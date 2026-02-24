@@ -245,6 +245,11 @@ class DatabaseOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DatabaseRestore(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=255)
+    server_name: str | None = None
+
+
 # ── Proxy ───────────────────────────────────────────────
 
 

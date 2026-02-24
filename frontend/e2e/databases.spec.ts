@@ -135,4 +135,70 @@ test.describe("Databases", () => {
     // Database should still be in the table
     await expect(page.getByText(MOCK_DATABASES[0].name)).toBeVisible();
   });
+
+  // ─── Backup ─────────────────────────────────────────────────────────────────
+
+  test("backup button is visible for each database", async ({ page }) => {
+    await expect(
+      page.getByLabel(`Backup ${MOCK_DATABASES[0].name}`),
+    ).toBeVisible();
+  });
+
+  test("clicking backup shows success toast with filename", async ({
+    page,
+  }) => {
+    await page.getByLabel(`Backup ${MOCK_DATABASES[0].name}`).click();
+    await expect(
+      page.getByText("Backup created: main-pg_20260224_120000.sql.gz"),
+    ).toBeVisible();
+  });
+
+  // ─── Restore ────────────────────────────────────────────────────────────────
+
+  test("restore button is visible for each database", async ({ page }) => {
+    await expect(
+      page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`),
+    ).toBeVisible();
+  });
+
+  test("clicking restore opens modal", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    await expect(
+      page.getByRole("heading", { name: "Restore Database" }),
+    ).toBeVisible();
+  });
+
+  test("restore modal has filename input", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    await expect(page.getByLabel("Backup Filename")).toBeVisible();
+  });
+
+  test("restore modal Cancel closes it", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    await expect(
+      page.getByRole("heading", { name: "Restore Database" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Restore Database" }),
+    ).not.toBeVisible();
+  });
+
+  test("restore submit shows success toast", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    await page.getByLabel("Backup Filename").fill("main-pg_20260224_120000.sql.gz");
+    await page.locator("form").getByRole("button", { name: "Restore" }).click();
+    await expect(
+      page.getByText(`Database "${MOCK_DATABASES[0].name}" restored`),
+    ).toBeVisible();
+  });
+
+  test("restore modal closes after successful submit", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    await page.getByLabel("Backup Filename").fill("main-pg_20260224_120000.sql.gz");
+    await page.locator("form").getByRole("button", { name: "Restore" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Restore Database" }),
+    ).not.toBeVisible();
+  });
 });

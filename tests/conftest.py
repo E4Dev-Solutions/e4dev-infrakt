@@ -12,9 +12,11 @@ def isolated_config(tmp_path, monkeypatch):
     monkeypatch.setattr("cli.core.config.DB_PATH", tmp_path / "infrakt.db")
     monkeypatch.setattr("cli.core.config.KEYS_DIR", tmp_path / "keys")
     monkeypatch.setattr("cli.core.config.ENVS_DIR", tmp_path / "envs")
+    monkeypatch.setattr("cli.core.config.BACKUPS_DIR", tmp_path / "backups")
     monkeypatch.setattr("cli.core.config.MASTER_KEY_PATH", tmp_path / "master.key")
     (tmp_path / "keys").mkdir()
     (tmp_path / "envs").mkdir()
+    (tmp_path / "backups").mkdir()
 
     # Write a known API key for test isolation
     api_key_path = tmp_path / "api_key.txt"

@@ -4,12 +4,16 @@ import {
   Trash2,
   Database,
   Loader2,
+  Download,
+  Upload,
 } from "lucide-react";
 import {
   useDatabases,
   useServers,
   useCreateDatabase,
   useDeleteDatabase,
+  useBackupDatabase,
+  useRestoreDatabase,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -38,11 +42,16 @@ export default function Databases() {
 
   const createDatabase = useCreateDatabase();
   const deleteDatabase = useDeleteDatabase();
+  const backupDatabase = useBackupDatabase();
+  const restoreDatabase = useRestoreDatabase();
   const toast = useToast();
 
   const [showModal, setShowModal] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState<{ name: string; server: string } | null>(null);
+  const [restoreFilename, setRestoreFilename] = useState("");
   const [form, setForm] = useState<CreateDatabaseInput>(defaultForm);
   const [deletingName, setDeletingName] = useState<string | null>(null);
+  const [backingUpName, setBackingUpName] = useState<string | null>(null);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -81,6 +90,39 @@ export default function Databases() {
       );
     } finally {
       setDeletingName(null);
+    }
+  }
+
+  async function handleBackup(name: string, serverName: string) {
+    setBackingUpName(name);
+    try {
+      const result = await backupDatabase.mutateAsync({ name, server: serverName });
+      toast.success(`Backup created: ${result.filename}`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to create backup."
+      );
+    } finally {
+      setBackingUpName(null);
+    }
+  }
+
+  async function handleRestore(e: React.FormEvent) {
+    e.preventDefault();
+    if (!showRestoreModal || !restoreFilename) return;
+    try {
+      await restoreDatabase.mutateAsync({
+        name: showRestoreModal.name,
+        filename: restoreFilename,
+        serverName: showRestoreModal.server,
+      });
+      toast.success(`Database "${showRestoreModal.name}" restored.`);
+      setShowRestoreModal(null);
+      setRestoreFilename("");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to restore database."
+      );
     }
   }
 
@@ -197,25 +239,103 @@ export default function Databases() {
                   </td>
                   {/* Actions */}
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleDelete(db.name, db.server_name)}
-                      disabled={deletingName === db.name}
-                      title="Delete database"
-                      className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
-                      aria-label={`Delete ${db.name}`}
-                    >
-                      {deletingName === db.name ? (
-                        <Loader2 size={15} className="animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Trash2 size={15} aria-hidden="true" />
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleBackup(db.name, db.server_name)}
+                        disabled={backingUpName === db.name}
+                        title="Backup database"
+                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        aria-label={`Backup ${db.name}`}
+                      >
+                        {backingUpName === db.name ? (
+                          <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Download size={15} aria-hidden="true" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setShowRestoreModal({ name: db.name, server: db.server_name })}
+                        title="Restore database"
+                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                        aria-label={`Restore ${db.name}`}
+                      >
+                        <Upload size={15} aria-hidden="true" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(db.name, db.server_name)}
+                        disabled={deletingName === db.name}
+                        title="Delete database"
+                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        aria-label={`Delete ${db.name}`}
+                      >
+                        {deletingName === db.name ? (
+                          <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Trash2 size={15} aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Create Database Modal */}
+      {/* Restore Database Modal */}
+      {showRestoreModal && (
+        <Modal
+          title="Restore Database"
+          onClose={() => { setShowRestoreModal(null); setRestoreFilename(""); }}
+        >
+          <form onSubmit={handleRestore} className="space-y-4" noValidate>
+            <p className="text-sm text-slate-400">
+              Restore <span className="font-medium text-slate-200">{showRestoreModal.name}</span> from
+              a backup file on the server.
+            </p>
+            <div>
+              <label
+                htmlFor="restore-filename"
+                className="mb-1.5 block text-xs font-medium text-slate-300"
+              >
+                Backup Filename <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="restore-filename"
+                type="text"
+                required
+                value={restoreFilename}
+                onChange={(e) => setRestoreFilename(e.target.value)}
+                placeholder="main-pg_20260224_120000.sql.gz"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                File must exist in /opt/infrakt/backups/ on the server.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setShowRestoreModal(null); setRestoreFilename(""); }}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={restoreDatabase.isPending || !restoreFilename}
+                className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              >
+                {restoreDatabase.isPending && (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                )}
+                Restore
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {/* Create Database Modal */}

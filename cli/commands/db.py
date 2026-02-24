@@ -3,6 +3,8 @@ import shlex
 
 import click
 
+from cli.core.backup import backup_database, restore_database
+from cli.core.config import BACKUPS_DIR
 from cli.core.console import error, info, print_table, status_spinner, success
 from cli.core.database import get_session, init_db
 from cli.core.deployer import _validate_name
@@ -242,3 +244,71 @@ def list_dbs(server_name: str | None) -> None:
             return
         rows = [(d.name, d.server.name, d.app_type.split(":", 1)[1], d.port, d.status) for d in dbs]
     print_table("Databases", ["Name", "Server", "Type", "Port", "Status"], rows)
+
+
+@db.command()
+@click.argument("name")
+@click.option("--server", "server_name", required=True, help="Server name")
+@click.option(
+    "--output", "-o", default=None, help="Local output path (default: ~/.infrakt/backups/)"
+)
+def backup(name: str, server_name: str, output: str | None) -> None:
+    """Back up a database to a local file."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == server_name).first()
+        if not srv:
+            raise ServerNotFoundError(f"Server '{server_name}' not found")
+        db_app = (
+            session.query(App)
+            .filter(App.name == name, App.server_id == srv.id, App.app_type.like("db:%"))
+            .first()
+        )
+        if not db_app:
+            error(f"Database '{name}' not found on '{server_name}'")
+            raise SystemExit(1)
+        ssh = SSHClient.from_server(srv)
+
+    with status_spinner(f"Backing up database '{name}'"):
+        with ssh:
+            remote_path = backup_database(ssh, db_app)
+            # Download to local
+            BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+            filename = remote_path.rsplit("/", 1)[-1]
+            local_path = output or str(BACKUPS_DIR / filename)
+            ssh.download(remote_path, local_path)
+
+    success(f"Database '{name}' backed up")
+    info(f"Local file: {local_path}")
+
+
+@db.command()
+@click.argument("name")
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--server", "server_name", required=True, help="Server name")
+def restore(name: str, file: str, server_name: str) -> None:
+    """Restore a database from a backup file."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == server_name).first()
+        if not srv:
+            raise ServerNotFoundError(f"Server '{server_name}' not found")
+        db_app = (
+            session.query(App)
+            .filter(App.name == name, App.server_id == srv.id, App.app_type.like("db:%"))
+            .first()
+        )
+        if not db_app:
+            error(f"Database '{name}' not found on '{server_name}'")
+            raise SystemExit(1)
+        ssh = SSHClient.from_server(srv)
+
+    remote_path = f"/opt/infrakt/backups/{file.rsplit('/', 1)[-1]}"
+
+    with status_spinner(f"Restoring database '{name}'"):
+        with ssh:
+            ssh.run_checked("mkdir -p /opt/infrakt/backups")
+            ssh.upload(file, remote_path)
+            restore_database(ssh, db_app, remote_path)
+
+    success(f"Database '{name}' restored from {file}")

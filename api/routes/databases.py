@@ -6,10 +6,12 @@ import shlex
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from api.schemas import DatabaseCreate, DatabaseOut
+from api.schemas import DatabaseCreate, DatabaseOut, DatabaseRestore
 from cli.commands.db import DB_TEMPLATES, DEFAULT_VERSIONS, _generate_db_compose
+from cli.core.backup import backup_database, restore_database
 from cli.core.database import get_session, init_db
 from cli.core.deployer import _validate_name
+from cli.core.exceptions import SSHConnectionError
 from cli.core.ssh import SSHClient
 from cli.models.app import App
 from cli.models.server import Server
@@ -154,3 +156,54 @@ def destroy_database(name: str, server: str | None = None) -> dict[str, str]:
             session.delete(a)
 
     return {"message": f"Database '{name}' destroyed"}
+
+
+@router.post("/{name}/backup")
+def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, str]:
+    """Trigger a database backup on the remote server."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        srv = db_app.server
+        ssh = SSHClient.from_server(srv)
+
+    with ssh:
+        remote_path = backup_database(ssh, db_app)
+
+    filename = remote_path.rsplit("/", 1)[-1]
+    return {
+        "message": f"Backup created: {filename}",
+        "filename": filename,
+        "remote_path": remote_path,
+    }
+
+
+@router.post("/{name}/restore")
+def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str]:
+    """Restore a database from a backup file on the server."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if body.server_name:
+            q = q.join(Server).filter(Server.name == body.server_name)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        srv = db_app.server
+        ssh = SSHClient.from_server(srv)
+
+    remote_path = f"/opt/infrakt/backups/{body.filename}"
+    try:
+        with ssh:
+            restore_database(ssh, db_app, remote_path)
+    except SSHConnectionError as exc:
+        if "not found" in str(exc):
+            raise HTTPException(404, f"Backup file not found: {body.filename}")
+        raise HTTPException(500, str(exc))
+
+    return {"message": f"Database '{name}' restored from {body.filename}"}

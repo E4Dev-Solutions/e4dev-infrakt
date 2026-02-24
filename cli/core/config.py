@@ -4,12 +4,13 @@ INFRAKT_HOME = Path.home() / ".infrakt"
 DB_PATH = INFRAKT_HOME / "infrakt.db"
 KEYS_DIR = INFRAKT_HOME / "keys"
 ENVS_DIR = INFRAKT_HOME / "envs"
+BACKUPS_DIR = INFRAKT_HOME / "backups"
 MASTER_KEY_PATH = INFRAKT_HOME / "master.key"
 
 
 def ensure_config_dir() -> Path:
     """Create all infrakt config directories if they don't exist."""
-    for d in (INFRAKT_HOME, KEYS_DIR, ENVS_DIR):
+    for d in (INFRAKT_HOME, KEYS_DIR, ENVS_DIR, BACKUPS_DIR):
         d.mkdir(parents=True, exist_ok=True)
     return INFRAKT_HOME
 

@@ -132,6 +132,12 @@ export interface Database {
   status: DbStatus;
 }
 
+export interface BackupResult {
+  message: string;
+  filename: string;
+  remote_path: string;
+}
+
 export interface ProxyDomain {
   domain: string;
   port: number;
@@ -366,6 +372,24 @@ export const databasesApi = {
     const qs = server ? `?server=${encodeURIComponent(server)}` : "";
     return del(`/databases/${encodeURIComponent(name)}${qs}`);
   },
+
+  backup: (
+    name: string,
+    server?: string,
+  ): Promise<BackupResult> => {
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    return post(`/databases/${encodeURIComponent(name)}/backup${qs}`);
+  },
+
+  restore: (
+    name: string,
+    filename: string,
+    serverName?: string,
+  ): Promise<{ message: string }> =>
+    post(`/databases/${encodeURIComponent(name)}/restore`, {
+      filename,
+      server_name: serverName,
+    }),
 };
 
 // ─── Proxy ────────────────────────────────────────────────────────────────────

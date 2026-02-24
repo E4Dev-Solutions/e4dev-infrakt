@@ -389,6 +389,30 @@ export async function mockApi(page: Page): Promise<void> {
     return route.continue();
   });
 
+  // Database backup (must be before generic /databases/*)
+  await page.route(/\/api\/databases\/[^/]+\/backup/, (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        json: {
+          message: "Backup created: main-pg_20260224_120000.sql.gz",
+          filename: "main-pg_20260224_120000.sql.gz",
+          remote_path: "/opt/infrakt/backups/main-pg_20260224_120000.sql.gz",
+        },
+      });
+    }
+    return route.continue();
+  });
+
+  // Database restore (must be before generic /databases/*)
+  await page.route(/\/api\/databases\/[^/]+\/restore/, (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        json: { message: "Database restored from backup" },
+      });
+    }
+    return route.continue();
+  });
+
   await page.route("**/api/databases/*", (route) => {
     if (route.request().method() === "DELETE") {
       return route.fulfill({ json: { message: "Database destroyed" } });

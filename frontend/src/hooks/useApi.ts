@@ -332,6 +332,27 @@ export function useDeleteDatabase() {
   });
 }
 
+export function useBackupDatabase() {
+  return useMutation({
+    mutationFn: ({ name, server }: { name: string; server?: string }) =>
+      databasesApi.backup(name, server),
+  });
+}
+
+export function useRestoreDatabase() {
+  return useMutation({
+    mutationFn: ({
+      name,
+      filename,
+      serverName,
+    }: {
+      name: string;
+      filename: string;
+      serverName?: string;
+    }) => databasesApi.restore(name, filename, serverName),
+  });
+}
+
 // ─── Proxy ────────────────────────────────────────────────────────────────────
 
 export function useProxyDomains(

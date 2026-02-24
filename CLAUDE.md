@@ -92,8 +92,9 @@ cli/
   templates/           # Jinja2 templates (reserved for future use)
 
 api/
-  main.py              # FastAPI app, CORS config, router registration
-  schemas.py           # Pydantic request/response models
+  main.py              # FastAPI app, CORS config, router registration (all routes require API key)
+  auth.py              # API key generation (secrets.token_urlsafe), validation (hmac.compare_digest)
+  schemas.py           # Pydantic request/response models (includes name/domain/SSRF validation)
   routes/
     dashboard.py       # GET /api/dashboard
     servers.py         # /api/servers/*
@@ -104,10 +105,10 @@ api/
 
 frontend/
   src/
-    api/client.ts      # Typed fetch wrappers for all API endpoints
+    api/client.ts      # Typed fetch wrappers; stores/sends API key via X-API-Key header
     hooks/useApi.ts    # TanStack Query hooks (useServers, useApps, etc.)
-    pages/             # Dashboard, Servers, ServerDetail, Apps, AppDetail, Databases
-    components/        # StatusBadge, DataTable, Modal, Toast, EmptyState
+    pages/             # Login, Dashboard, Servers, ServerDetail, Apps, AppDetail, Databases
+    components/        # Layout (with logout), StatusBadge, DataTable, Modal, Toast, EmptyState
 
 tests/
   conftest.py          # isolated_config fixture (temp dir), mock_ssh fixture
@@ -561,13 +562,22 @@ infrakt proxy reload prod-1
 
 The web dashboard provides a browser UI for the same operations available in the CLI. It consists of a FastAPI backend and a React frontend.
 
+### Authentication
+
+Every API route requires an `X-API-Key` header. The key is auto-generated at `~/.infrakt/api_key.txt` on the first API startup. The React app shows a login page on first visit — paste the key from that file to authenticate. The key is stored in browser `localStorage` and attached to every subsequent request.
+
+```bash
+# Retrieve the API key
+cat ~/.infrakt/api_key.txt
+```
+
 ### Start the API
 
 ```bash
 uvicorn api.main:app --reload --port 8000
 ```
 
-The API auto-initializes the database on startup and serves at `http://localhost:8000`. Interactive API docs are available at `http://localhost:8000/docs`.
+The API auto-initializes the database on startup and serves at `http://localhost:8000`. Interactive API docs (with API key authentication support) are available at `http://localhost:8000/docs`.
 
 ### Start the Frontend (Development)
 
@@ -600,6 +610,7 @@ The full dashboard is now available at `http://localhost:8000`.
 
 | Page | Route | Description |
 |------|-------|-------------|
+| Login | (no route, shown before auth) | API key entry; validates key against `GET /api/dashboard` |
 | Dashboard | `/` | Platform stats: servers, apps, databases, recent deployments |
 | Servers | `/servers` | List servers, add/remove, provision, test connection |
 | Server Detail | `/servers/:name` | Live metrics, app list, proxy routes |
@@ -644,12 +655,14 @@ mypy cli/ --ignore-missing-imports
 
 ### CI
 
-GitHub Actions runs three jobs on every push and PR to `main`:
+GitHub Actions runs five jobs on every push and PR to `main`:
 - **lint**: `ruff check` + `ruff format --check`
 - **test**: `pytest --cov=cli`
-- **typecheck**: `mypy cli/`
+- **typecheck**: `mypy cli/ --ignore-missing-imports`
+- **frontend-build**: `npm ci && npm run build` (validates TypeScript types and the Vite production build)
+- **docker-build**: multi-stage Docker image build (`docker/build-push-action`, no push)
 
-All three must pass before merging.
+All five must pass before merging. The `docker-build` job depends on `frontend-build` so the Node build is validated before the Docker layer cache is used.
 
 ### Frontend Development
 
@@ -670,6 +683,12 @@ npm run build        # production build to frontend/dist/
 **SSH-only access.** All remote operations (provisioning, deploying, log retrieval, proxy management) go through a Paramiko SSH connection using either key-based or agent authentication. Password authentication is not used by infrakt.
 
 **Encrypted environment variables.** Env vars are stored locally in `~/.infrakt/envs/<app_id>.json`. Each value is encrypted with Fernet (AES-128-CBC + HMAC-SHA256) using a master key stored in `~/.infrakt/master.key` with permissions `0600`. The plaintext is only decrypted immediately before being sent to the server at deploy time, and then only over the encrypted SSH channel.
+
+**API key authentication.** The FastAPI layer requires an `X-API-Key` header on every request. The key is generated with `secrets.token_urlsafe(32)` (256 bits of entropy) and stored at `~/.infrakt/api_key.txt` (chmod `0600`). Keys are compared with `hmac.compare_digest` to prevent timing attacks. Missing key: `401`. Wrong key: `403`.
+
+**Shell injection prevention.** All user-controlled values passed to remote shell commands are sanitized with `shlex.quote()` in `cli/core/deployer.py`. App names, branch names, and image references are validated against strict allowlist regular expressions before use in any shell command.
+
+**SSRF prevention.** The `git_repo` field in `AppCreate` (Pydantic schema) validates that the URL uses HTTPS, ends in `.git`, and does not resolve to localhost, RFC-1918 ranges (`10.x`, `172.16-31.x`, `192.168.x`), or link-local addresses.
 
 **Server hardening.** The provisioning step configures:
 - UFW firewall: deny all inbound except SSH (22), HTTP (80), HTTPS (443)

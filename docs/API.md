@@ -6,7 +6,17 @@ The infrakt API is a FastAPI application that exposes the same operations as the
 
 **Base URL:** `http://localhost:8000/api`
 
-**Authentication:** None. The API is designed for local use only. Do not expose it on a public network interface without adding authentication middleware.
+**Authentication:** All API endpoints require an `X-API-Key` header. The key is generated automatically at `~/.infrakt/api_key.txt` the first time the API starts (or when `infrakt init` is run). Requests missing the header receive `401 Unauthorized`; requests with a wrong key receive `403 Forbidden`.
+
+```bash
+# Retrieve the key
+API_KEY=$(cat ~/.infrakt/api_key.txt)
+
+# Use it in every request
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/dashboard
+```
+
+The Swagger UI at `/docs` includes an "Authorize" button where you can enter the key to authenticate all in-browser requests.
 
 **Content-Type:** All request and response bodies use `application/json`.
 
@@ -18,7 +28,19 @@ The infrakt API is a FastAPI application that exposes the same operations as the
 uvicorn api.main:app --reload --port 8000
 ```
 
-The API initializes the SQLite database on startup. No separate migration step is required.
+The API initializes the SQLite database on startup and generates `~/.infrakt/api_key.txt` if it does not exist. No separate migration step is required.
+
+Retrieve your API key after the first start:
+
+```bash
+cat ~/.infrakt/api_key.txt
+```
+
+All examples below use `$API_KEY` as a placeholder for this value. Set it once in your shell:
+
+```bash
+export API_KEY=$(cat ~/.infrakt/api_key.txt)
+```
 
 ## Error Response Format
 
@@ -37,6 +59,8 @@ HTTP status codes follow standard conventions:
 | 200 | Success |
 | 201 | Resource created |
 | 400 | Bad request (validation error or duplicate resource) |
+| 401 | Missing `X-API-Key` header |
+| 403 | Invalid API key |
 | 404 | Resource not found |
 | 422 | Request body validation failed (Pydantic) |
 | 502 | Cannot reach remote server via SSH |
@@ -76,7 +100,7 @@ Returns platform-wide statistics and the 10 most recent deployments.
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/dashboard
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/dashboard
 ```
 
 ---
@@ -112,7 +136,7 @@ List all registered servers, ordered by name.
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/servers
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/servers
 ```
 
 ---
@@ -152,6 +176,7 @@ Register a new server. Tests SSH connectivity after creation.
 
 ```bash
 curl -X POST http://localhost:8000/api/servers \
+  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "prod-1", "host": "1.2.3.4", "ssh_key_path": "~/.ssh/id_ed25519"}'
 ```
@@ -182,7 +207,7 @@ Remove a registered server from the local database. Does not touch the remote se
 **Example:**
 
 ```bash
-curl -X DELETE http://localhost:8000/api/servers/prod-1
+curl -X DELETE -H "X-API-Key: $API_KEY" http://localhost:8000/api/servers/prod-1
 ```
 
 ---
@@ -205,7 +230,7 @@ Provision a server in the background. Installs Docker, Caddy, UFW, and fail2ban 
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8000/api/servers/prod-1/provision
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8000/api/servers/prod-1/provision
 ```
 
 Poll `GET /api/servers` to check when status becomes `active`.
@@ -236,7 +261,7 @@ Fetch live system metrics from the server over SSH. This call connects to the se
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/servers/prod-1/status
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/servers/prod-1/status
 ```
 
 ---
@@ -259,7 +284,7 @@ Test SSH connectivity to the server.
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8000/api/servers/prod-1/test
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8000/api/servers/prod-1/test
 ```
 
 ---
@@ -307,8 +332,8 @@ List all apps, optionally filtered by server.
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/apps
-curl "http://localhost:8000/api/apps?server=prod-1"
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/apps
+curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/apps?server=prod-1"
 ```
 
 ---
@@ -353,6 +378,7 @@ App type is inferred: `image` if `image` is set, `git` if `git_repo` is set, oth
 
 ```bash
 curl -X POST http://localhost:8000/api/apps \
+  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"name": "myapp", "server_name": "prod-1", "git_repo": "https://github.com/you/myapp", "port": 3000}'
 ```
@@ -386,7 +412,7 @@ Poll `GET /api/apps/{name}/deployments` to check deployment status.
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8000/api/apps/myapp/deploy
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8000/api/apps/myapp/deploy
 ```
 
 ---
@@ -418,7 +444,7 @@ Fetch container logs from the remote server over SSH.
 **Example:**
 
 ```bash
-curl "http://localhost:8000/api/apps/myapp/logs?lines=200"
+curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/apps/myapp/logs?lines=200"
 ```
 
 ---
@@ -451,7 +477,7 @@ List the 20 most recent deployments for an app, newest first.
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/apps/myapp/deployments
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/apps/myapp/deployments
 ```
 
 ---
@@ -480,7 +506,7 @@ Restart the app's Docker Compose services without redeploying.
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8000/api/apps/myapp/restart
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8000/api/apps/myapp/restart
 ```
 
 ---
@@ -509,7 +535,7 @@ Stop the app's containers. Sets status to `stopped`.
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8000/api/apps/myapp/stop
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8000/api/apps/myapp/stop
 ```
 
 ---
@@ -540,7 +566,7 @@ Destroy an app: stop containers, remove volumes, delete `/opt/infrakt/apps/<name
 **Example:**
 
 ```bash
-curl -X DELETE http://localhost:8000/api/apps/myapp
+curl -X DELETE -H "X-API-Key: $API_KEY" http://localhost:8000/api/apps/myapp
 ```
 
 ---
@@ -591,8 +617,8 @@ With `show_values=true`:
 **Example:**
 
 ```bash
-curl "http://localhost:8000/api/apps/myapp/env"
-curl "http://localhost:8000/api/apps/myapp/env?show_values=true"
+curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/apps/myapp/env"
+curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/apps/myapp/env?show_values=true"
 ```
 
 ---
@@ -628,6 +654,7 @@ After setting variables, call `POST /api/apps/{name}/deploy` or `POST /api/apps/
 
 ```bash
 curl -X POST "http://localhost:8000/api/apps/myapp/env" \
+  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '[{"key": "DATABASE_URL", "value": "postgres://localhost/mydb"}]'
 ```
@@ -659,7 +686,7 @@ Delete a single environment variable.
 **Example:**
 
 ```bash
-curl -X DELETE "http://localhost:8000/api/apps/myapp/env/OLD_SECRET"
+curl -X DELETE -H "X-API-Key: $API_KEY" "http://localhost:8000/api/apps/myapp/env/OLD_SECRET"
 ```
 
 ---
@@ -682,7 +709,7 @@ Push all decrypted environment variables to the server and restart the app conta
 **Example:**
 
 ```bash
-curl -X POST "http://localhost:8000/api/apps/myapp/env/push"
+curl -X POST -H "X-API-Key: $API_KEY" "http://localhost:8000/api/apps/myapp/env/push"
 ```
 
 ---
@@ -719,8 +746,8 @@ List all database services, optionally filtered by server.
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/databases
-curl "http://localhost:8000/api/databases?server=prod-1"
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/databases
+curl -H "X-API-Key: $API_KEY" "http://localhost:8000/api/databases?server=prod-1"
 ```
 
 ---
@@ -775,6 +802,7 @@ Default versions: Postgres 16, MySQL 8, Redis 7-alpine, MongoDB 7.
 
 ```bash
 curl -X POST http://localhost:8000/api/databases \
+  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"server_name": "prod-1", "name": "mydb", "db_type": "postgres"}'
 ```
@@ -807,7 +835,7 @@ Destroy a database service: stop containers, remove all data volumes, and delete
 **Example:**
 
 ```bash
-curl -X DELETE "http://localhost:8000/api/databases/mydb?server=prod-1"
+curl -X DELETE -H "X-API-Key: $API_KEY" "http://localhost:8000/api/databases/mydb?server=prod-1"
 ```
 
 ---
@@ -839,7 +867,7 @@ List all active reverse proxy routes on a server. Reads the Caddyfile from the r
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/proxy/prod-1/domains
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/proxy/prod-1/domains
 ```
 
 ---
@@ -879,6 +907,7 @@ Add a reverse proxy route on a server. Modifies the Caddyfile on the remote serv
 
 ```bash
 curl -X POST http://localhost:8000/api/proxy/routes \
+  -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"domain": "api.example.com", "port": 3000, "server_name": "prod-1"}'
 ```
@@ -903,7 +932,7 @@ Remove a reverse proxy route. Modifies the Caddyfile on the remote server and re
 **Example:**
 
 ```bash
-curl -X DELETE "http://localhost:8000/api/proxy/prod-1/domains/api.example.com"
+curl -X DELETE -H "X-API-Key: $API_KEY" "http://localhost:8000/api/proxy/prod-1/domains/api.example.com"
 ```
 
 ---
@@ -926,7 +955,7 @@ Get the systemd status of the Caddy service on the server.
 **Example:**
 
 ```bash
-curl http://localhost:8000/api/proxy/prod-1/status
+curl -H "X-API-Key: $API_KEY" http://localhost:8000/api/proxy/prod-1/status
 ```
 
 ---
@@ -949,5 +978,5 @@ Trigger a graceful Caddy configuration reload (`systemctl reload caddy`).
 **Example:**
 
 ```bash
-curl -X POST http://localhost:8000/api/proxy/prod-1/reload
+curl -X POST -H "X-API-Key: $API_KEY" http://localhost:8000/api/proxy/prod-1/reload
 ```

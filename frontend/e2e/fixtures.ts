@@ -118,6 +118,12 @@ export const MOCK_DASHBOARD = {
   recent_deployments: MOCK_DEPLOYMENTS,
 };
 
+export const MOCK_ENV_VARS = [
+  { key: "DATABASE_URL", value: "postgres://user:pass@localhost:5432/mydb" },
+  { key: "NODE_ENV", value: "production" },
+  { key: "SECRET_KEY", value: "super-secret-123" },
+];
+
 export const MOCK_PROXY_DOMAINS = [
   { domain: "api.example.com", port: 3000 },
   { domain: "app.example.com", port: 8080 },
@@ -256,17 +262,25 @@ export async function mockApi(page: Page): Promise<void> {
     return route.fulfill({ json: MOCK_DEPLOYMENTS });
   });
 
-  await page.route("**/api/apps/*/env", (route) => {
+  // Env var delete — must be registered before the generic /env route
+  await page.route("**/api/apps/*/env/*", (route) => {
+    if (route.request().method() === "DELETE") {
+      return route.fulfill({ json: { message: "Deleted" } });
+    }
+    return route.continue();
+  });
+
+  await page.route(/\/api\/apps\/[^/]+\/env(\?.*)?$/, (route) => {
     if (route.request().method() === "GET") {
-      return route.fulfill({
-        json: [
-          { key: "DATABASE_URL", value: "****" },
-          { key: "NODE_ENV", value: "production" },
-        ],
-      });
+      return route.fulfill({ json: MOCK_ENV_VARS });
     }
     if (route.request().method() === "POST") {
-      return route.fulfill({ json: { message: "Environment variables set" } });
+      const body = route.request().postDataJSON();
+      return route.fulfill({
+        json: Array.isArray(body)
+          ? body.map((v: { key: string }) => ({ key: v.key, value: "••••••••" }))
+          : [{ key: "UNKNOWN", value: "••••••••" }],
+      });
     }
     return route.continue();
   });

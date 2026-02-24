@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   Server,
@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   Loader2,
   RefreshCw,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   useServers,
@@ -22,6 +24,7 @@ import {
   useUpdateServer,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
+import { useProvisionStream } from "@/hooks/useProvisionStream";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
@@ -87,6 +90,58 @@ function UsageBar({ label, used, total, percent, icon }: UsageBarProps) {
   );
 }
 
+interface ProvisionProgressProps {
+  lines: string[];
+  isStreaming: boolean;
+  status: string | null;
+  error: string | null;
+}
+
+function ProvisionProgress({ lines, isStreaming, status, error }: ProvisionProgressProps) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lines.length]);
+
+  return (
+    <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800" aria-label="Provisioning progress">
+      <div className="flex items-center gap-2 border-b border-slate-700 px-5 py-3">
+        {isStreaming ? (
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-indigo-500" />
+          </span>
+        ) : status === "active" ? (
+          <CheckCircle2 size={14} className="text-emerald-400" aria-hidden="true" />
+        ) : status === "inactive" ? (
+          <XCircle size={14} className="text-red-400" aria-hidden="true" />
+        ) : null}
+        <h2 className="text-sm font-semibold text-slate-200">
+          {isStreaming
+            ? "Provisioning…"
+            : status === "active"
+              ? "Provisioning Complete"
+              : status === "inactive"
+                ? "Provisioning Failed"
+                : "Provisioning"}
+        </h2>
+      </div>
+
+      <div className="max-h-64 overflow-y-auto px-5 py-3 font-mono text-xs leading-relaxed text-slate-300">
+        {lines.length === 0 && isStreaming && (
+          <p className="text-slate-500">Waiting for progress…</p>
+        )}
+        {lines.map((line, i) => (
+          <p key={i}>{line}</p>
+        ))}
+        {error && <p className="text-red-400">Error: {error}</p>}
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
 export default function ServerDetail() {
   const { name = "" } = useParams<{ name: string }>();
   const decodedName = decodeURIComponent(name);
@@ -115,11 +170,32 @@ export default function ServerDetail() {
     ssh_key_path: "",
     provider: "",
   });
+  const [provisionKey, setProvisionKey] = useState<number | null>(null);
+  const [provisionResult, setProvisionResult] = useState<{
+    lines: string[];
+    status: string;
+  } | null>(null);
+  const provStream = useProvisionStream(decodedName, provisionKey);
+
+  // When provisioning finishes, snapshot result and clear key
+  useEffect(() => {
+    if (provStream.status && provisionKey !== null) {
+      setProvisionResult({ lines: provStream.lines, status: provStream.status });
+      if (provStream.status === "active") {
+        toast.success("Server provisioned successfully.");
+      } else {
+        toast.error("Provisioning failed.");
+      }
+      setProvisionKey(null);
+      void refetchStatus();
+    }
+  }, [provStream.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleProvision() {
     try {
-      await provisionServer.mutateAsync(decodedName);
-      toast.success("Provisioning started.");
+      setProvisionResult(null);
+      const result = await provisionServer.mutateAsync(decodedName);
+      setProvisionKey(result.provision_key);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Provisioning failed.");
     }
@@ -241,6 +317,24 @@ export default function ServerDetail() {
           </button>
         </div>
       </div>
+
+      {/* Provisioning progress panel */}
+      {provisionKey !== null && (
+        <ProvisionProgress
+          lines={provStream.lines}
+          isStreaming={provStream.isStreaming}
+          status={provStream.status}
+          error={provStream.error}
+        />
+      )}
+      {provisionKey === null && provisionResult && (
+        <ProvisionProgress
+          lines={provisionResult.lines}
+          isStreaming={false}
+          status={provisionResult.status}
+          error={null}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left column: server info */}

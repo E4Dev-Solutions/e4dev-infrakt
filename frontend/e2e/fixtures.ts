@@ -216,9 +216,24 @@ export async function mockApi(page: Page): Promise<void> {
     });
   });
 
+  // Server provision stream (must be before /provision)
+  await page.route(/\/api\/servers\/[^/]+\/provision\/stream/, (route) => {
+    const sseBody = [
+      'data: {"line":"[1/9] Installing Docker"}\n\n',
+      'data: {"line":"[2/9] Configuring firewall"}\n\n',
+      'data: {"line":"[3/9] Installing Caddy"}\n\n',
+      'data: {"done":true,"status":"active"}\n\n',
+    ].join("");
+    return route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+      body: sseBody,
+    });
+  });
+
   // Server provision
-  await page.route("**/api/servers/*/provision", (route) => {
-    return route.fulfill({ json: { message: "Provisioning started" } });
+  await page.route(/\/api\/servers\/[^/]+\/provision$/, (route) => {
+    return route.fulfill({ json: { message: "Provisioning started", provision_key: -1 } });
   });
 
   // Server test

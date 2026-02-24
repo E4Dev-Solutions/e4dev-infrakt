@@ -99,6 +99,11 @@ class LogBroadcaster:
             except ValueError:
                 pass
 
+    def has(self, deployment_id: int) -> bool:
+        """Check if a deployment/key is currently registered."""
+        with self._global_lock:
+            return deployment_id in self._deployments
+
     def cleanup(self, deployment_id: int) -> None:
         """Remove all state for a deployment."""
         with self._global_lock:

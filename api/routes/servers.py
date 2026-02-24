@@ -1,11 +1,16 @@
 """Server management API routes."""
 
+import asyncio
 import json
 import logging
+import threading
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 
+from api.log_broadcaster import broadcaster
 from api.schemas import (
     DiskUsage,
     MemoryUsage,
@@ -146,7 +151,7 @@ def remove_server(name: str) -> dict[str, str]:
 
 
 @router.post("/{name}/provision")
-def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str]:
+def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str | int]:
     """Start provisioning a server in the background."""
     init_db()
     with get_session() as session:
@@ -154,32 +159,103 @@ def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str]:
         if not srv:
             raise HTTPException(404, f"Server '{name}' not found")
         srv.status = "provisioning"
+        srv_id = srv.id
         host, user, port, key_path = srv.host, srv.user, srv.port, srv.ssh_key_path
+
+    # Use negative server ID to avoid collision with deployment IDs
+    prov_key = -srv_id
+    loop = asyncio.get_event_loop()
+    broadcaster.register(prov_key, loop)
 
     def _do_provision() -> None:
         try:
             ssh = SSHClient(host=host, user=user, port=port, key_path=key_path)
             with ssh:
-                provision_server(ssh)
+
+                def _on_step(step_name: str, index: int, total: int) -> None:
+                    broadcaster.publish(prov_key, f"[{index + 1}/{total}] {step_name}")
+
+                provision_server(ssh, on_step=_on_step)
+
+            broadcaster.publish(prov_key, "Provisioning complete")
             with get_session() as session:
                 s = session.query(Server).filter(Server.name == name).first()
                 if s:
                     s.status = "active"
         except SSHConnectionError as exc:
             logger.error("Provisioning failed for %s: %s", name, exc)
+            broadcaster.publish(prov_key, f"Error: {exc}")
             with get_session() as session:
                 s = session.query(Server).filter(Server.name == name).first()
                 if s:
                     s.status = "inactive"
-        except Exception:
+        except Exception as exc:
             logger.exception("Unexpected error provisioning %s", name)
+            broadcaster.publish(prov_key, f"Error: {exc}")
             with get_session() as session:
                 s = session.query(Server).filter(Server.name == name).first()
                 if s:
                     s.status = "inactive"
+        finally:
+            broadcaster.finish(prov_key)
+            threading.Timer(300, broadcaster.cleanup, args=[prov_key]).start()
 
     background_tasks.add_task(_do_provision)
-    return {"message": f"Provisioning started for '{name}'"}
+    return {
+        "message": f"Provisioning started for '{name}'",
+        "provision_key": prov_key,
+    }
+
+
+@router.get("/{name}/provision/stream")
+async def stream_provision_logs(name: str, key: int) -> StreamingResponse:
+    """Stream provisioning progress via Server-Sent Events."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == name).first()
+        if not srv:
+            raise HTTPException(404, f"Server '{name}' not found")
+        srv_status = srv.status
+
+    sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+
+    # If provisioning already finished and no broadcaster entry, send done
+    if srv_status in ("active", "inactive") and not broadcaster.has(key):
+
+        async def _finished() -> AsyncIterator[str]:
+            yield (f"data: {json.dumps({'done': True, 'status': srv_status})}\n\n")
+
+        return StreamingResponse(_finished(), media_type="text/event-stream", headers=sse_headers)
+
+    # Subscribe to live stream
+    result = broadcaster.subscribe(key)
+    if result is None:
+
+        async def _no_stream() -> AsyncIterator[str]:
+            yield f"data: {json.dumps({'done': True, 'status': srv_status})}\n\n"
+
+        return StreamingResponse(_no_stream(), media_type="text/event-stream", headers=sse_headers)
+    existing, queue = result
+
+    async def _stream() -> AsyncIterator[str]:
+        for line in existing:
+            yield f"data: {json.dumps({'line': line})}\n\n"
+        while True:
+            line = await queue.get()
+            if line is None:
+                break
+            yield f"data: {json.dumps({'line': line})}\n\n"
+        # Fetch final status
+        with get_session() as session:
+            s = session.query(Server).filter(Server.name == name).first()
+            final = s.status if s else "inactive"
+        yield f"data: {json.dumps({'done': True, 'status': final})}\n\n"
+
+    return StreamingResponse(_stream(), media_type="text/event-stream", headers=sse_headers)
 
 
 def _fmt_bytes(n: int) -> str:

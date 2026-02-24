@@ -289,7 +289,7 @@ export const serversApi = {
 
   delete: (name: string): Promise<void> => del(`/servers/${encodeURIComponent(name)}`),
 
-  provision: (name: string): Promise<unknown> =>
+  provision: (name: string): Promise<{ message: string; provision_key: number }> =>
     post(`/servers/${encodeURIComponent(name)}/provision`),
 
   test: (name: string): Promise<TestConnectionResult> =>

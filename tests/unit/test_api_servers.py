@@ -233,3 +233,50 @@ class TestServerStatus:
         assert len(data["containers"]) == 1
         assert data["containers"][0]["name"] == "web"
         assert data["containers"][0]["id"] == "abc123"
+
+
+# ---------------------------------------------------------------------------
+# POST /api/servers/{name}/provision
+# ---------------------------------------------------------------------------
+
+
+class TestProvision:
+    def test_returns_provision_key_in_response(self, client, isolated_config):
+        _seed_server("prov-srv", status="inactive")
+        mock_loop = MagicMock()
+        with (
+            patch("api.routes.servers.provision_server"),
+            patch("api.routes.servers.asyncio.get_event_loop", return_value=mock_loop),
+            patch("api.routes.servers.broadcaster"),
+        ):
+            response = client.post("/api/servers/prov-srv/provision")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "provision_key" in data
+        assert isinstance(data["provision_key"], int)
+        assert data["provision_key"] < 0  # negative server ID
+
+    def test_returns_404_for_unknown_server(self, client, isolated_config):
+        response = client.post("/api/servers/ghost/provision")
+        assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/servers/{name}/provision/stream
+# ---------------------------------------------------------------------------
+
+
+class TestProvisionStream:
+    def test_returns_404_for_unknown_server(self, client, isolated_config):
+        response = client.get("/api/servers/ghost/provision/stream?key=-999")
+        assert response.status_code == 404
+
+    def test_returns_done_event_when_already_finished(self, client, isolated_config):
+        _seed_server("done-srv", status="active")
+        response = client.get("/api/servers/done-srv/provision/stream?key=-999")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        body = response.text
+        assert '"done": true' in body
+        assert '"status": "active"' in body

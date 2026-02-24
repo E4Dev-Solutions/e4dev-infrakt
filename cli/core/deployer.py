@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shlex
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import PurePosixPath
 
@@ -40,16 +41,21 @@ def deploy_app(
     port: int = 3000,
     env_content: str = "",
     compose_override: str | None = None,
+    log_fn: Callable[[str], None] | None = None,
 ) -> str:
     """Deploy or redeploy an app on a remote server.
 
-    Returns deployment log string.
+    Returns deployment log string.  If *log_fn* is provided it is called with
+    each log line as it is produced, enabling real-time streaming.
     """
     app_path = _app_dir(app_name)
     log_lines: list[str] = []
 
     def _log(msg: str) -> None:
-        log_lines.append(f"[{datetime.utcnow().isoformat()}] {msg}")
+        line = f"[{datetime.utcnow().isoformat()}] {msg}"
+        log_lines.append(line)
+        if log_fn is not None:
+            log_fn(line)
 
     # Validate inputs
     if branch and not _SAFE_BRANCH_RE.match(branch):

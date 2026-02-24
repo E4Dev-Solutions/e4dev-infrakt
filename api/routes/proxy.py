@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from api.schemas import ProxyRoute, ProxyRouteCreate
 from cli.core.database import get_session, init_db
+from cli.core.exceptions import SSHConnectionError
 from cli.core.proxy_manager import add_domain, get_status, list_domains, reload_proxy, remove_domain
 from cli.core.ssh import SSHClient
 from cli.models.server import Server
@@ -23,8 +24,11 @@ def _get_ssh(server_name: str) -> SSHClient:
 def domains(server_name: str) -> list[ProxyRoute]:
     init_db()
     ssh = _get_ssh(server_name)
-    with ssh:
-        entries = list_domains(ssh)
+    try:
+        with ssh:
+            entries = list_domains(ssh)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, str(exc))
     return [ProxyRoute(domain=d, port=p) for d, p in entries]
 
 
@@ -32,8 +36,11 @@ def domains(server_name: str) -> list[ProxyRoute]:
 def add_route(body: ProxyRouteCreate) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(body.server_name)
-    with ssh:
-        add_domain(ssh, body.domain, body.port)
+    try:
+        with ssh:
+            add_domain(ssh, body.domain, body.port)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, str(exc))
     return {"message": f"Added {body.domain} -> localhost:{body.port}"}
 
 
@@ -41,8 +48,11 @@ def add_route(body: ProxyRouteCreate) -> dict[str, str]:
 def remove_route(server_name: str, domain: str) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(server_name)
-    with ssh:
-        remove_domain(ssh, domain)
+    try:
+        with ssh:
+            remove_domain(ssh, domain)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, str(exc))
     return {"message": f"Removed {domain}"}
 
 
@@ -50,8 +60,11 @@ def remove_route(server_name: str, domain: str) -> dict[str, str]:
 def proxy_status(server_name: str) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(server_name)
-    with ssh:
-        output = get_status(ssh)
+    try:
+        with ssh:
+            output = get_status(ssh)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, str(exc))
     return {"status": output}
 
 
@@ -59,6 +72,9 @@ def proxy_status(server_name: str) -> dict[str, str]:
 def reload(server_name: str) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(server_name)
-    with ssh:
-        reload_proxy(ssh)
+    try:
+        with ssh:
+            reload_proxy(ssh)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, str(exc))
     return {"message": "Caddy reloaded"}

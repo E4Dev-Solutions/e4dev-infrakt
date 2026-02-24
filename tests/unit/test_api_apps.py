@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from api.main import app
 from cli.core.database import get_session, init_db
 from cli.models.app import App
+from cli.models.deployment import Deployment
 from cli.models.server import Server
 from tests.conftest import TEST_API_KEY
 
@@ -266,3 +267,37 @@ class TestDestroyApp:
         response = client.delete("/api/apps/ghost-app")
         assert response.status_code == 404
         assert "ghost-app" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# GET /api/apps/{name}/deployments/{dep_id}/logs/stream
+# ---------------------------------------------------------------------------
+
+
+class TestStreamDeploymentLogs:
+    def test_returns_404_for_unknown_app(self, client, isolated_config):
+        response = client.get("/api/apps/ghost/deployments/1/logs/stream")
+        assert response.status_code == 404
+
+    def test_returns_404_for_unknown_deployment(self, client, isolated_config):
+        _seed_app("srv-1", "my-app")
+        response = client.get("/api/apps/my-app/deployments/999/logs/stream")
+        assert response.status_code == 404
+
+    def test_streams_stored_log_for_finished_deployment(self, client, isolated_config):
+        _seed_app("srv-1", "my-app")
+        init_db()
+        with get_session() as session:
+            app_obj = session.query(App).filter(App.name == "my-app").first()
+            dep = Deployment(app_id=app_obj.id, status="success", log="line1\nline2")
+            session.add(dep)
+            session.flush()
+            dep_id = dep.id
+
+        response = client.get(f"/api/apps/my-app/deployments/{dep_id}/logs/stream")
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+        body = response.text
+        assert '"line1"' in body
+        assert '"line2"' in body
+        assert '"done": true' in body

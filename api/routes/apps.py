@@ -1,11 +1,19 @@
 """App management API routes."""
 
+from __future__ import annotations
+
+import asyncio
+import json
 import logging
+import threading
+from collections.abc import AsyncIterator
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import joinedload
 
+from api.log_broadcaster import broadcaster
 from api.schemas import AppCreate, AppLogs, AppOut, AppUpdate, DeploymentOut
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
@@ -184,7 +192,14 @@ def deploy(
             "key_path": srv.ssh_key_path,
         }
 
+    # Register for live log streaming before starting the background task.
+    loop = asyncio.get_event_loop()
+    broadcaster.register(dep_id, loop)
+
     def _do_deploy() -> None:
+        def _on_log(line: str) -> None:
+            broadcaster.publish(dep_id, line)
+
         ssh = SSHClient(
             host=ssh_data.get("host", ""),  # type: ignore[arg-type]
             user=ssh_data.get("user", "root"),  # type: ignore[arg-type]
@@ -215,6 +230,7 @@ def deploy(
                     image=image,
                     port=port,
                     env_content=env_content,
+                    log_fn=_on_log,
                 )
                 domain = app_data.get("domain")
                 if domain:
@@ -233,6 +249,7 @@ def deploy(
                     a.status = "running"
         except SSHConnectionError as exc:
             logger.error("Deployment SSH error for %s: %s", name, exc)
+            broadcaster.publish(dep_id, f"[ERROR] {exc}")
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
                 if dep:
@@ -244,6 +261,7 @@ def deploy(
                     a.status = "error"
         except Exception as exc:
             logger.exception("Unexpected deployment error for %s", name)
+            broadcaster.publish(dep_id, f"[ERROR] {exc}")
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
                 if dep:
@@ -253,6 +271,10 @@ def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "error"
+        finally:
+            broadcaster.finish(dep_id)
+            # Clean up broadcaster state after 5 minutes
+            threading.Timer(300, broadcaster.cleanup, args=[dep_id]).start()
 
     background_tasks.add_task(_do_deploy)
     return {"message": f"Deployment started for '{name}'", "deployment_id": dep_id}
@@ -294,6 +316,77 @@ def app_deployments(name: str) -> list[DeploymentOut]:
             .all()
         )
         return [DeploymentOut.model_validate(d) for d in deps]
+
+
+@router.get("/{name}/deployments/{dep_id}/logs/stream")
+async def stream_deployment_logs(name: str, dep_id: int) -> StreamingResponse:
+    """Stream deployment logs via Server-Sent Events."""
+    init_db()
+
+    # Verify the deployment exists and belongs to this app.
+    with get_session() as session:
+        app_obj: App | None = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        dep: Deployment | None = (
+            session.query(Deployment)
+            .filter(Deployment.id == dep_id, Deployment.app_id == app_obj.id)
+            .first()
+        )
+        if not dep:
+            raise HTTPException(404, f"Deployment {dep_id} not found")
+
+        dep_status = dep.status
+        stored_log = dep.log
+
+    sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+
+    # If the deployment is already finished, replay the stored log and close.
+    if dep_status in ("success", "failed") and stored_log:
+
+        async def _finished_stream() -> AsyncIterator[str]:
+            for line in stored_log.splitlines():
+                yield f"data: {json.dumps({'line': line})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'status': dep_status})}\n\n"
+
+        return StreamingResponse(
+            _finished_stream(),
+            media_type="text/event-stream",
+            headers=sse_headers,
+        )
+
+    # Deployment is in progress — subscribe to live stream.
+    result = broadcaster.subscribe(dep_id)
+    if result is None:
+        raise HTTPException(404, "No live stream available for this deployment")
+
+    existing_lines, queue = result
+
+    async def _live_stream() -> AsyncIterator[str]:
+        try:
+            for line in existing_lines:
+                yield f"data: {json.dumps({'line': line})}\n\n"
+            while True:
+                item = await queue.get()
+                if item is None:
+                    with get_session() as session:
+                        dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
+                        status = dep.status if dep else "unknown"
+                    yield f"data: {json.dumps({'done': True, 'status': status})}\n\n"
+                    break
+                yield f"data: {json.dumps({'line': item})}\n\n"
+        finally:
+            broadcaster.unsubscribe(dep_id, queue)
+
+    return StreamingResponse(
+        _live_stream(),
+        media_type="text/event-stream",
+        headers=sse_headers,
+    )
 
 
 @router.post("/{name}/restart")

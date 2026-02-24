@@ -32,9 +32,11 @@ import {
   useUpdateApp,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
+import { useDeploymentStream } from "@/hooks/useDeploymentStream";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
+import DeploymentLogStream from "@/components/DeploymentLogStream";
 import type { UpdateAppInput } from "@/api/client";
 
 type ActiveTab = "logs" | "env" | "deployments";
@@ -387,6 +389,7 @@ export default function AppDetail() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("logs");
   const [actionPending, setActionPending] = useState<string | null>(null);
+  const [activeDeploymentId, setActiveDeploymentId] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<UpdateAppInput>({
     domain: "",
@@ -396,11 +399,18 @@ export default function AppDetail() {
     image: "",
   });
 
+  const stream = useDeploymentStream(
+    activeDeploymentId ? decodedName : null,
+    activeDeploymentId,
+  );
+
   async function handleDeploy() {
     setActionPending("deploy");
     try {
       const result = await deployApp.mutateAsync(decodedName);
       toast.success(result.message || "Deployment triggered.");
+      setActiveDeploymentId(result.deployment_id);
+      setActiveTab("logs");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Deployment failed.");
     } finally {
@@ -630,7 +640,18 @@ export default function AppDetail() {
             aria-label="Logs"
             hidden={activeTab !== "logs"}
           >
-            {activeTab === "logs" && <LogsTab appName={decodedName} />}
+            {activeTab === "logs" &&
+              (activeDeploymentId ? (
+                <DeploymentLogStream
+                  lines={stream.lines}
+                  isStreaming={stream.isStreaming}
+                  status={stream.status}
+                  error={stream.error}
+                  onClose={() => setActiveDeploymentId(null)}
+                />
+              ) : (
+                <LogsTab appName={decodedName} />
+              ))}
           </div>
           <div
             id="tabpanel-env"

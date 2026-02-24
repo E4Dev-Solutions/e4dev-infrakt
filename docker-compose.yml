@@ -1,0 +1,47 @@
+services:
+  infrakt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Give the local image a recognisable tag so you can reference it with
+      # `docker run` without re-specifying the build context.
+    image: infrakt:local
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      # ---------------------------------------------------------------------------
+      # State volume — persists the SQLite database, encrypted env files, and the
+      # master encryption key across container restarts.
+      #
+      # IMPORTANT: cli/core/config.py resolves INFRAKT_HOME as Path.home() / ".infrakt"
+      # which inside the container means /home/infrakt/.infrakt (the non-root user's
+      # home directory). Mount your host ~/.infrakt to exactly that path so the app
+      # reads and writes the same state whether run via CLI or dashboard.
+      #
+      # If you have not used infrakt locally before, the app will create the
+      # directory structure automatically on first startup.
+      # ---------------------------------------------------------------------------
+      - "${HOME}/.infrakt:/home/infrakt/.infrakt"
+
+      # ---------------------------------------------------------------------------
+      # SSH key volume — read-only mount of your host SSH keys so the dashboard
+      # can perform deploys over SSH (via paramiko) to your Hetzner servers.
+      # Mounting read-only prevents the containerised process from modifying or
+      # creating keys in your host key store.
+      # ---------------------------------------------------------------------------
+      - "${HOME}/.ssh:/home/infrakt/.ssh:ro"
+
+    # Restart automatically on failure or after a Docker daemon restart, but not
+    # if you explicitly `docker compose stop` or `docker compose down`.
+    restart: unless-stopped
+
+    # Expose the FastAPI /docs health endpoint to the health check mechanism so
+    # `docker compose ps` shows a meaningful status.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3

@@ -1,0 +1,53 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+dist/
+.eggs/
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov/
+.coverage
+coverage.xml
+
+# Frontend build artifacts and dependencies
+# We install deps and build inside the container — exclude the local copies
+frontend/node_modules
+frontend/dist
+frontend/dist-types
+frontend/*.tsbuildinfo
+
+# Local development tooling
+.venv
+venv
+env
+
+# Secrets and local state — NEVER bake these into an image
+.env
+*.env
+*.key
+.infrakt/
+~/.infrakt
+
+# Docs and non-runtime files
+docs/
+CLAUDE.md
+*.md
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,103 @@
+import { NavLink, Outlet } from "react-router-dom";
+import { BarChart3, Server, Box, Database, Zap, LogOut } from "lucide-react";
+
+interface NavItem {
+  to: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+const navItems: NavItem[] = [
+  {
+    to: "/",
+    label: "Dashboard",
+    icon: <BarChart3 size={18} aria-hidden="true" />,
+  },
+  {
+    to: "/servers",
+    label: "Servers",
+    icon: <Server size={18} aria-hidden="true" />,
+  },
+  {
+    to: "/apps",
+    label: "Apps",
+    icon: <Box size={18} aria-hidden="true" />,
+  },
+  {
+    to: "/databases",
+    label: "Databases",
+    icon: <Database size={18} aria-hidden="true" />,
+  },
+];
+
+interface LayoutProps {
+  onLogout?: () => void;
+}
+
+export default function Layout({ onLogout }: LayoutProps) {
+  return (
+    <div className="flex h-full min-h-screen bg-slate-900">
+      {/* Sidebar */}
+      <aside
+        className="flex w-64 shrink-0 flex-col border-r border-slate-700 bg-slate-900"
+        aria-label="Main navigation"
+      >
+        {/* Logo */}
+        <div className="flex h-16 items-center gap-2.5 border-b border-slate-700 px-5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
+            <Zap size={16} className="text-white" aria-hidden="true" />
+          </div>
+          <span className="text-lg font-bold tracking-tight text-slate-100">
+            infrakt
+          </span>
+        </div>
+
+        {/* Nav links */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Sidebar navigation">
+          <ul className="space-y-1" role="list">
+            {navItems.map(({ to, label, icon }) => (
+              <li key={to}>
+                <NavLink
+                  to={to}
+                  end={to === "/"}
+                  className={({ isActive }) =>
+                    [
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+                      isActive
+                        ? "bg-indigo-600/20 text-indigo-400"
+                        : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
+                    ].join(" ")
+                  }
+                >
+                  {icon}
+                  {label}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Footer */}
+        <div className="border-t border-slate-700 px-5 py-4 flex items-center justify-between">
+          <p className="text-xs text-slate-500">infrakt v0.1.0</p>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="text-slate-500 hover:text-slate-300 transition-colors"
+              title="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <main className="flex-1 overflow-y-auto p-6" id="main-content">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

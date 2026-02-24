@@ -8,6 +8,7 @@ from cli.core.deployer import (
     deploy_app,
     get_container_health,
     reconcile_app_status,
+    stream_logs,
 )
 from cli.core.exceptions import DeploymentError
 
@@ -227,3 +228,58 @@ def test_deploy_app_rejects_invalid_pinned_commit():
             git_repo="https://github.com/test/repo.git",
             pinned_commit="not-a-valid-hash!",
         )
+
+
+# ── stream_logs tests ─────────────────────────────────────────────────────────
+
+
+def test_stream_logs_yields_lines():
+    """stream_logs yields decoded lines from the SSH channel."""
+    ssh = MagicMock()
+    channel = MagicMock()
+
+    # Simulate two recv calls: first returns two lines, second raises to end loop
+    call_count = 0
+
+    def fake_recv(size):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return b"line-one\nline-two\n"
+        # End the stream
+        return b""
+
+    channel.closed = False
+    channel.recv_ready.return_value = True
+    channel.recv = fake_recv
+    ssh.exec_stream = MagicMock(return_value=channel)
+
+    lines = list(stream_logs(ssh, "myapp", lines=50))
+    assert lines == ["line-one", "line-two"]
+    channel.close.assert_called_once()
+
+
+def test_stream_logs_handles_partial_lines():
+    """stream_logs buffers partial lines until a newline arrives."""
+    ssh = MagicMock()
+    channel = MagicMock()
+
+    call_count = 0
+
+    def fake_recv(size):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return b"partial"
+        if call_count == 2:
+            return b"-complete\n"
+        return b""
+
+    channel.closed = False
+    channel.recv_ready.return_value = True
+    channel.recv = fake_recv
+    ssh.exec_stream = MagicMock(return_value=channel)
+
+    lines = list(stream_logs(ssh, "myapp"))
+    assert lines == ["partial-complete"]
+    channel.close.assert_called_once()

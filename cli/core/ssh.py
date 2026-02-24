@@ -114,6 +114,19 @@ class SSHClient:
         finally:
             sftp.close()
 
+    def exec_stream(self, command: str, timeout: int = 300) -> paramiko.Channel:
+        """Execute a command and return the channel for streaming stdout.
+
+        Unlike ``run()``, this does **not** wait for the process to exit.
+        The caller is responsible for reading from the channel and closing it.
+        """
+        client = self._ensure_connected()
+        try:
+            _stdin, stdout, _stderr = client.exec_command(command, timeout=timeout)
+            return stdout.channel
+        except Exception as exc:
+            raise SSHConnectionError(f"Command failed on {self.host}: {exc}") from exc
+
     def test_connection(self) -> bool:
         try:
             self.connect()

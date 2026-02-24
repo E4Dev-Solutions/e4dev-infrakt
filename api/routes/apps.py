@@ -33,6 +33,7 @@ from cli.core.deployer import (
     reconcile_app_status,
     restart_app,
     stop_app,
+    stream_logs,
 )
 from cli.core.exceptions import SSHConnectionError
 from cli.core.proxy_manager import add_domain, remove_domain
@@ -472,6 +473,47 @@ def app_logs(name: str, server: str | None = None, lines: int = 100) -> AppLogs:
         raise HTTPException(502, str(exc))
 
     return AppLogs(app_name=name, logs=output)
+
+
+@router.get("/{name}/logs/stream")
+async def stream_app_logs(name: str, lines: int = 100) -> StreamingResponse:
+    """Stream live container logs via Server-Sent Events."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        ssh = _ssh_for(app_obj.server)
+
+    ssh.connect()
+    loop = asyncio.get_event_loop()
+    _sentinel = object()
+
+    def _next_line(gen):  # noqa: ANN001, ANN202
+        return next(gen, _sentinel)
+
+    async def _generate() -> AsyncIterator[str]:
+        try:
+            gen = stream_logs(ssh, name, lines=lines)
+            while True:
+                line = await loop.run_in_executor(None, _next_line, gen)
+                if line is _sentinel:
+                    break
+                yield f"data: {json.dumps({'line': line})}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            ssh.close()
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{name}/deployments", response_model=list[DeploymentOut])

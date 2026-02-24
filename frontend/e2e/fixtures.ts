@@ -271,7 +271,19 @@ export async function mockApi(page: Page): Promise<void> {
     return route.fulfill({ json: { message: "App stopped" } });
   });
 
-  await page.route("**/api/apps/*/logs", (route) => {
+  await page.route(/\/api\/apps\/[^/]+\/logs\/stream/, (route) => {
+    const sseBody = [
+      'data: {"line":"[streaming] Container started"}\n\n',
+      'data: {"line":"[streaming] Listening on :3000"}\n\n',
+    ].join("");
+    return route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+      body: sseBody,
+    });
+  });
+
+  await page.route(/\/api\/apps\/[^/]+\/logs(\?.*)?$/, (route) => {
     return route.fulfill({
       json: { app_name: "web-api", logs: "2025-01-01 Container started\n2025-01-01 Listening on :3000" },
     });

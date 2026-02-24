@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePosixPath
@@ -199,6 +199,43 @@ def get_logs(ssh: SSHClient, app_name: str, lines: int = 100) -> str:
     ssh_cmd = f"cd {shlex.quote(app_path)} && docker compose logs --tail={int(lines)} --no-color"
     stdout = ssh.run_checked(ssh_cmd, timeout=30)
     return stdout
+
+
+def stream_logs(ssh: SSHClient, app_name: str, lines: int = 100) -> Generator[str, None, None]:
+    """Stream container logs in real time via ``docker compose logs -f``.
+
+    Yields log lines as they arrive.  The caller controls the lifetime —
+    breaking out of the generator closes the SSH channel.
+    """
+    app_path = _app_dir(app_name)
+    lines = max(1, min(lines, 10000))
+    cmd = f"cd {shlex.quote(app_path)} && docker compose logs -f --tail={int(lines)} --no-color"
+    channel = ssh.exec_stream(cmd)
+    buf = b""
+    try:
+        while not channel.closed:
+            if channel.recv_ready():
+                data = channel.recv(4096)
+                if not data:
+                    break
+                buf += data
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    yield line.decode(errors="replace")
+            else:
+                channel.settimeout(1.0)
+                try:
+                    data = channel.recv(4096)
+                    if not data:
+                        break
+                    buf += data
+                    while b"\n" in buf:
+                        line, buf = buf.split(b"\n", 1)
+                        yield line.decode(errors="replace")
+                except TimeoutError:
+                    continue
+    finally:
+        channel.close()
 
 
 def _generate_compose(

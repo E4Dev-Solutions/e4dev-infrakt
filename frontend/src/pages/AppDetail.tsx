@@ -39,6 +39,7 @@ import {
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { useDeploymentStream } from "@/hooks/useDeploymentStream";
+import { useContainerLogStream } from "@/hooks/useContainerLogStream";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
@@ -97,55 +98,113 @@ function TabButton({
 
 function LogsTab({ appName }: { appName: string }) {
   const [lines, setLines] = useState(100);
-  const { data, isLoading, refetch, isFetching } = useAppLogs(appName, lines);
+  const [live, setLive] = useState(false);
+  const { data, isLoading, refetch, isFetching } = useAppLogs(appName, lines, {
+    enabled: !live && Boolean(appName),
+    refetchInterval: live ? false : 15_000,
+  });
+  const stream = useContainerLogStream(appName, lines, live);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [data?.logs]);
+  }, [data?.logs, stream.lines.length]);
+
+  function handleToggleLive() {
+    if (live) {
+      stream.clear();
+    }
+    setLive((prev) => !prev);
+  }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <label
-            htmlFor="log-lines"
-            className="text-xs text-slate-400"
-          >
-            Lines:
-          </label>
-          <select
-            id="log-lines"
-            value={lines}
-            onChange={(e) => setLines(Number(e.target.value))}
-            className="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-          >
-            {[50, 100, 200, 500].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-3">
+          {!live && (
+            <>
+              <label
+                htmlFor="log-lines"
+                className="text-xs text-slate-400"
+              >
+                Lines:
+              </label>
+              <select
+                id="log-lines"
+                value={lines}
+                onChange={(e) => setLines(Number(e.target.value))}
+                className="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              >
+                {[50, 100, 200, 500].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          {live && stream.isStreaming && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-400" aria-hidden="true" />
+              Streaming
+            </span>
+          )}
+          {live && stream.error && (
+            <span className="text-xs text-red-400">{stream.error}</span>
+          )}
         </div>
-        <button
-          onClick={() => void refetch()}
-          disabled={isFetching}
-          className="flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
-        >
-          <RefreshCw
-            size={12}
-            className={isFetching ? "animate-spin" : ""}
-            aria-hidden="true"
-          />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {!live && (
+            <button
+              onClick={() => void refetch()}
+              disabled={isFetching}
+              className="flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            >
+              <RefreshCw
+                size={12}
+                className={isFetching ? "animate-spin" : ""}
+                aria-hidden="true"
+              />
+              Refresh
+            </button>
+          )}
+          <button
+            onClick={handleToggleLive}
+            className={[
+              "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500",
+              live
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                : "border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600",
+            ].join(" ")}
+            aria-label={live ? "Stop live streaming" : "Start live streaming"}
+          >
+            {live ? (
+              <Square size={12} aria-hidden="true" />
+            ) : (
+              <Play size={12} aria-hidden="true" />
+            )}
+            Live
+          </button>
+        </div>
       </div>
 
       <div
         className="h-[480px] overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4"
         aria-label="Application logs"
       >
-        {isLoading ? (
+        {live ? (
+          stream.lines.length === 0 && stream.isStreaming ? (
+            <div className="flex h-full items-center justify-center">
+              <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Connecting to log stream" />
+            </div>
+          ) : stream.lines.length === 0 ? (
+            <p className="text-center text-sm text-slate-500">No logs available.</p>
+          ) : (
+            <pre className="log-viewer text-slate-300">
+              {stream.lines.join("\n")}
+            </pre>
+          )
+        ) : isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Loading logs" />
           </div>

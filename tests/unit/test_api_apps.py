@@ -423,3 +423,31 @@ class TestRollback:
         response = client.post("/api/apps/my-app/rollback")
         assert response.status_code == 404
         assert "No previous" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# GET /api/apps/{name}/logs/stream
+# ---------------------------------------------------------------------------
+
+
+class TestStreamAppLogs:
+    def test_returns_404_for_unknown_app(self, client, isolated_config):
+        response = client.get("/api/apps/ghost-app/logs/stream")
+        assert response.status_code == 404
+
+    def test_returns_sse_content_type(self, client, isolated_config):
+        _seed_app("srv-1", "my-app", status="running")
+        with (
+            patch("api.routes.apps.SSHClient") as mock_cls,
+            patch("api.routes.apps.stream_logs") as mock_stream,
+        ):
+            mock_ssh = MagicMock()
+            mock_cls.from_server.return_value = mock_ssh
+            mock_stream.return_value = iter(["log line 1", "log line 2"])
+            response = client.get("/api/apps/my-app/logs/stream?lines=50")
+
+        assert response.status_code == 200
+        assert "text/event-stream" in response.headers["content-type"]
+        body = response.text
+        assert '"log line 1"' in body
+        assert '"log line 2"' in body

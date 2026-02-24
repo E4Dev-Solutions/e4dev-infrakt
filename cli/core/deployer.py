@@ -6,6 +6,7 @@ import json
 import re
 import shlex
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePosixPath
 
@@ -17,6 +18,16 @@ APP_BASE = PurePosixPath("/opt/infrakt/apps")
 # Allow only safe characters in app names, branches, and image references
 _SAFE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 _SAFE_BRANCH_RE = re.compile(r"^[a-zA-Z0-9._/-]+$")
+_SAFE_COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+@dataclass
+class DeployResult:
+    """Result of a deploy_app() call with captured metadata."""
+
+    log: str = ""
+    commit_hash: str | None = None
+    image_used: str | None = None
 
 
 def _validate_name(value: str, label: str) -> None:
@@ -43,14 +54,18 @@ def deploy_app(
     env_content: str = "",
     compose_override: str | None = None,
     log_fn: Callable[[str], None] | None = None,
-) -> str:
+    pinned_commit: str | None = None,
+) -> DeployResult:
     """Deploy or redeploy an app on a remote server.
 
-    Returns deployment log string.  If *log_fn* is provided it is called with
-    each log line as it is produced, enabling real-time streaming.
+    Returns a DeployResult with log, commit_hash, and image_used.
+    If *log_fn* is provided it is called with each log line as it is produced.
+    If *pinned_commit* is provided (rollback), uses that commit instead of
+    origin/{branch}.
     """
     app_path = _app_dir(app_name)
     log_lines: list[str] = []
+    result = DeployResult()
 
     def _log(msg: str) -> None:
         line = f"[{datetime.utcnow().isoformat()}] {msg}"
@@ -61,6 +76,8 @@ def deploy_app(
     # Validate inputs
     if branch and not _SAFE_BRANCH_RE.match(branch):
         raise DeploymentError(f"Invalid branch name: {branch!r}")
+    if pinned_commit and not _SAFE_COMMIT_RE.match(pinned_commit):
+        raise DeploymentError(f"Invalid commit hash: {pinned_commit!r}")
 
     _log(f"Starting deployment of '{app_name}'")
 
@@ -82,17 +99,29 @@ def deploy_app(
 
         _, _, code = ssh.run(f"test -d {q_repo}/.git")
         if code == 0:
-            _log("Pulling latest changes")
-            ssh.run_checked(
-                f"cd {q_repo} && git fetch origin && git reset --hard origin/{q_branch}",
-                timeout=120,
-            )
+            if pinned_commit:
+                q_commit = shlex.quote(pinned_commit)
+                _log(f"Rolling back to commit {pinned_commit}")
+                ssh.run_checked(
+                    f"cd {q_repo} && git fetch origin && git reset --hard {q_commit}",
+                    timeout=120,
+                )
+            else:
+                _log("Pulling latest changes")
+                ssh.run_checked(
+                    f"cd {q_repo} && git fetch origin && git reset --hard origin/{q_branch}",
+                    timeout=120,
+                )
         else:
             _log(f"Cloning {git_repo} (branch: {branch})")
             ssh.run_checked(
                 f"git clone -b {q_branch} {q_git_repo} {q_repo}",
                 timeout=120,
             )
+
+        # Capture the commit hash
+        stdout = ssh.run_checked(f"cd {q_repo} && git rev-parse HEAD")
+        result.commit_hash = stdout.strip()[:40]
 
         # Use compose file from repo if it exists, otherwise generate one
         _, _, has_compose = ssh.run(f"test -f {q_repo}/docker-compose.yml")
@@ -124,6 +153,7 @@ def deploy_app(
             f"cd {q_app_path} && docker compose up -d --pull always --remove-orphans",
             timeout=300,
         )
+        result.image_used = image
 
     # Handle compose-override-only deployment
     elif compose_override:
@@ -142,7 +172,8 @@ def deploy_app(
         )
 
     _log("Deployment complete")
-    return "\n".join(log_lines)
+    result.log = "\n".join(log_lines)
+    return result
 
 
 def stop_app(ssh: SSHClient, app_name: str) -> None:

@@ -229,6 +229,19 @@ export function useDeployApp() {
   });
 }
 
+export function useRollbackApp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, deploymentId }: { name: string; deploymentId?: number }) =>
+      appsApi.rollback(name, deploymentId),
+    onSuccess: (_data, { name }) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.appDeployments(name) });
+      void qc.invalidateQueries({ queryKey: queryKeys.apps() });
+      void qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+    },
+  });
+}
+
 export function useRestartApp() {
   const qc = useQueryClient();
   return useMutation({

@@ -81,9 +81,10 @@ export interface App {
 }
 
 export interface Deployment {
-  id: string;
-  app_id: string;
+  id: number;
+  app_id: number;
   commit_hash?: string;
+  image_used?: string;
   status: DeploymentStatus;
   log?: string;
   started_at: string;
@@ -343,6 +344,11 @@ export const appsApi = {
 
   health: (name: string): Promise<AppHealth> =>
     get(`/apps/${encodeURIComponent(name)}/health`),
+
+  rollback: (name: string, deploymentId?: number): Promise<DeployResult> => {
+    const qs = deploymentId ? `?deployment_id=${deploymentId}` : "";
+    return post(`/apps/${encodeURIComponent(name)}/rollback${qs}`);
+  },
 };
 
 // ─── Databases ────────────────────────────────────────────────────────────────

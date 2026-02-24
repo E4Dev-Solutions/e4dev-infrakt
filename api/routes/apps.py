@@ -238,7 +238,7 @@ def deploy(
                 port = app_data.get("port")
                 if not isinstance(port, int):
                     port = 3000
-                log = deploy_app(
+                result = deploy_app(
                     ssh,
                     name,
                     git_repo=git_repo,
@@ -258,7 +258,9 @@ def deploy(
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
                 if dep:
                     dep.status = "success"
-                    dep.log = log
+                    dep.log = result.log
+                    dep.commit_hash = result.commit_hash
+                    dep.image_used = result.image_used
                     dep.finished_at = datetime.utcnow()
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
@@ -294,6 +296,161 @@ def deploy(
 
     background_tasks.add_task(_do_deploy)
     return {"message": f"Deployment started for '{name}'", "deployment_id": dep_id}
+
+
+@router.post("/{name}/rollback")
+def rollback(
+    name: str,
+    background_tasks: BackgroundTasks,
+    deployment_id: int | None = None,
+    server: str | None = None,
+) -> dict[str, str | int]:
+    """Roll back an app to a previous successful deployment."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name)
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        app_obj = q.first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+
+        app_id = app_obj.id
+        srv = app_obj.server
+
+        # Find target deployment
+        if deployment_id:
+            target = (
+                session.query(Deployment)
+                .filter(
+                    Deployment.id == deployment_id,
+                    Deployment.app_id == app_id,
+                    Deployment.status == "success",
+                )
+                .first()
+            )
+            if not target:
+                raise HTTPException(
+                    404,
+                    f"No successful deployment #{deployment_id} found for '{name}'",
+                )
+        else:
+            successes = (
+                session.query(Deployment)
+                .filter(Deployment.app_id == app_id, Deployment.status == "success")
+                .order_by(Deployment.started_at.desc())
+                .limit(2)
+                .all()
+            )
+            if len(successes) < 2:
+                raise HTTPException(
+                    404,
+                    f"No previous successful deployment to roll back to for '{name}'",
+                )
+            target = successes[1]
+
+        pinned_commit = target.commit_hash
+        pinned_image = target.image_used
+        target_dep_id = target.id
+
+        app_data: dict[str, str | int | None] = {
+            "port": app_obj.port,
+            "git_repo": app_obj.git_repo,
+            "branch": app_obj.branch,
+            "image": pinned_image or app_obj.image,
+            "domain": app_obj.domain,
+        }
+        ssh_data: dict[str, str | int | None] = {
+            "host": srv.host,
+            "user": srv.user,
+            "port": srv.port,
+            "key_path": srv.ssh_key_path,
+        }
+
+        # Create new deployment record for rollback
+        dep = Deployment(app_id=app_id, status="in_progress")
+        session.add(dep)
+        session.flush()
+        dep_id = dep.id
+
+    loop = asyncio.get_event_loop()
+    broadcaster.register(dep_id, loop)
+
+    def _do_rollback() -> None:
+        def _on_log(line: str) -> None:
+            broadcaster.publish(dep_id, line)
+
+        ssh = SSHClient(
+            host=ssh_data.get("host", ""),  # type: ignore[arg-type]
+            user=ssh_data.get("user", "root"),  # type: ignore[arg-type]
+            port=ssh_data.get("port", 22),  # type: ignore[arg-type]
+            key_path=ssh_data.get("key_path"),  # type: ignore[arg-type]
+        )
+        try:
+            with ssh:
+                ssh.run("docker network create infrakt 2>/dev/null || true")
+                env_content = env_content_for_app(app_id)
+                git_repo = app_data.get("git_repo")
+                if not isinstance(git_repo, (str, type(None))):
+                    git_repo = None
+                branch = app_data.get("branch")
+                if not isinstance(branch, str):
+                    branch = "main"
+                image = app_data.get("image")
+                if not isinstance(image, (str, type(None))):
+                    image = None
+                port = app_data.get("port")
+                if not isinstance(port, int):
+                    port = 3000
+                result = deploy_app(
+                    ssh,
+                    name,
+                    git_repo=git_repo,
+                    branch=branch,
+                    image=image,
+                    port=port,
+                    env_content=env_content,
+                    log_fn=_on_log,
+                    pinned_commit=pinned_commit,
+                )
+                domain = app_data.get("domain")
+                if domain:
+                    if not isinstance(domain, str):
+                        domain = str(domain)
+                    add_domain(ssh, domain, port)
+
+            with get_session() as session:
+                dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
+                if dep:
+                    dep.status = "success"
+                    dep.log = result.log
+                    dep.commit_hash = result.commit_hash
+                    dep.image_used = result.image_used
+                    dep.finished_at = datetime.utcnow()
+                a = session.query(App).filter(App.id == app_id).first()
+                if a:
+                    a.status = "running"
+        except Exception as exc:
+            logger.exception("Rollback error for %s", name)
+            broadcaster.publish(dep_id, f"[ERROR] {exc}")
+            with get_session() as session:
+                dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
+                if dep:
+                    dep.status = "failed"
+                    dep.log = str(exc)
+                    dep.finished_at = datetime.utcnow()
+                a = session.query(App).filter(App.id == app_id).first()
+                if a:
+                    a.status = "error"
+        finally:
+            broadcaster.finish(dep_id)
+            threading.Timer(300, broadcaster.cleanup, args=[dep_id]).start()
+
+    background_tasks.add_task(_do_rollback)
+    return {
+        "message": f"Rolling back '{name}' to deployment #{target_dep_id}",
+        "deployment_id": dep_id,
+    }
 
 
 @router.get("/{name}/logs", response_model=AppLogs)

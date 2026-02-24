@@ -6,6 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from cli.core.database import get_session, init_db
+from cli.core.deployer import DeployResult
 from cli.main import cli
 from cli.models.app import App
 from cli.models.server import Server
@@ -243,7 +244,7 @@ class TestAppDeploy:
         _seed_app("prod", "deploy-me")
         with (
             patch("cli.commands.app.SSHClient") as mock_cls,
-            patch("cli.commands.app.deploy_app", return_value="build log"),
+            patch("cli.commands.app.deploy_app", return_value=DeployResult(log="build log")),
             patch("cli.commands.app.status_spinner"),
         ):
             mock_ssh = MagicMock()
@@ -265,7 +266,7 @@ class TestAppDeploy:
         _seed_app("prod", "status-app")
         with (
             patch("cli.commands.app.SSHClient") as mock_cls,
-            patch("cli.commands.app.deploy_app", return_value="ok"),
+            patch("cli.commands.app.deploy_app", return_value=DeployResult(log="ok")),
             patch("cli.commands.app.status_spinner"),
         ):
             mock_ssh = MagicMock()

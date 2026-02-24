@@ -146,7 +146,7 @@ def deploy(name: str, server_name: str | None) -> None:
             ssh.connect()
             ssh.run("docker network create infrakt 2>/dev/null || true")
 
-            log = deploy_app(
+            result = deploy_app(
                 ssh,
                 name,
                 git_repo=app_git,
@@ -167,7 +167,9 @@ def deploy(name: str, server_name: str | None) -> None:
             dep_record = session.query(Deployment).filter(Deployment.id == dep_id).first()
             if dep_record is not None:
                 dep_record.status = "success"
-                dep_record.log = log
+                dep_record.log = result.log
+                dep_record.commit_hash = result.commit_hash
+                dep_record.image_used = result.image_used
                 dep_record.finished_at = datetime.utcnow()
             app_record = session.query(App).filter(App.id == app_id).first()
             if app_record is not None:
@@ -336,3 +338,113 @@ def health(name: str, server_name: str | None) -> None:
         rows,
     )
     info(f"DB status: {db_status}  |  Actual: {actual_status}")
+
+
+@app.command()
+@click.argument("name")
+@click.option("--deployment", "dep_id", type=int, default=None, help="Deployment ID to rollback to")
+@click.option("--server", "server_name", default=None)
+def rollback(name: str, dep_id: int | None, server_name: str | None) -> None:
+    """Roll back an app to a previous successful deployment."""
+    init_db()
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        srv = app_obj.server
+        app_id = app_obj.id
+        app_port = app_obj.port
+        app_git = app_obj.git_repo
+        app_branch = app_obj.branch
+        app_image = app_obj.image
+        app_domain = app_obj.domain
+
+        # Find target deployment
+        if dep_id:
+            target = (
+                session.query(Deployment)
+                .filter(
+                    Deployment.id == dep_id,
+                    Deployment.app_id == app_id,
+                    Deployment.status == "success",
+                )
+                .first()
+            )
+            if not target:
+                error(f"No successful deployment #{dep_id} found for '{name}'")
+                raise SystemExit(1)
+        else:
+            # Default: 2nd most recent success (most recent = current)
+            successes = (
+                session.query(Deployment)
+                .filter(Deployment.app_id == app_id, Deployment.status == "success")
+                .order_by(Deployment.started_at.desc())
+                .limit(2)
+                .all()
+            )
+            if len(successes) < 2:
+                error(f"No previous successful deployment to roll back to for '{name}'")
+                raise SystemExit(1)
+            target = successes[1]
+
+        pinned_commit = target.commit_hash
+        pinned_image = target.image_used
+        target_id = target.id
+
+        env_content = env_content_for_app(app_id)
+        ssh = _ssh_for_server(srv)
+
+    info(f"Rolling back '{name}' to deployment #{target_id}")
+
+    # Create a new deployment record for the rollback
+    with get_session() as session:
+        dep = Deployment(app_id=app_id, status="in_progress")
+        session.add(dep)
+        session.flush()
+        new_dep_id = dep.id
+
+    try:
+        with status_spinner(f"Rolling back '{name}'"):
+            ssh.connect()
+            ssh.run("docker network create infrakt 2>/dev/null || true")
+
+            result = deploy_app(
+                ssh,
+                name,
+                git_repo=app_git,
+                branch=app_branch,
+                image=pinned_image or app_image,
+                port=app_port,
+                env_content=env_content,
+                pinned_commit=pinned_commit,
+            )
+
+            if app_domain:
+                add_domain(ssh, app_domain, app_port)
+
+        ssh.close()
+
+        with get_session() as session:
+            dep_record = session.query(Deployment).filter(Deployment.id == new_dep_id).first()
+            if dep_record is not None:
+                dep_record.status = "success"
+                dep_record.log = result.log
+                dep_record.commit_hash = result.commit_hash
+                dep_record.image_used = result.image_used
+                dep_record.finished_at = datetime.utcnow()
+            app_record = session.query(App).filter(App.id == app_id).first()
+            if app_record is not None:
+                app_record.status = "running"
+
+        success(f"App '{name}' rolled back to deployment #{target_id}")
+
+    except Exception as exc:
+        with get_session() as session:
+            dep_record = session.query(Deployment).filter(Deployment.id == new_dep_id).first()
+            if dep_record is not None:
+                dep_record.status = "failed"
+                dep_record.log = str(exc)
+                dep_record.finished_at = datetime.utcnow()
+            app_record = session.query(App).filter(App.id == app_id).first()
+            if app_record is not None:
+                app_record.status = "error"
+        error(f"Rollback failed: {exc}")
+        raise SystemExit(1)

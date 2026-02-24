@@ -45,7 +45,7 @@ test.describe("Dashboard", () => {
     // The deployments table should show status badges
     const table = page.getByRole("table");
     await expect(table).toBeVisible();
-    await expect(table.getByText("success")).toBeVisible();
+    await expect(table.getByText("success").first()).toBeVisible();
     await expect(table.getByText("failed")).toBeVisible();
   });
 });

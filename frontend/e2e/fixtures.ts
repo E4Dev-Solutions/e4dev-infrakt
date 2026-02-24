@@ -88,12 +88,13 @@ export const MOCK_DATABASES = [
 
 export const MOCK_DEPLOYMENTS = [
   {
-    id: 1,
+    id: 3,
     app_id: 1,
     app_name: "web-api",
     status: "success",
-    log: "Deployed successfully",
-    commit_hash: "abc12345",
+    log: "[2025-02-10T10:00:00] Starting deployment\n[2025-02-10T10:02:00] Deployment complete",
+    commit_hash: "abc12345def67890",
+    image_used: null,
     started_at: "2025-02-10T10:00:00",
     finished_at: "2025-02-10T10:02:00",
   },
@@ -102,10 +103,22 @@ export const MOCK_DEPLOYMENTS = [
     app_id: 1,
     app_name: "web-api",
     status: "failed",
-    log: "Build failed",
-    commit_hash: "def67890",
+    log: "Build failed: exit code 1",
+    commit_hash: "def67890abc12345",
+    image_used: null,
     started_at: "2025-02-09T15:00:00",
     finished_at: "2025-02-09T15:01:00",
+  },
+  {
+    id: 1,
+    app_id: 1,
+    app_name: "web-api",
+    status: "success",
+    log: "[2025-02-08T08:00:00] Starting deployment\n[2025-02-08T08:01:00] Deployment complete",
+    commit_hash: "111222333444",
+    image_used: null,
+    started_at: "2025-02-08T08:00:00",
+    finished_at: "2025-02-08T08:01:00",
   },
 ];
 
@@ -241,6 +254,12 @@ export async function mockApi(page: Page): Promise<void> {
   await page.route("**/api/apps/*/deploy", (route) => {
     return route.fulfill({
       json: { message: "Deployment started", deployment_id: 100 },
+    });
+  });
+
+  await page.route(/\/api\/apps\/[^/]+\/rollback/, (route) => {
+    return route.fulfill({
+      json: { message: "Rolling back", deployment_id: 200 },
     });
   });
 

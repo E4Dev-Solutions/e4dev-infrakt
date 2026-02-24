@@ -18,6 +18,9 @@ import {
   GitBranch,
   Box,
   Activity,
+  ChevronDown,
+  ChevronRight,
+  RotateCcw,
 } from "lucide-react";
 import {
   useApps,
@@ -26,6 +29,7 @@ import {
   useAppEnv,
   useAppHealth,
   useDeployApp,
+  useRollbackApp,
   useRestartApp,
   useStopApp,
   useDestroyApp,
@@ -310,6 +314,9 @@ function EnvTab({ appName }: { appName: string }) {
 
 function DeploymentsTab({ appName }: { appName: string }) {
   const { data: deployments = [], isLoading } = useAppDeployments(appName);
+  const rollbackMut = useRollbackApp();
+  const toast = useToast();
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   if (isLoading) {
     return (
@@ -327,14 +334,31 @@ function DeploymentsTab({ appName }: { appName: string }) {
     );
   }
 
+  function getRef(dep: { commit_hash?: string; image_used?: string }): string {
+    if (dep.commit_hash) return dep.commit_hash.slice(0, 8);
+    if (dep.image_used) return dep.image_used;
+    return "—";
+  }
+
+  function handleRollback(depId: number) {
+    if (!confirm("Roll back to this deployment?")) return;
+    rollbackMut.mutate(
+      { name: appName, deploymentId: depId },
+      {
+        onSuccess: () => toast.success("Rollback started"),
+        onError: () => toast.error("Rollback failed"),
+      },
+    );
+  }
+
   return (
     <div className="overflow-hidden rounded-lg border border-slate-700">
       <table className="w-full text-sm" role="table">
         <thead>
           <tr className="border-b border-slate-700 bg-slate-800/60">
-            {["ID", "Status", "Commit", "Started", "Finished"].map((h) => (
+            {["", "ID", "Status", "Ref", "Started", "Finished", ""].map((h, i) => (
               <th
-                key={h}
+                key={`${h}-${i}`}
                 scope="col"
                 className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
               >
@@ -344,30 +368,65 @@ function DeploymentsTab({ appName }: { appName: string }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-700/40">
-          {deployments.map((dep) => (
-            <tr
-              key={dep.id}
-              className="bg-slate-800/30 transition-colors hover:bg-slate-800/60"
-            >
-              <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                {dep.id.slice(0, 8)}
-              </td>
-              <td className="px-4 py-3">
-                <StatusBadge status={dep.status} />
-              </td>
-              <td className="px-4 py-3 font-mono text-xs text-slate-400">
-                {dep.commit_hash ? dep.commit_hash.slice(0, 8) : "—"}
-              </td>
-              <td className="px-4 py-3 text-slate-400">
-                {formatDate(dep.started_at)}
-              </td>
-              <td className="px-4 py-3 text-slate-400">
-                {dep.finished_at ? formatDate(dep.finished_at) : "—"}
-              </td>
-            </tr>
+          {deployments.map((dep, idx) => (
+            <>
+              <tr
+                key={dep.id}
+                className="bg-slate-800/30 transition-colors hover:bg-slate-800/60"
+              >
+                <td className="w-8 px-4 py-3">
+                  {dep.log ? (
+                    <button
+                      onClick={() => setExpandedId(expandedId === dep.id ? null : dep.id)}
+                      className="text-slate-500 hover:text-slate-300"
+                      aria-label={expandedId === dep.id ? "Collapse log" : "View log"}
+                    >
+                      {expandedId === dep.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                  ) : null}
+                </td>
+                <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                  #{dep.id}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={dep.status} />
+                </td>
+                <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                  {getRef(dep)}
+                </td>
+                <td className="px-4 py-3 text-slate-400">
+                  {formatDate(dep.started_at)}
+                </td>
+                <td className="px-4 py-3 text-slate-400">
+                  {dep.finished_at ? formatDate(dep.finished_at) : "—"}
+                </td>
+                <td className="px-4 py-3">
+                  {dep.status === "success" && idx > 0 ? (
+                    <button
+                      onClick={() => handleRollback(dep.id)}
+                      disabled={rollbackMut.isPending}
+                      className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/10 disabled:opacity-50"
+                      aria-label="Rollback"
+                    >
+                      <RotateCcw size={12} /> Rollback
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+              {expandedId === dep.id && dep.log ? (
+                <tr key={`${dep.id}-log`}>
+                  <td colSpan={7} className="bg-slate-900/60 px-4 py-3">
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-400">
+                      {dep.log}
+                    </pre>
+                  </td>
+                </tr>
+              ) : null}
+            </>
           ))}
         </tbody>
       </table>
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
     </div>
   );
 }

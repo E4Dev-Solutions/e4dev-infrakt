@@ -1,8 +1,9 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from cli.core.config import ensure_config_dir, get_db_url
@@ -31,12 +32,28 @@ def _get_session_factory() -> sessionmaker[Session]:
     return _SessionLocal
 
 
+def _apply_migrations(engine: Engine) -> None:
+    """Apply incremental schema migrations for existing databases."""
+    migrations = [
+        "ALTER TABLE deployments ADD COLUMN image_used VARCHAR(500)",
+    ]
+    with engine.connect() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except OperationalError:
+                conn.rollback()
+
+
 def init_db() -> None:
     """Create all tables."""
     # Import models so they register with Base metadata
     import cli.models  # noqa: F401
 
-    Base.metadata.create_all(_get_engine())
+    engine = _get_engine()
+    Base.metadata.create_all(engine)
+    _apply_migrations(engine)
 
 
 @contextmanager

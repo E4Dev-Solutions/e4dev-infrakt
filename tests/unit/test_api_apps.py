@@ -369,3 +369,57 @@ class TestAppHealth:
     def test_returns_404_for_unknown_app(self, client, isolated_config):
         response = client.get("/api/apps/ghost-app/health")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# POST /api/apps/{name}/rollback
+# ---------------------------------------------------------------------------
+
+
+def _seed_deployment(app_name="my-app", status="success", commit_hash=None, image_used=None):
+    """Insert a deployment record for the given app."""
+    init_db()
+    with get_session() as session:
+        a = session.query(App).filter(App.name == app_name).first()
+        dep = Deployment(
+            app_id=a.id,
+            status=status,
+            commit_hash=commit_hash,
+            image_used=image_used,
+            log="test log",
+        )
+        session.add(dep)
+        session.flush()
+        return dep.id
+
+
+class TestRollback:
+    def test_rollback_with_deployment_id(self, client, isolated_config):
+        _seed_app("srv-1", "my-app", status="running")
+        dep_id = _seed_deployment("my-app", status="success", image_used="nginx:1.24")
+        _seed_deployment("my-app", status="success", image_used="nginx:1.25")
+
+        with patch("api.routes.apps.broadcaster"), patch("api.routes.apps.asyncio"):
+            response = client.post(f"/api/apps/my-app/rollback?deployment_id={dep_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "deployment_id" in data
+        assert data["deployment_id"] != dep_id
+
+    def test_rollback_without_deployment_id_uses_second_success(self, client, isolated_config):
+        _seed_app("srv-1", "my-app", status="running")
+        _seed_deployment("my-app", status="success", image_used="nginx:1.24")
+        _seed_deployment("my-app", status="success", image_used="nginx:1.25")
+
+        with patch("api.routes.apps.broadcaster"), patch("api.routes.apps.asyncio"):
+            response = client.post("/api/apps/my-app/rollback")
+        assert response.status_code == 200
+        assert "deployment_id" in response.json()
+
+    def test_rollback_returns_404_when_no_previous_deployment(self, client, isolated_config):
+        _seed_app("srv-1", "my-app", status="running")
+        _seed_deployment("my-app", status="success", image_used="nginx:1.25")
+
+        response = client.post("/api/apps/my-app/rollback")
+        assert response.status_code == 404
+        assert "No previous" in response.json()["detail"]

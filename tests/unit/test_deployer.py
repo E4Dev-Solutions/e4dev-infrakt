@@ -1,11 +1,15 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from cli.core.deployer import (
+    DeployResult,
     _generate_compose,
     deploy_app,
     get_container_health,
     reconcile_app_status,
 )
+from cli.core.exceptions import DeploymentError
 
 
 def test_generate_compose_with_image():
@@ -52,8 +56,8 @@ def test_deploy_app_without_log_fn():
     ssh.upload_string = MagicMock()
 
     result = deploy_app(ssh, "test-app", image="nginx:latest")
-    assert "Starting deployment" in result
-    assert "Deployment complete" in result
+    assert "Starting deployment" in result.log
+    assert "Deployment complete" in result.log
 
 
 # ── Health check tests ─────────────────────────────────────────────────────────
@@ -137,3 +141,89 @@ def test_reconcile_app_status_no_containers():
     ssh = MagicMock()
     ssh.run.return_value = ("", "", 1)
     assert reconcile_app_status(ssh, "myapp") == "stopped"
+
+
+# ── DeployResult and metadata capture tests ───────────────────────────────────
+
+
+def test_deploy_app_returns_deploy_result():
+    """deploy_app returns a DeployResult with image_used for image deploys."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.run_checked = MagicMock(return_value="")
+    ssh.run = MagicMock(return_value=("", "", 0))
+    ssh.upload_string = MagicMock()
+
+    result = deploy_app(ssh, "test-app", image="nginx:1.25")
+    assert isinstance(result, DeployResult)
+    assert result.image_used == "nginx:1.25"
+    assert result.commit_hash is None
+    assert "Deployment complete" in result.log
+
+
+def test_deploy_app_captures_commit_hash_for_git():
+    """deploy_app captures git commit hash after clone/pull."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.upload_string = MagicMock()
+    # test -d returns 1 (no existing repo -> clone)
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1)])
+    ssh.run_checked = MagicMock(
+        side_effect=[
+            "",  # mkdir
+            "",  # git clone
+            "abc123def456\n",  # git rev-parse HEAD
+            "",  # docker compose up
+        ]
+    )
+
+    result = deploy_app(ssh, "test-app", git_repo="https://github.com/test/repo.git", branch="main")
+    assert isinstance(result, DeployResult)
+    assert result.commit_hash == "abc123def456"
+    assert result.image_used is None
+
+
+def test_deploy_app_pinned_commit_uses_reset():
+    """pinned_commit triggers git reset --hard <commit> instead of origin/branch."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.upload_string = MagicMock()
+    # test -d returns 0 (existing repo -> pull/reset)
+    ssh.run = MagicMock(side_effect=[("", "", 0), ("", "", 1)])
+    ssh.run_checked = MagicMock(
+        side_effect=[
+            "",  # mkdir
+            "",  # git fetch + reset --hard <commit>
+            "deadbeef12345678\n",  # git rev-parse HEAD
+            "",  # docker compose up
+        ]
+    )
+
+    result = deploy_app(
+        ssh,
+        "test-app",
+        git_repo="https://github.com/test/repo.git",
+        branch="main",
+        pinned_commit="deadbeef12345678",
+    )
+
+    # Verify it used the pinned commit in the reset command
+    reset_call = ssh.run_checked.call_args_list[1]
+    assert "deadbeef12345678" in reset_call[0][0]
+    assert "origin/" not in reset_call[0][0]
+    assert result.commit_hash == "deadbeef12345678"
+
+
+def test_deploy_app_rejects_invalid_pinned_commit():
+    """Invalid pinned_commit raises DeploymentError."""
+    ssh = MagicMock()
+    with pytest.raises(DeploymentError, match="Invalid commit hash"):
+        deploy_app(
+            ssh,
+            "test-app",
+            git_repo="https://github.com/test/repo.git",
+            pinned_commit="not-a-valid-hash!",
+        )

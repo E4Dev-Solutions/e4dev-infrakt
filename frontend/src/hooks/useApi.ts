@@ -11,8 +11,11 @@ import {
   databasesApi,
   proxyApi,
   type CreateServerInput,
+  type UpdateServerInput,
   type CreateAppInput,
+  type UpdateAppInput,
   type CreateDatabaseInput,
+  type ProxyRouteCreateInput,
   type EnvVar,
   type DashboardData,
   type Server,
@@ -78,6 +81,18 @@ export function useAddServer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateServerInput) => serversApi.create(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.servers });
+      void qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+    },
+  });
+}
+
+export function useUpdateServer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, input }: { name: string; input: UpdateServerInput }) =>
+      serversApi.update(name, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.servers });
       void qc.invalidateQueries({ queryKey: queryKeys.dashboard });
@@ -168,6 +183,18 @@ export function useCreateApp() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateAppInput) => appsApi.create(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.apps() });
+      void qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+    },
+  });
+}
+
+export function useUpdateApp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, input }: { name: string; input: UpdateAppInput }) =>
+      appsApi.update(name, input),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.apps() });
       void qc.invalidateQueries({ queryKey: queryKeys.dashboard });
@@ -288,5 +315,32 @@ export function useProxyDomains(
     queryFn: () => proxyApi.domains(server),
     enabled: Boolean(server),
     ...options,
+  });
+}
+
+export function useAddProxyRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ProxyRouteCreateInput) => proxyApi.addRoute(input),
+    onSuccess: (_data, input) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.proxyDomains(input.server_name) });
+    },
+  });
+}
+
+export function useRemoveProxyRoute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ server, domain }: { server: string; domain: string }) =>
+      proxyApi.removeRoute(server, domain),
+    onSuccess: (_data, { server }) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.proxyDomains(server) });
+    },
+  });
+}
+
+export function useReloadProxy() {
+  return useMutation({
+    mutationFn: (server: string) => proxyApi.reload(server),
   });
 }

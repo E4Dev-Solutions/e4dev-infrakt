@@ -1,7 +1,8 @@
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from cli.core.config import ensure_config_dir, get_db_url
@@ -11,11 +12,11 @@ class Base(DeclarativeBase):
     pass
 
 
-_engine = None
-_SessionLocal = None
+_engine: Engine | None = None
+_SessionLocal: sessionmaker[Session] | None = None
 
 
-def _get_engine():
+def _get_engine() -> Engine:
     global _engine
     if _engine is None:
         ensure_config_dir()
@@ -23,7 +24,7 @@ def _get_engine():
     return _engine
 
 
-def _get_session_factory():
+def _get_session_factory() -> sessionmaker[Session]:
     global _SessionLocal
     if _SessionLocal is None:
         _SessionLocal = sessionmaker(bind=_get_engine())

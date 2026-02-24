@@ -1,14 +1,13 @@
 """Tests for the 'env' CLI command group (set, get, list, delete)."""
 
-from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
-from cli.core.database import init_db, get_session
+from cli.core.database import get_session, init_db
 from cli.main import cli
-from cli.models.server import Server
 from cli.models.app import App
+from cli.models.server import Server
 
 
 @pytest.fixture
@@ -60,7 +59,6 @@ class TestEnvSet:
         _seed_app(isolated_config)
         runner.invoke(cli, ["env", "set", "my-app", "SECRET=mysecretvalue"])
         # The value stored on disk should NOT be the plaintext
-        from cli.core.config import ENVS_DIR
         import json
         # Find the env file
         files = list(isolated_config.joinpath("envs").glob("*.json"))

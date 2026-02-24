@@ -1,5 +1,6 @@
 import json
 import shlex
+from pathlib import Path
 
 import click
 
@@ -24,16 +25,19 @@ def _get_app_id(app_name: str, server_name: str | None) -> int:
         return app_obj.id
 
 
-def _env_file(app_id: int):
+def _env_file(app_id: int) -> Path:
     ensure_config_dir()
-    return ENVS_DIR / f"{app_id}.json"
+    return Path(ENVS_DIR) / f"{app_id}.json"
 
 
 def _load_env(app_id: int) -> dict[str, str]:
     path = _env_file(app_id)
     if not path.exists():
         return {}
-    return json.loads(path.read_text())
+    content = json.loads(path.read_text())
+    if isinstance(content, dict):
+        return content
+    return {}
 
 
 def _save_env(app_id: int, data: dict[str, str]) -> None:

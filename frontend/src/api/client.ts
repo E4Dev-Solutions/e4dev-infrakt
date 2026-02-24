@@ -134,6 +134,14 @@ export interface CreateServerInput {
   provider?: string;
 }
 
+export interface UpdateServerInput {
+  host?: string;
+  user?: string;
+  port?: number;
+  ssh_key_path?: string;
+  provider?: string;
+}
+
 export interface CreateAppInput {
   name: string;
   server_name: string;
@@ -142,6 +150,20 @@ export interface CreateAppInput {
   git_repo?: string;
   branch?: string;
   image?: string;
+}
+
+export interface UpdateAppInput {
+  domain?: string;
+  port?: number;
+  git_repo?: string;
+  branch?: string;
+  image?: string;
+}
+
+export interface ProxyRouteCreateInput {
+  server_name: string;
+  domain: string;
+  port: number;
 }
 
 export interface CreateDatabaseInput {
@@ -226,6 +248,13 @@ function del<T>(path: string): Promise<T> {
   return request<T>(path, { method: "DELETE" });
 }
 
+function put<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "PUT",
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export const dashboardApi = {
@@ -250,6 +279,9 @@ export const serversApi = {
 
   status: (name: string): Promise<ServerStatusData> =>
     get(`/servers/${encodeURIComponent(name)}/status`),
+
+  update: (name: string, input: UpdateServerInput): Promise<Server> =>
+    put(`/servers/${encodeURIComponent(name)}`, input),
 };
 
 // ─── Apps ─────────────────────────────────────────────────────────────────────
@@ -261,6 +293,9 @@ export const appsApi = {
   },
 
   create: (input: CreateAppInput): Promise<App> => post("/apps", input),
+
+  update: (name: string, input: UpdateAppInput): Promise<App> =>
+    put(`/apps/${encodeURIComponent(name)}`, input),
 
   deploy: (name: string): Promise<DeployResult> =>
     post(`/apps/${encodeURIComponent(name)}/deploy`),
@@ -312,6 +347,18 @@ export const databasesApi = {
 export const proxyApi = {
   domains: (server: string): Promise<ProxyDomain[]> =>
     get(`/proxy/${encodeURIComponent(server)}/domains`),
+
+  addRoute: (input: ProxyRouteCreateInput): Promise<{ message: string }> =>
+    post("/proxy/routes", input),
+
+  removeRoute: (server: string, domain: string): Promise<{ message: string }> =>
+    del(`/proxy/${encodeURIComponent(server)}/domains/${encodeURIComponent(domain)}`),
+
+  reload: (server: string): Promise<{ message: string }> =>
+    post(`/proxy/${encodeURIComponent(server)}/reload`),
+
+  status: (server: string): Promise<{ status: string }> =>
+    get(`/proxy/${encodeURIComponent(server)}/status`),
 };
 
 export { ApiError };

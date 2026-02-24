@@ -4,9 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cli.core.ssh import SSHClient
 from cli.core.exceptions import SSHConnectionError
-
+from cli.core.ssh import SSHClient
 
 # ---------------------------------------------------------------------------
 # Helpers

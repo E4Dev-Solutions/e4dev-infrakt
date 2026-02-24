@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy.orm import selectinload
 
-from api.schemas import ServerCreate, ServerOut, ServerStatus
+from api.schemas import ServerCreate, ServerOut, ServerStatus, ServerUpdate
 from cli.core.database import get_session, init_db
 from cli.core.exceptions import SSHConnectionError
 from cli.core.provisioner import provision_server
@@ -85,6 +85,48 @@ def add_server(body: ServerCreate) -> ServerOut:
         )
 
 
+@router.put("/{name}", response_model=ServerOut)
+def update_server(name: str, body: ServerUpdate) -> ServerOut:
+    """Update a server's connection details."""
+    init_db()
+    with get_session() as session:
+        srv = (
+            session.query(Server)
+            .options(selectinload(Server.apps))
+            .filter(Server.name == name)
+            .first()
+        )
+        if not srv:
+            raise HTTPException(404, f"Server '{name}' not found")
+
+        if body.host is not None:
+            srv.host = body.host
+        if body.user is not None:
+            srv.user = body.user
+        if body.port is not None:
+            srv.port = body.port
+        if body.ssh_key_path is not None:
+            srv.ssh_key_path = body.ssh_key_path
+        if body.provider is not None:
+            srv.provider = body.provider
+
+        session.flush()
+
+        return ServerOut(
+            id=srv.id,
+            name=srv.name,
+            host=srv.host,
+            user=srv.user,
+            port=srv.port,
+            ssh_key_path=srv.ssh_key_path,
+            status=srv.status,
+            provider=srv.provider,
+            created_at=srv.created_at,
+            updated_at=srv.updated_at,
+            app_count=len(srv.apps),
+        )
+
+
 @router.delete("/{name}")
 def remove_server(name: str) -> dict[str, str]:
     """Remove a registered server."""
@@ -123,7 +165,7 @@ def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str]:
                 s = session.query(Server).filter(Server.name == name).first()
                 if s:
                     s.status = "inactive"
-        except Exception as exc:
+        except Exception:
             logger.exception("Unexpected error provisioning %s", name)
             with get_session() as session:
                 s = session.query(Server).filter(Server.name == name).first()
@@ -150,9 +192,13 @@ def server_status(name: str) -> ServerStatus:
         with ssh:
             uptime = ssh.run_checked("uptime -p").strip()
             mem = ssh.run_checked("free -h | awk '/Mem:/{print $3\"/\"$2}'").strip()
-            disk = ssh.run_checked("df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\" used)\"}'").strip()
+            disk_cmd = (
+                "df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\" used)\"}'"
+            )
+            disk = ssh.run_checked(disk_cmd).strip()
             containers = ssh.run_checked(
-                "docker ps --format '{{.Names}}\\t{{.Status}}' 2>/dev/null || echo 'Docker not running'"
+                "docker ps --format '{{.Names}}\\t{{.Status}}' "
+                "2>/dev/null || echo 'Docker not running'"
             ).strip()
     except SSHConnectionError as exc:
         raise HTTPException(502, f"Cannot reach server: {exc}")

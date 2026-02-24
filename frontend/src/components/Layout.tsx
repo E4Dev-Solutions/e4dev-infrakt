@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, Server, Box, Database, Zap, LogOut } from "lucide-react";
+import { BarChart3, Server, Box, Database, Globe, Zap, LogOut } from "lucide-react";
 
 interface NavItem {
   to: string;
@@ -27,6 +27,11 @@ const navItems: NavItem[] = [
     to: "/databases",
     label: "Databases",
     icon: <Database size={18} aria-hidden="true" />,
+  },
+  {
+    to: "/proxy",
+    label: "Proxy",
+    icon: <Globe size={18} aria-hidden="true" />,
   },
 ];
 

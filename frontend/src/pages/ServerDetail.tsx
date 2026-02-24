@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   Server,
@@ -7,6 +8,7 @@ import {
   Box,
   Play,
   Wifi,
+  Pencil,
   ArrowLeft,
   Loader2,
   RefreshCw,
@@ -17,10 +19,13 @@ import {
   useApps,
   useProvisionServer,
   useTestServer,
+  useUpdateServer,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
+import Modal from "@/components/Modal";
+import type { UpdateServerInput } from "@/api/client";
 
 interface InfoRowProps {
   label: string;
@@ -99,7 +104,17 @@ export default function ServerDetail() {
 
   const provisionServer = useProvisionServer();
   const testServer = useTestServer();
+  const updateServer = useUpdateServer();
   const toast = useToast();
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState<UpdateServerInput>({
+    host: "",
+    user: "",
+    port: 22,
+    ssh_key_path: "",
+    provider: "",
+  });
 
   async function handleProvision() {
     try {
@@ -120,6 +135,39 @@ export default function ServerDetail() {
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Connection test failed.");
+    }
+  }
+
+  const PROVIDERS = ["", "hetzner", "digitalocean", "linode", "vultr", "aws", "gcp", "azure", "bare-metal", "other"];
+
+  function openEditModal() {
+    if (!server) return;
+    setEditForm({
+      host: server.host,
+      user: server.user,
+      port: server.port,
+      ssh_key_path: server.ssh_key_path ?? "",
+      provider: server.provider ?? "",
+    });
+    setShowEditModal(true);
+  }
+
+  function handleEditChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({
+      ...prev,
+      [name]: name === "port" ? (value === "" ? undefined : Number(value)) : value,
+    }));
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await updateServer.mutateAsync({ name: decodedName, input: editForm });
+      toast.success("Server updated.");
+      setShowEditModal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update server.");
     }
   }
 
@@ -160,6 +208,13 @@ export default function ServerDetail() {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={openEditModal}
+            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          >
+            <Pencil size={14} aria-hidden="true" />
+            Edit
+          </button>
           <button
             onClick={handleTest}
             disabled={testServer.isPending}
@@ -367,6 +422,111 @@ export default function ServerDetail() {
           </div>
         </div>
       </div>
+
+      {/* Edit Server Modal */}
+      {showEditModal && (
+        <Modal title="Edit Server" onClose={() => setShowEditModal(false)}>
+          <form onSubmit={handleEditSubmit} className="space-y-4" noValidate>
+            <div>
+              <label htmlFor="edit-host" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Host / IP
+              </label>
+              <input
+                id="edit-host"
+                name="host"
+                type="text"
+                value={editForm.host ?? ""}
+                onChange={handleEditChange}
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="edit-user" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  SSH User
+                </label>
+                <input
+                  id="edit-user"
+                  name="user"
+                  type="text"
+                  value={editForm.user ?? ""}
+                  onChange={handleEditChange}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  SSH Port
+                </label>
+                <input
+                  id="edit-port"
+                  name="port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={editForm.port ?? ""}
+                  onChange={handleEditChange}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="edit-key" className="mb-1.5 block text-xs font-medium text-slate-300">
+                SSH Key Path
+              </label>
+              <input
+                id="edit-key"
+                name="ssh_key_path"
+                type="text"
+                value={editForm.ssh_key_path ?? ""}
+                onChange={handleEditChange}
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-provider" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Provider
+              </label>
+              <select
+                id="edit-provider"
+                name="provider"
+                value={editForm.provider ?? ""}
+                onChange={handleEditChange}
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              >
+                {PROVIDERS.map((p) => (
+                  <option key={p} value={p}>
+                    {p === "" ? "Select provider (optional)" : p}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updateServer.isPending}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              >
+                {updateServer.isPending && (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                )}
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

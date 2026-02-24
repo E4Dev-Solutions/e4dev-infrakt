@@ -10,7 +10,6 @@ from pathlib import PurePosixPath
 from cli.core.exceptions import DeploymentError
 from cli.core.ssh import SSHClient
 
-
 APP_BASE = PurePosixPath("/opt/infrakt/apps")
 
 # Allow only safe characters in app names, branches, and image references
@@ -93,7 +92,8 @@ def deploy_app(
         if has_compose == 0 and not compose_override:
             _log("Using docker-compose.yml from repository")
             ssh.run_checked(
-                f"cd {q_repo} && docker compose --env-file {q_app_path}/.env up -d --build --remove-orphans",
+                f"cd {q_repo} && docker compose --env-file {q_app_path}/.env "
+                f"up -d --build --remove-orphans",
                 timeout=600,
             )
         else:

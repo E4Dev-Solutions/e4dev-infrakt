@@ -4,10 +4,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from cli.core.database import init_db, get_session
-from cli.models.server import Server
+from cli.core.database import get_session, init_db
 from cli.models.app import App
 from cli.models.deployment import Deployment
+from cli.models.server import Server
 from tests.conftest import TEST_API_KEY
 
 

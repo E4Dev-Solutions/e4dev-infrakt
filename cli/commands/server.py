@@ -1,8 +1,8 @@
 import click
 
-from cli.core.console import error, info, print_table, success, status_spinner
+from cli.core.console import error, info, print_table, status_spinner, success
 from cli.core.database import get_session, init_db
-from cli.core.exceptions import SSHConnectionError, ServerNotFoundError
+from cli.core.exceptions import ServerNotFoundError
 from cli.core.ssh import SSHClient
 from cli.models.server import Server
 
@@ -33,8 +33,19 @@ def server() -> None:
 @click.option("--user", default="root", prompt="SSH user", help="SSH username")
 @click.option("--port", default=22, help="SSH port")
 @click.option("--key", "ssh_key_path", default=None, help="Path to SSH private key")
-@click.option("--provider", default=None, help="Cloud provider label (hetzner, digitalocean, etc.)")
-def add(name: str, host: str, user: str, port: int, ssh_key_path: str | None, provider: str | None) -> None:
+@click.option(
+    "--provider",
+    default=None,
+    help="Cloud provider label (hetzner, digitalocean, etc.)",
+)
+def add(
+    name: str,
+    host: str,
+    user: str,
+    port: int,
+    ssh_key_path: str | None,
+    provider: str | None,
+) -> None:
     """Register a new server."""
     init_db()
     with get_session() as session:
@@ -130,8 +141,14 @@ def status(name: str) -> None:
         # Gather system info
         uptime = ssh.run_checked("uptime -p").strip()
         mem = ssh.run_checked("free -h | awk '/Mem:/{print $3\"/\"$2}'").strip()
-        disk = ssh.run_checked("df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\" used)\"}'").strip()
-        containers = ssh.run_checked("docker ps --format '{{.Names}}\\t{{.Status}}' 2>/dev/null || echo 'Docker not running'").strip()
+        disk_cmd = (
+            "df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\" used)\"}'"
+        )
+        disk = ssh.run_checked(disk_cmd).strip()
+        containers = ssh.run_checked(
+            "docker ps --format '{{.Names}}\\t{{.Status}}' "
+            "2>/dev/null || echo 'Docker not running'"
+        ).strip()
 
     info(f"Server: {srv.name} ({srv.host})")
     info(f"Uptime: {uptime}")

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import io
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import paramiko
+import paramiko  # type: ignore[import-untyped]
 
 from cli.core.exceptions import SSHConnectionError
+
+if TYPE_CHECKING:
+    from cli.models.server import Server
 
 
 class SSHClient:
@@ -25,14 +28,14 @@ class SSHClient:
         self._client: paramiko.SSHClient | None = None
 
     @classmethod
-    def from_server(cls, srv: "Server") -> "SSHClient":
+    def from_server(cls, srv: Server) -> SSHClient:
         """Construct an SSHClient from a Server model instance."""
         return cls(host=srv.host, user=srv.user, port=srv.port, key_path=srv.ssh_key_path)
 
     def connect(self) -> None:
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        kwargs: dict = {
+        kwargs: dict[str, str | int] = {
             "hostname": self.host,
             "port": self.port,
             "username": self.user,
@@ -42,7 +45,9 @@ class SSHClient:
         try:
             client.connect(**kwargs)
         except Exception as exc:
-            raise SSHConnectionError(f"Failed to connect to {self.user}@{self.host}:{self.port}: {exc}") from exc
+            raise SSHConnectionError(
+                f"Failed to connect to {self.user}@{self.host}:{self.port}: {exc}"
+            ) from exc
         self._client = client
 
     def _ensure_connected(self) -> paramiko.SSHClient:
@@ -102,7 +107,10 @@ class SSHClient:
         sftp = client.open_sftp()
         try:
             with sftp.file(remote_path, "r") as f:
-                return f.read().decode()
+                content = f.read()
+                if isinstance(content, bytes):
+                    return content.decode()
+                return str(content)
         finally:
             sftp.close()
 

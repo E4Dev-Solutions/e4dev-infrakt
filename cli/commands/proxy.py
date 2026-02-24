@@ -1,6 +1,6 @@
 import click
 
-from cli.core.console import console, error, info, print_table, success, status_spinner
+from cli.core.console import console, info, print_table, status_spinner, success
 from cli.core.database import get_session, init_db
 from cli.core.exceptions import ServerNotFoundError
 from cli.core.proxy_manager import add_domain, get_status, list_domains, reload_proxy, remove_domain

@@ -1,11 +1,6 @@
-import os
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-from cli.core.database import Base
 
 TEST_API_KEY = "test-api-key-for-tests"
 

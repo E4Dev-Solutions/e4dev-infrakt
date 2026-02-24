@@ -3,7 +3,6 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from cli.core.database import init_db
 from cli.main import cli
 
 

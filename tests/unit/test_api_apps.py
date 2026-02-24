@@ -1,14 +1,14 @@
 """Tests for FastAPI /api/apps routes."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from cli.core.database import init_db, get_session
-from cli.models.server import Server
+from cli.core.database import get_session, init_db
 from cli.models.app import App
+from cli.models.server import Server
 from tests.conftest import TEST_API_KEY
 
 

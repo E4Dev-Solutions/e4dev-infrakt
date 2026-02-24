@@ -20,7 +20,7 @@ router = APIRouter(prefix="/databases", tags=["databases"])
 
 
 @router.get("", response_model=list[DatabaseOut])
-def list_databases(server: str | None = None):
+def list_databases(server: str | None = None) -> list[DatabaseOut]:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.app_type.like("db:%")).join(Server)
@@ -41,10 +41,14 @@ def list_databases(server: str | None = None):
 
 
 @router.post("", status_code=201)
-def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks):
+def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks) -> dict[str, str]:
     init_db()
     if body.db_type not in DB_TEMPLATES:
-        raise HTTPException(400, f"Unsupported type: {body.db_type}. Use: {list(DB_TEMPLATES.keys())}")
+        supported = list(DB_TEMPLATES.keys())
+        raise HTTPException(
+            400,
+            f"Unsupported type: {body.db_type}. Use: {supported}",
+        )
 
     version = body.version or DEFAULT_VERSIONS.get(body.db_type, "latest")
     password = secrets.token_urlsafe(24)
@@ -54,9 +58,16 @@ def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks):
         if not srv:
             raise HTTPException(404, f"Server '{body.server_name}' not found")
 
-        existing = session.query(App).filter(App.name == body.name, App.server_id == srv.id).first()
+        existing = (
+            session.query(App)
+            .filter(App.name == body.name, App.server_id == srv.id)
+            .first()
+        )
         if existing:
-            raise HTTPException(400, f"Service '{body.name}' already exists on '{body.server_name}'")
+            raise HTTPException(
+                400,
+                f"Service '{body.name}' already exists on '{body.server_name}'",
+            )
 
         db_app = App(
             name=body.name,
@@ -68,16 +79,35 @@ def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks):
         session.add(db_app)
         session.flush()
         app_id = db_app.id
-        ssh_data = {"host": srv.host, "user": srv.user, "port": srv.port, "key_path": srv.ssh_key_path}
+        ssh_data = {
+            "host": srv.host,
+            "user": srv.user,
+            "port": srv.port,
+            "key_path": srv.ssh_key_path,
+        }
 
     _validate_name(body.name, "database name")
     compose = _generate_db_compose(body.db_type, body.name, version, password)
     app_path = f"/opt/infrakt/apps/{body.name}"
     q_path = shlex.quote(app_path)
 
-    def _do_create():
+    def _do_create() -> None:
         try:
-            ssh = SSHClient(**ssh_data)
+            host = ssh_data.get("host")
+            user = ssh_data.get("user")
+            port = ssh_data.get("port")
+            key_path = ssh_data.get("key_path")
+            port_int: int = 22
+            if isinstance(port, int):
+                port_int = port
+            elif port is not None:
+                port_int = int(str(port))
+            ssh = SSHClient(
+                host=str(host or ""),
+                user=str(user or "root"),
+                port=port_int,
+                key_path=key_path if isinstance(key_path, (str, type(None))) else None,
+            )
             with ssh:
                 ssh.run("docker network create infrakt 2>/dev/null || true")
                 ssh.run_checked(f"mkdir -p {q_path}")
@@ -99,7 +129,7 @@ def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks):
 
 
 @router.delete("/{name}")
-def destroy_database(name: str, server: str | None = None):
+def destroy_database(name: str, server: str | None = None) -> dict[str, str]:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))

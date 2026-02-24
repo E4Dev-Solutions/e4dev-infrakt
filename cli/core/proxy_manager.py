@@ -11,7 +11,10 @@ CADDYFILE_PATH = "/opt/infrakt/caddy/Caddyfile"
 CADDYFILE_HEADER = "# Managed by infrakt — do not edit manually\n"
 
 # Validates domain names: alphanumeric, dots, hyphens, optional wildcard prefix
-_DOMAIN_RE = re.compile(r"^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$")
+_DOMAIN_RE = re.compile(
+    r"^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]"
+    r"([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$"
+)
 
 
 def _validate_domain(domain: str) -> None:

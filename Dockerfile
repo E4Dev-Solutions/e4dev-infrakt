@@ -54,7 +54,7 @@ WORKDIR /app
 # Install Python dependencies from pyproject.toml.
 # Copy only the build descriptor first so pip install is cached unless
 # pyproject.toml changes, even if application source changes.
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 
 # Install the package in non-editable mode. pip resolves [project.dependencies]
 # from pyproject.toml. We do NOT install the [dev] extras (pytest, mypy, ruff)

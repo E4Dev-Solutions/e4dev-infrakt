@@ -1,14 +1,14 @@
 """Tests for the 'app' CLI command group (create, list, deploy, stop, destroy, etc.)."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
 
-from cli.core.database import init_db, get_session
+from cli.core.database import get_session, init_db
 from cli.main import cli
-from cli.models.server import Server
 from cli.models.app import App
+from cli.models.server import Server
 
 
 @pytest.fixture
@@ -331,7 +331,7 @@ class TestAppDestroy:
     def test_destroy_without_force_prompts_confirmation(self, runner, isolated_config):
         _seed_app("prod", "careful-app")
         # Provide 'n' to decline the confirmation prompt
-        result = runner.invoke(cli, ["app", "destroy", "careful-app"], input="n\n")
+        runner.invoke(cli, ["app", "destroy", "careful-app"], input="n\n")
         # Should abort and not destroy the app
         init_db()
         with get_session() as session:

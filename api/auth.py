@@ -5,7 +5,7 @@ import hmac
 import secrets
 from pathlib import Path
 
-from fastapi import Depends, HTTPException, Security
+from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
 
 import cli.core.config as config

@@ -1,9 +1,15 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cli.core.database import Base
+
+if TYPE_CHECKING:
+    from cli.models.app import App
 
 
 class Server(Base):
@@ -20,7 +26,7 @@ class Server(Base):
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
-    apps: Mapped[list["App"]] = relationship(  # noqa: F821
+    apps: Mapped[list[App]] = relationship(
         back_populates="server", cascade="all, delete-orphan"
     )
 

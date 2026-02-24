@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy.orm import joinedload
 
-from api.schemas import AppCreate, AppLogs, AppOut, DeploymentOut
+from api.schemas import AppCreate, AppLogs, AppOut, AppUpdate, DeploymentOut
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
 from cli.core.deployer import deploy_app, destroy_app, get_logs, restart_app, stop_app
@@ -55,7 +55,7 @@ def list_apps(server: str | None = None) -> list[AppOut]:
 
 
 @router.post("", response_model=AppOut, status_code=201)
-def create_app(body: AppCreate):
+def create_app(body: AppCreate) -> AppOut:
     init_db()
     with get_session() as session:
         srv = session.query(Server).filter(Server.name == body.server_name).first()
@@ -98,8 +98,62 @@ def create_app(body: AppCreate):
         )
 
 
+@router.put("/{name}", response_model=AppOut)
+def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
+    """Update an app's configuration."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name).options(joinedload(App.server))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        app_obj = q.first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+
+        if body.domain is not None:
+            app_obj.domain = body.domain
+        if body.port is not None:
+            app_obj.port = body.port
+        if body.git_repo is not None:
+            app_obj.git_repo = body.git_repo
+        if body.branch is not None:
+            app_obj.branch = body.branch
+        if body.image is not None:
+            app_obj.image = body.image
+
+        if body.image is not None or body.git_repo is not None:
+            if app_obj.image:
+                app_obj.app_type = "image"
+            elif app_obj.git_repo:
+                app_obj.app_type = "git"
+            else:
+                app_obj.app_type = "compose"
+
+        session.flush()
+
+        return AppOut(
+            id=app_obj.id,
+            name=app_obj.name,
+            server_id=app_obj.server_id,
+            server_name=app_obj.server.name,
+            domain=app_obj.domain,
+            port=app_obj.port,
+            git_repo=app_obj.git_repo,
+            branch=app_obj.branch,
+            image=app_obj.image,
+            status=app_obj.status,
+            app_type=app_obj.app_type,
+            created_at=app_obj.created_at,
+            updated_at=app_obj.updated_at,
+        )
+
+
 @router.post("/{name}/deploy")
-def deploy(name: str, server: str | None = None, background_tasks: BackgroundTasks = None):
+def deploy(
+    name: str,
+    background_tasks: BackgroundTasks,
+    server: str | None = None,
+) -> dict[str, str | int]:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name)
@@ -116,39 +170,57 @@ def deploy(name: str, server: str | None = None, background_tasks: BackgroundTas
 
         dep_id = dep.id
         app_id = app_obj.id
-        app_data = {
+        app_data: dict[str, str | int | None] = {
             "port": app_obj.port,
             "git_repo": app_obj.git_repo,
             "branch": app_obj.branch,
             "image": app_obj.image,
             "domain": app_obj.domain,
         }
-        ssh_data = {
+        ssh_data: dict[str, str | int | None] = {
             "host": srv.host,
             "user": srv.user,
             "port": srv.port,
             "key_path": srv.ssh_key_path,
         }
 
-    app_obj_status_update = {"id": app_id, "dep_id": dep_id}
-
-    def _do_deploy():
-        ssh = SSHClient(**ssh_data)
+    def _do_deploy() -> None:
+        ssh = SSHClient(
+            host=ssh_data.get("host", ""),  # type: ignore[arg-type]
+            user=ssh_data.get("user", "root"),  # type: ignore[arg-type]
+            port=ssh_data.get("port", 22),  # type: ignore[arg-type]
+            key_path=ssh_data.get("key_path"),  # type: ignore[arg-type]
+        )
         try:
             with ssh:
                 ssh.run("docker network create infrakt 2>/dev/null || true")
                 env_content = env_content_for_app(app_id)
+                git_repo = app_data.get("git_repo")
+                if not isinstance(git_repo, (str, type(None))):
+                    git_repo = None
+                branch = app_data.get("branch")
+                if not isinstance(branch, str):
+                    branch = "main"
+                image = app_data.get("image")
+                if not isinstance(image, (str, type(None))):
+                    image = None
+                port = app_data.get("port")
+                if not isinstance(port, int):
+                    port = 3000
                 log = deploy_app(
                     ssh,
                     name,
-                    git_repo=app_data["git_repo"],
-                    branch=app_data["branch"],
-                    image=app_data["image"],
-                    port=app_data["port"],
+                    git_repo=git_repo,
+                    branch=branch,
+                    image=image,
+                    port=port,
                     env_content=env_content,
                 )
-                if app_data["domain"]:
-                    add_domain(ssh, app_data["domain"], app_data["port"])
+                domain = app_data.get("domain")
+                if domain:
+                    if not isinstance(domain, str):
+                        domain = str(domain)
+                    add_domain(ssh, domain, port)
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
@@ -187,7 +259,7 @@ def deploy(name: str, server: str | None = None, background_tasks: BackgroundTas
 
 
 @router.get("/{name}/logs", response_model=AppLogs)
-def app_logs(name: str, server: str | None = None, lines: int = 100):
+def app_logs(name: str, server: str | None = None, lines: int = 100) -> AppLogs:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name)
@@ -208,7 +280,7 @@ def app_logs(name: str, server: str | None = None, lines: int = 100):
 
 
 @router.get("/{name}/deployments", response_model=list[DeploymentOut])
-def app_deployments(name: str):
+def app_deployments(name: str) -> list[DeploymentOut]:
     init_db()
     with get_session() as session:
         app_obj = session.query(App).filter(App.name == name).first()
@@ -225,7 +297,7 @@ def app_deployments(name: str):
 
 
 @router.post("/{name}/restart")
-def restart(name: str, server: str | None = None):
+def restart(name: str, server: str | None = None) -> dict[str, str]:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name)
@@ -242,7 +314,7 @@ def restart(name: str, server: str | None = None):
 
 
 @router.post("/{name}/stop")
-def stop(name: str, server: str | None = None):
+def stop(name: str, server: str | None = None) -> dict[str, str]:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name)
@@ -266,7 +338,7 @@ def stop(name: str, server: str | None = None):
 
 
 @router.delete("/{name}")
-def destroy(name: str, server: str | None = None):
+def destroy(name: str, server: str | None = None) -> dict[str, str]:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name)

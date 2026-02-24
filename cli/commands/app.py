@@ -2,7 +2,7 @@ from datetime import datetime
 
 import click
 
-from cli.core.console import error, info, print_table, success, status_spinner, console
+from cli.core.console import console, error, info, print_table, status_spinner, success
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
 from cli.core.deployer import deploy_app, destroy_app, get_logs, restart_app, stop_app
@@ -14,32 +14,35 @@ from cli.models.deployment import Deployment
 from cli.models.server import Server
 
 
-def _resolve_server(session, server_name: str | None, app_name: str | None = None) -> Server:
+def _resolve_server(
+    session: object, server_name: str | None, app_name: str | None = None
+) -> Server:
     """Resolve server by name, or by looking up the app's server."""
     if server_name:
-        srv = session.query(Server).filter(Server.name == server_name).first()
+        srv: Server | None = session.query(Server).filter(Server.name == server_name).first()  # type: ignore[attr-defined]
         if not srv:
             raise ServerNotFoundError(f"Server '{server_name}' not found")
         return srv
     if app_name:
-        app_obj = session.query(App).filter(App.name == app_name).first()
+        app_obj: App | None = session.query(App).filter(App.name == app_name).first()  # type: ignore[attr-defined]
         if app_obj:
             return app_obj.server
     raise click.UsageError("Please specify --server or ensure the app name is unique")
 
 
-def _get_app(session, app_name: str, server_name: str | None) -> App:
-    q = session.query(App).filter(App.name == app_name)
+def _get_app(session: object, app_name: str, server_name: str | None) -> App:
+    q = session.query(App).filter(App.name == app_name)  # type: ignore[attr-defined]
     if server_name:
         q = q.join(Server).filter(Server.name == server_name)
-    app_obj = q.first()
+    app_obj: App | None = q.first()
     if not app_obj:
         raise AppNotFoundError(f"App '{app_name}' not found")
     return app_obj
 
 
 def _ssh_for_server(srv: Server) -> SSHClient:
-    return SSHClient.from_server(srv)
+    result = SSHClient.from_server(srv)
+    return result
 
 
 @click.group()
@@ -55,7 +58,15 @@ def app() -> None:
 @click.option("--git", "git_repo", default=None, help="Git repository URL")
 @click.option("--branch", default="main", help="Git branch")
 @click.option("--image", default=None, help="Docker image (e.g. nginx:latest)")
-def create(server_name: str, name: str, domain: str | None, port: int, git_repo: str | None, branch: str, image: str | None) -> None:
+def create(
+    server_name: str,
+    name: str,
+    domain: str | None,
+    port: int,
+    git_repo: str | None,
+    branch: str,
+    image: str | None,
+) -> None:
     """Create a new app on a server."""
     init_db()
     with get_session() as session:
@@ -83,12 +94,20 @@ def create(server_name: str, name: str, domain: str | None, port: int, git_repo:
         )
         session.add(new_app)
 
-    success(f"App '{name}' created on server '{server_name}'. Use 'infrakt app deploy {name}' to deploy.")
+    success(
+        f"App '{name}' created on server '{server_name}'. "
+        f"Use 'infrakt app deploy {name}' to deploy."
+    )
 
 
 @app.command()
 @click.argument("name")
-@click.option("--server", "server_name", default=None, help="Server name (optional if app name is unique)")
+@click.option(
+    "--server",
+    "server_name",
+    default=None,
+    help="Server name (optional if app name is unique)",
+)
 def deploy(name: str, server_name: str | None) -> None:
     """Deploy or redeploy an app."""
     init_db()
@@ -137,27 +156,27 @@ def deploy(name: str, server_name: str | None) -> None:
 
         # Update records
         with get_session() as session:
-            dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
-            if dep:
-                dep.status = "success"
-                dep.log = log
-                dep.finished_at = datetime.utcnow()
-            app_obj = session.query(App).filter(App.id == app_id).first()
-            if app_obj:
-                app_obj.status = "running"
+            dep_record = session.query(Deployment).filter(Deployment.id == dep_id).first()
+            if dep_record is not None:
+                dep_record.status = "success"
+                dep_record.log = log
+                dep_record.finished_at = datetime.utcnow()
+            app_record = session.query(App).filter(App.id == app_id).first()
+            if app_record is not None:
+                app_record.status = "running"
 
         success(f"App '{name}' deployed successfully")
 
     except Exception as exc:
         with get_session() as session:
-            dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
-            if dep:
-                dep.status = "failed"
-                dep.log = str(exc)
-                dep.finished_at = datetime.utcnow()
-            app_obj = session.query(App).filter(App.id == app_id).first()
-            if app_obj:
-                app_obj.status = "error"
+            dep_record = session.query(Deployment).filter(Deployment.id == dep_id).first()
+            if dep_record is not None:
+                dep_record.status = "failed"
+                dep_record.log = str(exc)
+                dep_record.finished_at = datetime.utcnow()
+            app_record = session.query(App).filter(App.id == app_id).first()
+            if app_record is not None:
+                app_record.status = "error"
         error(f"Deployment failed: {exc}")
         raise SystemExit(1)
 
@@ -265,8 +284,8 @@ def destroy(name: str, server_name: str | None, force: bool) -> None:
                 remove_domain(ssh, app_domain)
 
     with get_session() as session:
-        app_obj = session.query(App).filter(App.id == app_id).first()
-        if app_obj:
-            session.delete(app_obj)
+        app_record = session.query(App).filter(App.id == app_id).first()
+        if app_record is not None:
+            session.delete(app_record)
 
     success(f"App '{name}' destroyed")

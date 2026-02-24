@@ -40,5 +40,5 @@ if FRONTEND_DIST.exists():
 
 
 @app.on_event("startup")
-def on_startup():
+def on_startup() -> None:
     init_db()

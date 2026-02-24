@@ -1,5 +1,6 @@
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
-from typing import Any, Generator, Sequence
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table

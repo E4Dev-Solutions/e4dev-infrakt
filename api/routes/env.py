@@ -2,6 +2,7 @@
 
 import json
 import shlex
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,7 +13,6 @@ from cli.core.database import get_session, init_db
 from cli.core.deployer import _validate_name
 from cli.core.ssh import SSHClient
 from cli.models.app import App
-from cli.models.server import Server
 
 router = APIRouter(prefix="/apps/{app_name}/env", tags=["env"])
 
@@ -25,16 +25,19 @@ def _get_app_id(app_name: str) -> int:
         return app_obj.id
 
 
-def _env_file(app_id: int):
+def _env_file(app_id: int) -> Path:
     ensure_config_dir()
-    return ENVS_DIR / f"{app_id}.json"
+    return Path(ENVS_DIR) / f"{app_id}.json"
 
 
 def _load_env(app_id: int) -> dict[str, str]:
     path = _env_file(app_id)
     if not path.exists():
         return {}
-    return json.loads(path.read_text())
+    content = json.loads(path.read_text())
+    if isinstance(content, dict):
+        return content
+    return {}
 
 
 def _save_env(app_id: int, data: dict[str, str]) -> None:
@@ -42,7 +45,7 @@ def _save_env(app_id: int, data: dict[str, str]) -> None:
 
 
 @router.get("", response_model=list[EnvVarOut])
-def list_env(app_name: str, show_values: bool = False):
+def list_env(app_name: str, show_values: bool = False) -> list[EnvVarOut]:
     init_db()
     app_id = _get_app_id(app_name)
     data = _load_env(app_id)
@@ -53,7 +56,7 @@ def list_env(app_name: str, show_values: bool = False):
 
 
 @router.post("", response_model=list[EnvVarOut])
-def set_env(app_name: str, vars: list[EnvVarSet]):
+def set_env(app_name: str, vars: list[EnvVarSet]) -> list[EnvVarOut]:
     init_db()
     app_id = _get_app_id(app_name)
     data = _load_env(app_id)
@@ -64,7 +67,7 @@ def set_env(app_name: str, vars: list[EnvVarSet]):
 
 
 @router.delete("/{key}")
-def delete_env(app_name: str, key: str):
+def delete_env(app_name: str, key: str) -> dict[str, str]:
     init_db()
     app_id = _get_app_id(app_name)
     data = _load_env(app_id)
@@ -76,7 +79,7 @@ def delete_env(app_name: str, key: str):
 
 
 @router.post("/push")
-def push_env(app_name: str):
+def push_env(app_name: str) -> dict[str, str]:
     init_db()
     with get_session() as session:
         app_obj = session.query(App).filter(App.name == app_name).first()

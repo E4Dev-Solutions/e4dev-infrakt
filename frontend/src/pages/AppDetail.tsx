@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Square,
   Trash2,
+  Pencil,
   Terminal,
   Settings,
   Clock,
@@ -28,10 +29,13 @@ import {
   useDestroyApp,
   useSetEnv,
   useDeleteEnv,
+  useUpdateApp,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
+import Modal from "@/components/Modal";
+import type { UpdateAppInput } from "@/api/client";
 
 type ActiveTab = "logs" | "env" | "deployments";
 
@@ -378,10 +382,19 @@ export default function AppDetail() {
   const restartApp = useRestartApp();
   const stopApp = useStopApp();
   const destroyApp = useDestroyApp();
+  const updateApp = useUpdateApp();
   const toast = useToast();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("logs");
   const [actionPending, setActionPending] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState<UpdateAppInput>({
+    domain: "",
+    port: 3000,
+    git_repo: "",
+    branch: "",
+    image: "",
+  });
 
   async function handleDeploy() {
     setActionPending("deploy");
@@ -429,6 +442,37 @@ export default function AppDetail() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Destroy failed.");
       setActionPending(null);
+    }
+  }
+
+  function openEditModal() {
+    if (!app) return;
+    setEditForm({
+      domain: app.domain ?? "",
+      port: app.port ?? 3000,
+      git_repo: app.git_repo ?? "",
+      branch: app.branch ?? "main",
+      image: app.image ?? "",
+    });
+    setShowEditModal(true);
+  }
+
+  function handleEditChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({
+      ...prev,
+      [name]: name === "port" ? (value === "" ? undefined : Number(value)) : value,
+    }));
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await updateApp.mutateAsync({ name: decodedName, input: editForm });
+      toast.success("App configuration updated.");
+      setShowEditModal(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update app.");
     }
   }
 
@@ -488,6 +532,14 @@ export default function AppDetail() {
 
         {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={openEditModal}
+            disabled={!!actionPending}
+            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+          >
+            <Pencil size={14} aria-hidden="true" />
+            Edit
+          </button>
           <button
             onClick={handleDeploy}
             disabled={!!actionPending}
@@ -600,6 +652,109 @@ export default function AppDetail() {
           </div>
         </div>
       </div>
+
+      {/* Edit App Modal */}
+      {showEditModal && (
+        <Modal title="Edit App" onClose={() => setShowEditModal(false)}>
+          <form onSubmit={handleEditSubmit} className="space-y-4" noValidate>
+            <div>
+              <label htmlFor="edit-domain" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Domain
+              </label>
+              <input
+                id="edit-domain"
+                name="domain"
+                type="text"
+                value={editForm.domain ?? ""}
+                onChange={handleEditChange}
+                placeholder="app.example.com"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Port
+              </label>
+              <input
+                id="edit-port"
+                name="port"
+                type="number"
+                min={1}
+                max={65535}
+                value={editForm.port ?? ""}
+                onChange={handleEditChange}
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-git-repo" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Git Repository
+              </label>
+              <input
+                id="edit-git-repo"
+                name="git_repo"
+                type="text"
+                value={editForm.git_repo ?? ""}
+                onChange={handleEditChange}
+                placeholder="https://github.com/user/repo.git"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-branch" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Branch
+              </label>
+              <input
+                id="edit-branch"
+                name="branch"
+                type="text"
+                value={editForm.branch ?? ""}
+                onChange={handleEditChange}
+                placeholder="main"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-image" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Docker Image
+              </label>
+              <input
+                id="edit-image"
+                name="image"
+                type="text"
+                value={editForm.image ?? ""}
+                onChange={handleEditChange}
+                placeholder="nginx:latest"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updateApp.isPending}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              >
+                {updateApp.isPending && (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                )}
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

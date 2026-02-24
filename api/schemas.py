@@ -26,6 +26,30 @@ def _validate_safe_name(v: str) -> str:
     return v
 
 
+def _validate_git_repo_url(v: str | None) -> str | None:
+    if v is None:
+        return v
+    if not _GIT_REPO_PATTERN.match(v):
+        raise ValueError(
+            "git_repo must be an HTTPS URL ending with .git "
+            "(e.g. https://github.com/user/repo.git)"
+        )
+    hostname = urlparse(v).hostname or ""
+    _blocked_prefixes = ("localhost", "127.", "0.0.0.0", "169.254.", "10.")
+    if any(hostname.startswith(b) for b in _blocked_prefixes):
+        raise ValueError("git_repo must not point to localhost or private addresses")
+    if hostname.endswith(".local") or hostname == "::1":
+        raise ValueError("git_repo must not point to localhost or private addresses")
+    parts = hostname.split(".")
+    if len(parts) == 4 and all(p.isdigit() for p in parts):
+        first, second = int(parts[0]), int(parts[1])
+        if first == 172 and 16 <= second <= 31:
+            raise ValueError("git_repo must not point to private addresses")
+        if first == 192 and second == 168:
+            raise ValueError("git_repo must not point to private addresses")
+    return v
+
+
 # ── Server ──────────────────────────────────────────────
 
 class ServerCreate(BaseModel):
@@ -40,6 +64,14 @@ class ServerCreate(BaseModel):
     @classmethod
     def validate_name(cls, v: str) -> str:
         return _validate_safe_name(v)
+
+
+class ServerUpdate(BaseModel):
+    host: str | None = Field(default=None, max_length=255)
+    user: str | None = None
+    port: int | None = Field(default=None, ge=1, le=65535)
+    ssh_key_path: str | None = None
+    provider: str | None = None
 
 
 class ServerOut(BaseModel):
@@ -93,27 +125,27 @@ class AppCreate(BaseModel):
     @field_validator("git_repo")
     @classmethod
     def validate_git_repo(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        if not _GIT_REPO_PATTERN.match(v):
-            raise ValueError(
-                "git_repo must be an HTTPS URL ending with .git "
-                "(e.g. https://github.com/user/repo.git)"
-            )
-        hostname = urlparse(v).hostname or ""
-        _blocked_prefixes = ("localhost", "127.", "0.0.0.0", "169.254.", "10.")
-        if any(hostname.startswith(b) for b in _blocked_prefixes):
-            raise ValueError("git_repo must not point to localhost or private addresses")
-        if hostname.endswith(".local") or hostname == "::1":
-            raise ValueError("git_repo must not point to localhost or private addresses")
-        parts = hostname.split(".")
-        if len(parts) == 4 and all(p.isdigit() for p in parts):
-            first, second = int(parts[0]), int(parts[1])
-            if first == 172 and 16 <= second <= 31:
-                raise ValueError("git_repo must not point to private addresses")
-            if first == 192 and second == 168:
-                raise ValueError("git_repo must not point to private addresses")
+        return _validate_git_repo_url(v)
+
+
+class AppUpdate(BaseModel):
+    domain: str | None = None
+    port: int | None = Field(default=None, ge=1, le=65535)
+    git_repo: str | None = None
+    branch: str | None = None
+    image: str | None = None
+
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, v: str | None) -> str | None:
+        if v is not None and not _DOMAIN_PATTERN.match(v):
+            raise ValueError("Invalid domain name format")
         return v
+
+    @field_validator("git_repo")
+    @classmethod
+    def validate_git_repo(cls, v: str | None) -> str | None:
+        return _validate_git_repo_url(v)
 
 
 class AppOut(BaseModel):

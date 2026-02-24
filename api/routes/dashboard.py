@@ -12,13 +12,17 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("", response_model=DashboardStats)
-def dashboard_stats():
+def dashboard_stats() -> DashboardStats:
     init_db()
     with get_session() as session:
         total_servers = session.query(Server).count()
         active_servers = session.query(Server).filter(Server.status == "active").count()
         total_apps = session.query(App).filter(~App.app_type.like("db:%")).count()
-        running_apps = session.query(App).filter(App.status == "running", ~App.app_type.like("db:%")).count()
+        running_apps = (
+            session.query(App)
+            .filter(App.status == "running", ~App.app_type.like("db:%"))
+            .count()
+        )
         total_databases = session.query(App).filter(App.app_type.like("db:%")).count()
 
         recent_deps = (

@@ -20,7 +20,7 @@ def _get_ssh(server_name: str) -> SSHClient:
 
 
 @router.get("/{server_name}/domains", response_model=list[ProxyRoute])
-def domains(server_name: str):
+def domains(server_name: str) -> list[ProxyRoute]:
     init_db()
     ssh = _get_ssh(server_name)
     with ssh:
@@ -29,7 +29,7 @@ def domains(server_name: str):
 
 
 @router.post("/routes", status_code=201)
-def add_route(body: ProxyRouteCreate):
+def add_route(body: ProxyRouteCreate) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(body.server_name)
     with ssh:
@@ -38,7 +38,7 @@ def add_route(body: ProxyRouteCreate):
 
 
 @router.delete("/{server_name}/domains/{domain}")
-def remove_route(server_name: str, domain: str):
+def remove_route(server_name: str, domain: str) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(server_name)
     with ssh:
@@ -47,7 +47,7 @@ def remove_route(server_name: str, domain: str):
 
 
 @router.get("/{server_name}/status")
-def proxy_status(server_name: str):
+def proxy_status(server_name: str) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(server_name)
     with ssh:
@@ -56,7 +56,7 @@ def proxy_status(server_name: str):
 
 
 @router.post("/{server_name}/reload")
-def reload(server_name: str):
+def reload(server_name: str) -> dict[str, str]:
     init_db()
     ssh = _get_ssh(server_name)
     with ssh:

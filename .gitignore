@@ -37,3 +37,7 @@ frontend/dist-types/
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/

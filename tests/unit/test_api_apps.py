@@ -301,3 +301,71 @@ class TestStreamDeploymentLogs:
         assert '"line1"' in body
         assert '"line2"' in body
         assert '"done": true' in body
+
+
+# ---------------------------------------------------------------------------
+# GET /api/apps/{name}/health
+# ---------------------------------------------------------------------------
+
+
+class TestAppHealth:
+    def test_returns_health_data_for_running_app(self, client, isolated_config):
+        _seed_app("srv-1", "my-app", status="running")
+        with (
+            patch("api.routes.apps.SSHClient") as mock_cls,
+            patch("api.routes.apps.get_container_health") as mock_health,
+            patch("api.routes.apps.reconcile_app_status") as mock_reconcile,
+        ):
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+            mock_health.return_value = [
+                {
+                    "name": "infrakt-my-app",
+                    "state": "running",
+                    "status": "Up 1 hour",
+                    "image": "nginx:latest",
+                    "health": "",
+                }
+            ]
+            mock_reconcile.return_value = "running"
+            response = client.get("/api/apps/my-app/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["actual_status"] == "running"
+        assert data["status_mismatch"] is False
+        assert len(data["containers"]) == 1
+        assert data["containers"][0]["name"] == "infrakt-my-app"
+
+    def test_reconciles_db_status_on_mismatch(self, client, isolated_config):
+        _seed_app("srv-1", "my-app", status="running")
+        with (
+            patch("api.routes.apps.SSHClient") as mock_cls,
+            patch("api.routes.apps.get_container_health") as mock_health,
+            patch("api.routes.apps.reconcile_app_status") as mock_reconcile,
+        ):
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+            mock_health.return_value = []
+            mock_reconcile.return_value = "stopped"
+            response = client.get("/api/apps/my-app/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status_mismatch"] is True
+        assert data["db_status"] == "running"
+        assert data["actual_status"] == "stopped"
+
+        # Verify DB was updated
+        init_db()
+        with get_session() as session:
+            a = session.query(App).filter(App.name == "my-app").first()
+            assert a.status == "stopped"
+
+    def test_returns_404_for_unknown_app(self, client, isolated_config):
+        response = client.get("/api/apps/ghost-app/health")
+        assert response.status_code == 404

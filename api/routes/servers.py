@@ -1,11 +1,20 @@
 """Server management API routes."""
 
+import json
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy.orm import selectinload
 
-from api.schemas import ServerCreate, ServerOut, ServerStatus, ServerUpdate
+from api.schemas import (
+    DiskUsage,
+    MemoryUsage,
+    ServerContainerInfo,
+    ServerCreate,
+    ServerOut,
+    ServerStatus,
+    ServerUpdate,
+)
 from cli.core.database import get_session, init_db
 from cli.core.exceptions import SSHConnectionError
 from cli.core.provisioner import provision_server
@@ -173,6 +182,67 @@ def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str]:
     return {"message": f"Provisioning started for '{name}'"}
 
 
+def _fmt_bytes(n: int) -> str:
+    """Format bytes as a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if abs(n) < 1024:
+            return f"{n:.1f} {unit}"
+        n = n // 1024
+    return f"{n:.1f} PB"
+
+
+def _parse_memory(raw: str) -> MemoryUsage | None:
+    """Parse output of: free -b | awk '/^Mem:/{print $2, $3, $4}'."""
+    parts = raw.split()
+    if len(parts) < 3:
+        return None
+    try:
+        total, used, free = int(parts[0]), int(parts[1]), int(parts[2])
+    except ValueError:
+        return None
+    percent = round((used / total) * 100, 1) if total > 0 else 0.0
+    return MemoryUsage(
+        total=_fmt_bytes(total), used=_fmt_bytes(used), free=_fmt_bytes(free), percent=percent
+    )
+
+
+def _parse_disk(raw: str) -> DiskUsage | None:
+    """Parse output of: df -B1 / | awk 'NR==2{print $2, $3, $4, $5}'."""
+    parts = raw.split()
+    if len(parts) < 4:
+        return None
+    try:
+        total, used, avail = int(parts[0]), int(parts[1]), int(parts[2])
+        percent = float(parts[3].rstrip("%"))
+    except ValueError:
+        return None
+    return DiskUsage(
+        total=_fmt_bytes(total), used=_fmt_bytes(used), free=_fmt_bytes(avail), percent=percent
+    )
+
+
+def _parse_containers(raw: str) -> list[ServerContainerInfo]:
+    """Parse docker ps --format JSON output into ServerContainerInfo list."""
+    results: list[ServerContainerInfo] = []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            results.append(
+                ServerContainerInfo(
+                    id=obj.get("ID", ""),
+                    name=obj.get("Names", ""),
+                    status=obj.get("Status", ""),
+                    image=obj.get("Image", ""),
+                )
+            )
+        except json.JSONDecodeError:
+            continue
+    return results
+
+
 @router.get("/{name}/status", response_model=ServerStatus)
 def server_status(name: str) -> ServerStatus:
     """Show server resource usage and Docker status."""
@@ -188,13 +258,13 @@ def server_status(name: str) -> ServerStatus:
     try:
         with ssh:
             uptime = ssh.run_checked("uptime -p").strip()
-            mem = ssh.run_checked("free -h | awk '/Mem:/{print $3\"/\"$2}'").strip()
-            disk_cmd = 'df -h / | awk \'NR==2{print $3"/"$2" ("$5" used)"}\''
-            disk = ssh.run_checked(disk_cmd).strip()
-            containers = ssh.run_checked(
-                "docker ps --format '{{.Names}}\\t{{.Status}}' "
-                "2>/dev/null || echo 'Docker not running'"
-            ).strip()
+            mem_raw, _, _ = ssh.run("free -b | awk '/^Mem:/{print $2, $3, $4}'", timeout=10)
+            disk_raw, _, _ = ssh.run("df -B1 / | awk 'NR==2{print $2, $3, $4, $5}'", timeout=10)
+            containers_raw, _, _ = ssh.run(
+                'docker ps --format \'{"ID":"{{.ID}}","Names":"{{.Names}}",'
+                '"Status":"{{.Status}}","Image":"{{.Image}}"}\' 2>/dev/null',
+                timeout=10,
+            )
     except SSHConnectionError as exc:
         raise HTTPException(502, f"Cannot reach server: {exc}")
 
@@ -202,9 +272,9 @@ def server_status(name: str) -> ServerStatus:
         name=srv_name,
         host=srv_host,
         uptime=uptime,
-        memory=mem,
-        disk=disk,
-        containers=containers,
+        memory=_parse_memory(mem_raw.strip()),
+        disk=_parse_disk(disk_raw.strip()),
+        containers=_parse_containers(containers_raw.strip()),
     )
 
 

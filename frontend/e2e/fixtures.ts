@@ -262,6 +262,27 @@ export async function mockApi(page: Page): Promise<void> {
     return route.fulfill({ json: MOCK_DEPLOYMENTS });
   });
 
+  await page.route("**/api/apps/*/health", (route) => {
+    return route.fulfill({
+      json: {
+        app_name: "web-api",
+        db_status: "running",
+        actual_status: "running",
+        status_mismatch: false,
+        containers: [
+          {
+            name: "infrakt-web-api",
+            state: "running",
+            status: "Up 2 hours",
+            image: "nginx:latest",
+            health: "healthy",
+          },
+        ],
+        checked_at: new Date().toISOString(),
+      },
+    });
+  });
+
   // Env var delete — must be registered before the generic /env route
   await page.route("**/api/apps/*/env/*", (route) => {
     if (route.request().method() === "DELETE") {

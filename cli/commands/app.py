@@ -5,7 +5,15 @@ import click
 from cli.core.console import console, error, info, print_table, status_spinner, success
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
-from cli.core.deployer import deploy_app, destroy_app, get_logs, restart_app, stop_app
+from cli.core.deployer import (
+    deploy_app,
+    destroy_app,
+    get_container_health,
+    get_logs,
+    reconcile_app_status,
+    restart_app,
+    stop_app,
+)
 from cli.core.exceptions import AppNotFoundError, ServerNotFoundError
 from cli.core.proxy_manager import add_domain, remove_domain
 from cli.core.ssh import SSHClient
@@ -288,3 +296,43 @@ def destroy(name: str, server_name: str | None, force: bool) -> None:
             session.delete(app_record)
 
     success(f"App '{name}' destroyed")
+
+
+@app.command()
+@click.argument("name")
+@click.option("--server", "server_name", default=None)
+def health(name: str, server_name: str | None) -> None:
+    """Check real container health for an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        srv = app_obj.server
+        db_status = app_obj.status
+        app_id = app_obj.id
+        ssh = _ssh_for_server(srv)
+
+    with status_spinner(f"Checking health of '{name}'"):
+        with ssh:
+            containers = get_container_health(ssh, name)
+            actual_status = reconcile_app_status(ssh, name)
+
+    if actual_status != db_status:
+        with get_session() as session:
+            a = session.query(App).filter(App.id == app_id).first()
+            if a:
+                a.status = actual_status
+        info(f"Status updated: {db_status} → {actual_status}")
+
+    if not containers:
+        info(f"No containers found for '{name}' (status: {actual_status})")
+        return
+
+    rows = [
+        (c["name"], c["state"], c["status"], c["health"] or "—", c["image"]) for c in containers
+    ]
+    print_table(
+        f"Health: {name}",
+        ["Container", "State", "Status", "Healthcheck", "Image"],
+        rows,
+    )
+    info(f"DB status: {db_status}  |  Actual: {actual_status}")

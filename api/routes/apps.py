@@ -14,10 +14,26 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import joinedload
 
 from api.log_broadcaster import broadcaster
-from api.schemas import AppCreate, AppLogs, AppOut, AppUpdate, DeploymentOut
+from api.schemas import (
+    AppCreate,
+    AppHealth,
+    AppLogs,
+    AppOut,
+    AppUpdate,
+    ContainerHealth,
+    DeploymentOut,
+)
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
-from cli.core.deployer import deploy_app, destroy_app, get_logs, restart_app, stop_app
+from cli.core.deployer import (
+    deploy_app,
+    destroy_app,
+    get_container_health,
+    get_logs,
+    reconcile_app_status,
+    restart_app,
+    stop_app,
+)
 from cli.core.exceptions import SSHConnectionError
 from cli.core.proxy_manager import add_domain, remove_domain
 from cli.core.ssh import SSHClient
@@ -386,6 +402,55 @@ async def stream_deployment_logs(name: str, dep_id: int) -> StreamingResponse:
         _live_stream(),
         media_type="text/event-stream",
         headers=sse_headers,
+    )
+
+
+@router.get("/{name}/health", response_model=AppHealth)
+def app_health(name: str, server: str | None = None) -> AppHealth:
+    """Check real container health state and reconcile DB status."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name)
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        app_obj = q.first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        db_status = app_obj.status
+        app_id = app_obj.id
+        ssh = _ssh_for(app_obj.server)
+
+    try:
+        with ssh:
+            raw_containers = get_container_health(ssh, name)
+            actual_status = reconcile_app_status(ssh, name)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, f"Cannot reach server: {exc}")
+
+    if actual_status != db_status:
+        with get_session() as session:
+            a = session.query(App).filter(App.id == app_id).first()
+            if a:
+                a.status = actual_status
+
+    containers = [
+        ContainerHealth(
+            name=c["name"],
+            state=c["state"],
+            status=c["status"],
+            image=c["image"],
+            health=c["health"],
+        )
+        for c in raw_containers
+    ]
+
+    return AppHealth(
+        app_name=name,
+        db_status=db_status,
+        actual_status=actual_status,
+        status_mismatch=(actual_status != db_status),
+        containers=containers,
+        checked_at=datetime.utcnow(),
     )
 
 

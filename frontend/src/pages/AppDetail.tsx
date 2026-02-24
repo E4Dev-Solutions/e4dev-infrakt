@@ -17,12 +17,14 @@ import {
   Server,
   GitBranch,
   Box,
+  Activity,
 } from "lucide-react";
 import {
   useApps,
   useAppLogs,
   useAppDeployments,
   useAppEnv,
+  useAppHealth,
   useDeployApp,
   useRestartApp,
   useStopApp,
@@ -39,7 +41,7 @@ import Modal from "@/components/Modal";
 import DeploymentLogStream from "@/components/DeploymentLogStream";
 import type { UpdateAppInput } from "@/api/client";
 
-type ActiveTab = "logs" | "env" | "deployments";
+type ActiveTab = "logs" | "env" | "deployments" | "health";
 
 function formatDate(iso: string): string {
   try {
@@ -370,6 +372,105 @@ function DeploymentsTab({ appName }: { appName: string }) {
   );
 }
 
+// ─── Health Tab ──────────────────────────────────────────────────────────────
+
+function HealthTab({ appName }: { appName: string }) {
+  const { data, isLoading, refetch, isFetching } = useAppHealth(appName);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-400">
+          Health checks run on-demand over SSH.
+        </p>
+        <button
+          onClick={() => void refetch()}
+          disabled={isFetching}
+          className="flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+        >
+          <RefreshCw
+            size={12}
+            className={isFetching ? "animate-spin" : ""}
+            aria-hidden="true"
+          />
+          {isLoading || isFetching ? "Checking..." : "Check Health"}
+        </button>
+      </div>
+
+      {!data && !isLoading && !isFetching ? (
+        <p className="py-10 text-center text-sm text-slate-500">
+          Click &quot;Check Health&quot; to query real container state from the server.
+        </p>
+      ) : isLoading || isFetching ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Checking health" />
+        </div>
+      ) : data ? (
+        <>
+          {/* Status summary */}
+          <div className="flex items-center gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+            <div>
+              <p className="mb-1 text-xs text-slate-400">Actual Status</p>
+              <StatusBadge status={data.actual_status} />
+            </div>
+            {data.status_mismatch && (
+              <p className="ml-4 text-xs text-amber-400">
+                DB was &quot;{data.db_status}&quot; — updated to match actual state.
+              </p>
+            )}
+          </div>
+
+          {/* Container table */}
+          {data.containers.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-500">
+              No containers found. The app may not be deployed.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-slate-700">
+              <table className="w-full text-sm" role="table">
+                <thead>
+                  <tr className="border-b border-slate-700 bg-slate-800/60">
+                    {["Container", "State", "Status", "Healthcheck", "Image"].map((h) => (
+                      <th
+                        key={h}
+                        scope="col"
+                        className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/40">
+                  {data.containers.map((c) => (
+                    <tr key={c.name} className="bg-slate-800/30 hover:bg-slate-800/60">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-200">{c.name}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={c.state} />
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-400">{c.status}</td>
+                      <td className="px-4 py-3">
+                        {c.health ? (
+                          <StatusBadge status={c.health} />
+                        ) : (
+                          <span className="text-xs text-slate-500">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                        {c.image || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AppDetail() {
@@ -630,6 +731,13 @@ export default function AppDetail() {
             isActive={activeTab === "deployments"}
             onClick={setActiveTab}
           />
+          <TabButton
+            id="health"
+            label="Health"
+            icon={<Activity size={14} aria-hidden="true" />}
+            isActive={activeTab === "health"}
+            onClick={setActiveTab}
+          />
         </div>
 
         {/* Tab panels */}
@@ -670,6 +778,14 @@ export default function AppDetail() {
             {activeTab === "deployments" && (
               <DeploymentsTab appName={decodedName} />
             )}
+          </div>
+          <div
+            id="tabpanel-health"
+            role="tabpanel"
+            aria-label="Health"
+            hidden={activeTab !== "health"}
+          >
+            {activeTab === "health" && <HealthTab appName={decodedName} />}
           </div>
         </div>
       </div>

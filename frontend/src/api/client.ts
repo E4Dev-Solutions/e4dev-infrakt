@@ -105,6 +105,23 @@ export interface EnvVar {
   value: string;
 }
 
+export interface ContainerHealthInfo {
+  name: string;
+  state: string;
+  status: string;
+  image: string;
+  health: string;
+}
+
+export interface AppHealth {
+  app_name: string;
+  db_status: string;
+  actual_status: string;
+  status_mismatch: boolean;
+  containers: ContainerHealthInfo[];
+  checked_at: string;
+}
+
 export interface Database {
   id: string;
   name: string;
@@ -323,6 +340,9 @@ export const appsApi = {
 
   deleteEnv: (name: string, key: string): Promise<void> =>
     del(`/apps/${encodeURIComponent(name)}/env/${encodeURIComponent(key)}`),
+
+  health: (name: string): Promise<AppHealth> =>
+    get(`/apps/${encodeURIComponent(name)}/health`),
 };
 
 // ─── Databases ────────────────────────────────────────────────────────────────

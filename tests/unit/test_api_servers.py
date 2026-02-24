@@ -180,3 +180,56 @@ class TestConnectionTest:
     def test_returns_404_when_server_not_found(self, client, isolated_config):
         response = client.post("/api/servers/ghost/test")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/servers/{name}/status
+# ---------------------------------------------------------------------------
+
+
+class TestServerStatus:
+    def test_returns_structured_memory_and_disk(self, client, isolated_config):
+        _seed_server("status-srv")
+        with patch("api.routes.servers.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_ssh.run_checked.return_value = "up 2 days"
+            mock_ssh.run.side_effect = [
+                ("8000000000 2000000000 5000000000", "", 0),  # free -b
+                ("20000000000 5000000000 15000000000 25%", "", 0),  # df -B1
+                ("", "", 0),  # docker ps
+            ]
+            mock_cls.from_server.return_value = mock_ssh
+            response = client.get("/api/servers/status-srv/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["uptime"] == "up 2 days"
+        assert isinstance(data["memory"], dict)
+        assert "percent" in data["memory"]
+        assert isinstance(data["memory"]["percent"], float)
+        assert isinstance(data["disk"], dict)
+        assert isinstance(data["disk"]["percent"], float)
+        assert isinstance(data["containers"], list)
+
+    def test_returns_containers_from_docker_ps(self, client, isolated_config):
+        _seed_server("docker-srv")
+        docker_json = '{"ID":"abc123","Names":"web","Status":"Up 1 hour","Image":"nginx"}\n'
+        with patch("api.routes.servers.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_ssh.run_checked.return_value = "up 1 day"
+            mock_ssh.run.side_effect = [
+                ("4000000000 1000000000 3000000000", "", 0),
+                ("10000000000 2000000000 8000000000 20%", "", 0),
+                (docker_json, "", 0),
+            ]
+            mock_cls.from_server.return_value = mock_ssh
+            response = client.get("/api/servers/docker-srv/status")
+
+        data = response.json()
+        assert len(data["containers"]) == 1
+        assert data["containers"][0]["name"] == "web"
+        assert data["containers"][0]["id"] == "abc123"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 from collections.abc import Callable
@@ -208,3 +209,59 @@ def _generate_compose(
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def get_container_health(ssh: SSHClient, app_name: str) -> list[dict[str, str]]:
+    """Query real container state for an app using docker compose ps.
+
+    Returns a list of dicts with keys: name, state, status, image, health.
+    Returns empty list if the app directory doesn't exist or Docker is not running.
+    """
+    app_path = _app_dir(app_name)
+    q = shlex.quote(app_path)
+
+    # docker compose ps --format json outputs NDJSON (one JSON object per line)
+    stdout, _, exit_code = ssh.run(
+        f"cd {q} && docker compose ps --format json 2>/dev/null",
+        timeout=15,
+    )
+    if exit_code != 0 or not stdout.strip():
+        return []
+
+    containers: list[dict[str, str]] = []
+    for line in stdout.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            containers.append(
+                {
+                    "name": obj.get("Name", ""),
+                    "state": obj.get("State", ""),
+                    "status": obj.get("Status", ""),
+                    "image": obj.get("Image", ""),
+                    "health": obj.get("Health", ""),
+                }
+            )
+        except json.JSONDecodeError:
+            continue
+    return containers
+
+
+def reconcile_app_status(ssh: SSHClient, app_name: str) -> str:
+    """Check actual Docker state and return the appropriate DB status string.
+
+    Possible returns: "running", "stopped", "error", "restarting".
+    """
+    containers = get_container_health(ssh, app_name)
+    if not containers:
+        return "stopped"
+    states = [c["state"] for c in containers]
+    if any(s == "restarting" for s in states):
+        return "restarting"
+    if all(s == "running" for s in states):
+        return "running"
+    if any(s == "running" for s in states):
+        return "error"  # partially running
+    return "stopped"

@@ -17,6 +17,7 @@ import {
   type CreateDatabaseInput,
   type ProxyRouteCreateInput,
   type EnvVar,
+  type AppHealth,
   type DashboardData,
   type Server,
   type ServerStatusData,
@@ -37,6 +38,7 @@ export const queryKeys = {
   appLogs: (name: string) => ["apps", name, "logs"] as const,
   appDeployments: (name: string) => ["apps", name, "deployments"] as const,
   appEnv: (name: string) => ["apps", name, "env"] as const,
+  appHealth: (name: string) => ["apps", name, "health"] as const,
   databases: (server?: string) => ["databases", server ?? "all"] as const,
   proxyDomains: (server: string) => ["proxy", server, "domains"] as const,
 };
@@ -175,6 +177,19 @@ export function useAppEnv(
     queryKey: queryKeys.appEnv(name),
     queryFn: () => appsApi.getEnv(name, showValues),
     enabled: Boolean(name),
+    ...options,
+  });
+}
+
+export function useAppHealth(
+  name: string,
+  options?: Partial<UseQueryOptions<AppHealth>>
+) {
+  return useQuery({
+    queryKey: queryKeys.appHealth(name),
+    queryFn: () => appsApi.health(name),
+    enabled: false, // on-demand only — triggered by refetch()
+    staleTime: Infinity,
     ...options,
   });
 }

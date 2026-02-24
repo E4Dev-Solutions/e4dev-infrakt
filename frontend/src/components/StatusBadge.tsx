@@ -25,11 +25,17 @@ function getVariant(status: string): BadgeVariant {
   ) {
     return "blue";
   }
-  if (normalized === "error" || normalized === "failed") {
+  if (normalized === "error" || normalized === "failed" || normalized === "unhealthy") {
     return "red";
   }
-  if (normalized === "warning") {
+  if (normalized === "warning" || normalized === "restarting") {
     return "amber";
+  }
+  if (normalized === "healthy") {
+    return "green";
+  }
+  if (normalized === "starting") {
+    return "blue";
   }
   return "gray";
 }

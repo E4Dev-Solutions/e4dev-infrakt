@@ -90,13 +90,34 @@ class ServerOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MemoryUsage(BaseModel):
+    total: str
+    used: str
+    free: str
+    percent: float
+
+
+class DiskUsage(BaseModel):
+    total: str
+    used: str
+    free: str
+    percent: float
+
+
+class ServerContainerInfo(BaseModel):
+    id: str
+    name: str
+    status: str
+    image: str = ""
+
+
 class ServerStatus(BaseModel):
     name: str
     host: str
     uptime: str
-    memory: str
-    disk: str
-    containers: str
+    memory: MemoryUsage | None = None
+    disk: DiskUsage | None = None
+    containers: list[ServerContainerInfo] = []
 
 
 # ── App ─────────────────────────────────────────────────
@@ -242,6 +263,26 @@ class ProxyRouteCreate(BaseModel):
         if not _DOMAIN_PATTERN.match(v) or len(v) > 253:
             raise ValueError("Invalid domain name format")
         return v
+
+
+# ── Health ──────────────────────────────────────────────
+
+
+class ContainerHealth(BaseModel):
+    name: str
+    state: str  # running, exited, restarting, paused, dead
+    status: str  # human-readable Docker status string
+    image: str = ""
+    health: str = ""  # healthy, unhealthy, starting, or empty
+
+
+class AppHealth(BaseModel):
+    app_name: str
+    db_status: str
+    actual_status: str
+    status_mismatch: bool
+    containers: list[ContainerHealth]
+    checked_at: datetime
 
 
 # ── Dashboard ───────────────────────────────────────────

@@ -31,12 +31,14 @@ def _build_caddyfile(entries: list[tuple[str, int]]) -> str:
     """Build a complete Caddyfile from a list of (domain, port) tuples."""
     lines = [CADDYFILE_HEADER]
     for domain, port in sorted(entries):
-        lines.extend([
-            f"{domain} {{",
-            f"    reverse_proxy localhost:{port}",
-            "}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"{domain} {{",
+                f"    reverse_proxy localhost:{port}",
+                "}",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 

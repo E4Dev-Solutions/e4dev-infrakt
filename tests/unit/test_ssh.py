@@ -11,11 +11,13 @@ from cli.core.ssh import SSHClient
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_exec_side_effect(stdout_data=b"ok\n", stderr_data=b"", exit_code=0):
     """
     Return a side-effect function for paramiko SSHClient.exec_command that
     simulates a remote command execution with the given outputs.
     """
+
     def _exec(command, timeout=None):
         mock_channel = MagicMock()
         mock_channel.recv_exit_status.return_value = exit_code
@@ -50,6 +52,7 @@ def _patched_client(exec_side_effect=None, connect_error=None):
 # ---------------------------------------------------------------------------
 # connect
 # ---------------------------------------------------------------------------
+
 
 class TestConnect:
     def test_connect_calls_paramiko_with_host_user_port(self):
@@ -102,6 +105,7 @@ class TestConnect:
 # ---------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------
+
 
 class TestRun:
     def test_run_returns_stdout_stderr_exit_code_tuple(self):
@@ -170,6 +174,7 @@ class TestRun:
 # run_checked
 # ---------------------------------------------------------------------------
 
+
 class TestRunChecked:
     def test_run_checked_returns_stdout_on_success(self):
         ef = _make_exec_side_effect(stdout_data=b"result\n", exit_code=0)
@@ -205,6 +210,7 @@ class TestRunChecked:
 # ---------------------------------------------------------------------------
 # upload_string
 # ---------------------------------------------------------------------------
+
 
 class TestUploadString:
     def test_upload_string_writes_content_to_remote_path(self):
@@ -254,6 +260,7 @@ class TestUploadString:
 # test_connection
 # ---------------------------------------------------------------------------
 
+
 class TestTestConnection:
     def test_test_connection_returns_true_when_echo_succeeds(self):
         ef = _make_exec_side_effect(stdout_data=b"ok\n", exit_code=0)
@@ -295,6 +302,7 @@ class TestTestConnection:
 # close
 # ---------------------------------------------------------------------------
 
+
 class TestClose:
     def test_close_calls_paramiko_close_and_clears_client(self):
         patcher, mock_instance = _patched_client()
@@ -316,6 +324,7 @@ class TestClose:
 # ---------------------------------------------------------------------------
 # Context manager
 # ---------------------------------------------------------------------------
+
 
 class TestContextManager:
     def test_context_manager_connects_on_enter(self):

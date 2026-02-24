@@ -23,6 +23,7 @@ def isolated_config(tmp_path, monkeypatch):
 
     # Reset engine so each test gets a fresh in-memory or temp DB
     import cli.core.database as db_mod
+
     db_mod._engine = None
     db_mod._SessionLocal = None
 

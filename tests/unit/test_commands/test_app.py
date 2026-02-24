@@ -40,25 +40,39 @@ def _seed_app(server_name="test-server", app_name="my-app", status="stopped"):
 # app create
 # ---------------------------------------------------------------------------
 
+
 class TestAppCreate:
     def test_create_succeeds_with_valid_server(self, runner, isolated_config):
         _seed_server("prod")
-        result = runner.invoke(cli, [
-            "app", "create",
-            "--server", "prod",
-            "--name", "web-api",
-            "--port", "8080",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "app",
+                "create",
+                "--server",
+                "prod",
+                "--name",
+                "web-api",
+                "--port",
+                "8080",
+            ],
+        )
         assert result.exit_code == 0
         assert "web-api" in result.output
 
     def test_create_stores_app_in_database(self, runner, isolated_config):
         _seed_server("prod")
-        runner.invoke(cli, [
-            "app", "create",
-            "--server", "prod",
-            "--name", "stored-app",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "app",
+                "create",
+                "--server",
+                "prod",
+                "--name",
+                "stored-app",
+            ],
+        )
         init_db()
         with get_session() as session:
             app_obj = session.query(App).filter(App.name == "stored-app").first()
@@ -68,11 +82,17 @@ class TestAppCreate:
         assert status == "stopped"
 
     def test_create_fails_when_server_not_found(self, runner, isolated_config):
-        result = runner.invoke(cli, [
-            "app", "create",
-            "--server", "nonexistent",
-            "--name", "my-app",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "app",
+                "create",
+                "--server",
+                "nonexistent",
+                "--name",
+                "my-app",
+            ],
+        )
         assert result.exit_code != 0
         assert "not found" in result.output.lower() or "nonexistent" in result.output
 
@@ -85,12 +105,19 @@ class TestAppCreate:
 
     def test_create_with_git_repo_sets_type(self, runner, isolated_config):
         _seed_server("prod")
-        runner.invoke(cli, [
-            "app", "create",
-            "--server", "prod",
-            "--name", "git-app",
-            "--git", "https://github.com/example/repo.git",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "app",
+                "create",
+                "--server",
+                "prod",
+                "--name",
+                "git-app",
+                "--git",
+                "https://github.com/example/repo.git",
+            ],
+        )
         init_db()
         with get_session() as session:
             app_obj = session.query(App).filter(App.name == "git-app").first()
@@ -101,12 +128,19 @@ class TestAppCreate:
 
     def test_create_with_image_sets_type(self, runner, isolated_config):
         _seed_server("prod")
-        runner.invoke(cli, [
-            "app", "create",
-            "--server", "prod",
-            "--name", "img-app",
-            "--image", "nginx:latest",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "app",
+                "create",
+                "--server",
+                "prod",
+                "--name",
+                "img-app",
+                "--image",
+                "nginx:latest",
+            ],
+        )
         init_db()
         with get_session() as session:
             app_obj = session.query(App).filter(App.name == "img-app").first()
@@ -117,12 +151,19 @@ class TestAppCreate:
 
     def test_create_with_domain_stores_domain(self, runner, isolated_config):
         _seed_server("prod")
-        runner.invoke(cli, [
-            "app", "create",
-            "--server", "prod",
-            "--name", "domain-app",
-            "--domain", "api.example.com",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "app",
+                "create",
+                "--server",
+                "prod",
+                "--name",
+                "domain-app",
+                "--domain",
+                "api.example.com",
+            ],
+        )
         init_db()
         with get_session() as session:
             app_obj = session.query(App).filter(App.name == "domain-app").first()
@@ -131,11 +172,17 @@ class TestAppCreate:
 
     def test_create_without_source_defaults_to_compose_type(self, runner, isolated_config):
         _seed_server("prod")
-        runner.invoke(cli, [
-            "app", "create",
-            "--server", "prod",
-            "--name", "compose-app",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "app",
+                "create",
+                "--server",
+                "prod",
+                "--name",
+                "compose-app",
+            ],
+        )
         init_db()
         with get_session() as session:
             app_obj = session.query(App).filter(App.name == "compose-app").first()
@@ -146,6 +193,7 @@ class TestAppCreate:
 # ---------------------------------------------------------------------------
 # app list
 # ---------------------------------------------------------------------------
+
 
 class TestAppList:
     def test_list_shows_no_apps_message_when_empty(self, runner, isolated_config):
@@ -189,12 +237,15 @@ class TestAppList:
 # app deploy
 # ---------------------------------------------------------------------------
 
+
 class TestAppDeploy:
     def test_deploy_succeeds_with_mocked_ssh(self, runner, isolated_config):
         _seed_app("prod", "deploy-me")
-        with patch("cli.commands.app.SSHClient") as mock_cls, \
-             patch("cli.commands.app.deploy_app", return_value="build log"), \
-             patch("cli.commands.app.status_spinner"):
+        with (
+            patch("cli.commands.app.SSHClient") as mock_cls,
+            patch("cli.commands.app.deploy_app", return_value="build log"),
+            patch("cli.commands.app.status_spinner"),
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -212,9 +263,11 @@ class TestAppDeploy:
 
     def test_deploy_updates_app_status_to_running_on_success(self, runner, isolated_config):
         _seed_app("prod", "status-app")
-        with patch("cli.commands.app.SSHClient") as mock_cls, \
-             patch("cli.commands.app.deploy_app", return_value="ok"), \
-             patch("cli.commands.app.status_spinner"):
+        with (
+            patch("cli.commands.app.SSHClient") as mock_cls,
+            patch("cli.commands.app.deploy_app", return_value="ok"),
+            patch("cli.commands.app.status_spinner"),
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -230,9 +283,11 @@ class TestAppDeploy:
 
     def test_deploy_sets_app_status_to_error_on_failure(self, runner, isolated_config):
         _seed_app("prod", "fail-app")
-        with patch("cli.commands.app.SSHClient") as mock_cls, \
-             patch("cli.commands.app.deploy_app", side_effect=Exception("boom")), \
-             patch("cli.commands.app.status_spinner"):
+        with (
+            patch("cli.commands.app.SSHClient") as mock_cls,
+            patch("cli.commands.app.deploy_app", side_effect=Exception("boom")),
+            patch("cli.commands.app.status_spinner"),
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -252,12 +307,15 @@ class TestAppDeploy:
 # app stop
 # ---------------------------------------------------------------------------
 
+
 class TestAppStop:
     def test_stop_succeeds_with_mocked_ssh(self, runner, isolated_config):
         _seed_app("prod", "running-app", status="running")
-        with patch("cli.commands.app.SSHClient") as mock_cls, \
-             patch("cli.commands.app.stop_app"), \
-             patch("cli.commands.app.status_spinner"):
+        with (
+            patch("cli.commands.app.SSHClient") as mock_cls,
+            patch("cli.commands.app.stop_app"),
+            patch("cli.commands.app.status_spinner"),
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -269,9 +327,11 @@ class TestAppStop:
 
     def test_stop_updates_app_status_to_stopped(self, runner, isolated_config):
         _seed_app("prod", "to-stop", status="running")
-        with patch("cli.commands.app.SSHClient") as mock_cls, \
-             patch("cli.commands.app.stop_app"), \
-             patch("cli.commands.app.status_spinner"):
+        with (
+            patch("cli.commands.app.SSHClient") as mock_cls,
+            patch("cli.commands.app.stop_app"),
+            patch("cli.commands.app.status_spinner"),
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -293,12 +353,15 @@ class TestAppStop:
 # app destroy
 # ---------------------------------------------------------------------------
 
+
 class TestAppDestroy:
     def test_destroy_with_force_removes_app_from_database(self, runner, isolated_config):
         _seed_app("prod", "doomed-app")
-        with patch("cli.commands.app.SSHClient") as mock_cls, \
-             patch("cli.commands.app.destroy_app"), \
-             patch("cli.commands.app.status_spinner"):
+        with (
+            patch("cli.commands.app.SSHClient") as mock_cls,
+            patch("cli.commands.app.destroy_app"),
+            patch("cli.commands.app.status_spinner"),
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -313,9 +376,11 @@ class TestAppDestroy:
 
     def test_destroy_prints_success_message(self, runner, isolated_config):
         _seed_app("prod", "bye-app")
-        with patch("cli.commands.app.SSHClient") as mock_cls, \
-             patch("cli.commands.app.destroy_app"), \
-             patch("cli.commands.app.status_spinner"):
+        with (
+            patch("cli.commands.app.SSHClient") as mock_cls,
+            patch("cli.commands.app.destroy_app"),
+            patch("cli.commands.app.status_spinner"),
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)

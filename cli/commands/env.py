@@ -145,6 +145,7 @@ def push_env(app_name: str, server_name: str | None) -> None:
             raise AppNotFoundError(f"App '{app_name}' not found")
 
         from cli.core.ssh import SSHClient
+
         ssh = SSHClient.from_server(app_obj.server)
         app_id = app_obj.id
 

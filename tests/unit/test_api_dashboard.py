@@ -39,6 +39,7 @@ def _seed_app(server_name, app_name, status="stopped", app_type="git"):
 # GET /api/dashboard
 # ---------------------------------------------------------------------------
 
+
 class TestDashboardStats:
     def test_returns_200_with_zero_counts_when_empty(self, client, isolated_config):
         response = client.get("/api/dashboard")

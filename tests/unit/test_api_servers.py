@@ -30,6 +30,7 @@ def _seed_server(name="srv-1", host="1.2.3.4", user="root", status="active"):
 # GET /api/servers
 # ---------------------------------------------------------------------------
 
+
 class TestListServers:
     def test_returns_empty_list_when_no_servers(self, client):
         response = client.get("/api/servers")
@@ -69,6 +70,7 @@ class TestListServers:
 # ---------------------------------------------------------------------------
 # POST /api/servers
 # ---------------------------------------------------------------------------
+
 
 class TestAddServer:
     def test_creates_server_and_returns_201(self, client, isolated_config):
@@ -126,6 +128,7 @@ class TestAddServer:
 # DELETE /api/servers/{name}
 # ---------------------------------------------------------------------------
 
+
 class TestRemoveServer:
     def test_removes_existing_server_and_returns_message(self, client, isolated_config):
         _seed_server("to-remove")
@@ -149,6 +152,7 @@ class TestRemoveServer:
 # ---------------------------------------------------------------------------
 # POST /api/servers/{name}/test
 # ---------------------------------------------------------------------------
+
 
 class TestConnectionTest:
     def test_returns_reachable_true_when_ssh_succeeds(self, client, isolated_config):

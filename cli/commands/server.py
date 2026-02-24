@@ -83,10 +83,7 @@ def list_servers() -> None:
         if not servers:
             info("No servers registered. Use 'infrakt server add' to add one.")
             return
-        rows = [
-            (s.name, s.host, s.user, s.port, s.status, s.provider or "—")
-            for s in servers
-        ]
+        rows = [(s.name, s.host, s.user, s.port, s.status, s.provider or "—") for s in servers]
     print_table("Servers", ["Name", "Host", "User", "Port", "Status", "Provider"], rows)
 
 
@@ -103,9 +100,7 @@ def remove(name: str, force: bool) -> None:
             raise SystemExit(1)
         app_count = len(srv.apps)
         if app_count and not force:
-            click.confirm(
-                f"Server '{name}' has {app_count} app(s). Remove anyway?", abort=True
-            )
+            click.confirm(f"Server '{name}' has {app_count} app(s). Remove anyway?", abort=True)
         session.delete(srv)
     success(f"Server '{name}' removed")
 
@@ -120,6 +115,7 @@ def provision(name: str) -> None:
     with status_spinner(f"Provisioning {srv.name} ({srv.host})"):
         with _ssh_for_server(srv) as ssh:
             from cli.core.provisioner import provision_server
+
             provision_server(ssh)
 
     with get_session() as session:
@@ -141,13 +137,10 @@ def status(name: str) -> None:
         # Gather system info
         uptime = ssh.run_checked("uptime -p").strip()
         mem = ssh.run_checked("free -h | awk '/Mem:/{print $3\"/\"$2}'").strip()
-        disk_cmd = (
-            "df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\" used)\"}'"
-        )
+        disk_cmd = 'df -h / | awk \'NR==2{print $3"/"$2" ("$5" used)"}\''
         disk = ssh.run_checked(disk_cmd).strip()
         containers = ssh.run_checked(
-            "docker ps --format '{{.Names}}\\t{{.Status}}' "
-            "2>/dev/null || echo 'Docker not running'"
+            "docker ps --format '{{.Names}}\\t{{.Status}}' 2>/dev/null || echo 'Docker not running'"
         ).strip()
 
     info(f"Server: {srv.name} ({srv.host})")
@@ -162,6 +155,7 @@ def status(name: str) -> None:
 def ssh(name: str) -> None:
     """Open an interactive SSH session to the server."""
     import subprocess
+
     srv = _get_server(name)
     cmd = ["ssh", f"{srv.user}@{srv.host}", "-p", str(srv.port)]
     if srv.ssh_key_path:

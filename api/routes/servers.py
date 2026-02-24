@@ -26,10 +26,7 @@ def list_servers() -> list[ServerOut]:
     init_db()
     with get_session() as session:
         servers = (
-            session.query(Server)
-            .options(selectinload(Server.apps))
-            .order_by(Server.name)
-            .all()
+            session.query(Server).options(selectinload(Server.apps)).order_by(Server.name).all()
         )
         return [
             ServerOut(
@@ -192,9 +189,7 @@ def server_status(name: str) -> ServerStatus:
         with ssh:
             uptime = ssh.run_checked("uptime -p").strip()
             mem = ssh.run_checked("free -h | awk '/Mem:/{print $3\"/\"$2}'").strip()
-            disk_cmd = (
-                "df -h / | awk 'NR==2{print $3\"/\"$2\" (\"$5\" used)\"}'"
-            )
+            disk_cmd = 'df -h / | awk \'NR==2{print $3"/"$2" ("$5" used)"}\''
             disk = ssh.run_checked(disk_cmd).strip()
             containers = ssh.run_checked(
                 "docker ps --format '{{.Names}}\\t{{.Status}}' "

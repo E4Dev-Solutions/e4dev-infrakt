@@ -58,11 +58,7 @@ def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks) -> 
         if not srv:
             raise HTTPException(404, f"Server '{body.server_name}' not found")
 
-        existing = (
-            session.query(App)
-            .filter(App.name == body.name, App.server_id == srv.id)
-            .first()
-        )
+        existing = session.query(App).filter(App.name == body.name, App.server_id == srv.id).first()
         if existing:
             raise HTTPException(
                 400,

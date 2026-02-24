@@ -1,6 +1,5 @@
 """Tests for the 'env' CLI command group (set, get, list, delete)."""
 
-
 import pytest
 from click.testing import CliRunner
 
@@ -42,6 +41,7 @@ def _seed_app(isolated_config, server_name="srv", app_name="my-app"):
 # env set
 # ---------------------------------------------------------------------------
 
+
 class TestEnvSet:
     def test_set_single_variable_succeeds(self, runner, isolated_config):
         _seed_app(isolated_config)
@@ -60,6 +60,7 @@ class TestEnvSet:
         runner.invoke(cli, ["env", "set", "my-app", "SECRET=mysecretvalue"])
         # The value stored on disk should NOT be the plaintext
         import json
+
         # Find the env file
         files = list(isolated_config.joinpath("envs").glob("*.json"))
         assert len(files) == 1
@@ -99,6 +100,7 @@ class TestEnvSet:
 # env get
 # ---------------------------------------------------------------------------
 
+
 class TestEnvGet:
     def test_get_returns_decrypted_value(self, runner, isolated_config):
         _seed_app(isolated_config)
@@ -127,6 +129,7 @@ class TestEnvGet:
 # ---------------------------------------------------------------------------
 # env list
 # ---------------------------------------------------------------------------
+
 
 class TestEnvList:
     def test_list_shows_no_vars_message_when_empty(self, runner, isolated_config):
@@ -177,6 +180,7 @@ class TestEnvList:
 # ---------------------------------------------------------------------------
 # env delete
 # ---------------------------------------------------------------------------
+
 
 class TestEnvDelete:
     def test_delete_removes_existing_variable(self, runner, isolated_config):

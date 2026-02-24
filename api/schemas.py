@@ -31,8 +31,7 @@ def _validate_git_repo_url(v: str | None) -> str | None:
         return v
     if not _GIT_REPO_PATTERN.match(v):
         raise ValueError(
-            "git_repo must be an HTTPS URL ending with .git "
-            "(e.g. https://github.com/user/repo.git)"
+            "git_repo must be an HTTPS URL ending with .git (e.g. https://github.com/user/repo.git)"
         )
     hostname = urlparse(v).hostname or ""
     _blocked_prefixes = ("localhost", "127.", "0.0.0.0", "169.254.", "10.")
@@ -51,6 +50,7 @@ def _validate_git_repo_url(v: str | None) -> str | None:
 
 
 # ── Server ──────────────────────────────────────────────
+
 
 class ServerCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -100,6 +100,7 @@ class ServerStatus(BaseModel):
 
 
 # ── App ─────────────────────────────────────────────────
+
 
 class AppCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -185,6 +186,7 @@ class AppLogs(BaseModel):
 
 # ── Env ─────────────────────────────────────────────────
 
+
 class EnvVarSet(BaseModel):
     key: str = Field(..., min_length=1, max_length=255, pattern=r"^[A-Za-z_][A-Za-z0-9_]*$")
     value: str
@@ -196,6 +198,7 @@ class EnvVarOut(BaseModel):
 
 
 # ── Database ────────────────────────────────────────────
+
 
 class DatabaseCreate(BaseModel):
     server_name: str
@@ -222,6 +225,7 @@ class DatabaseOut(BaseModel):
 
 # ── Proxy ───────────────────────────────────────────────
 
+
 class ProxyRoute(BaseModel):
     domain: str
     port: int = Field(..., ge=1, le=65535)
@@ -241,6 +245,7 @@ class ProxyRouteCreate(BaseModel):
 
 
 # ── Dashboard ───────────────────────────────────────────
+
 
 class DashboardStats(BaseModel):
     total_servers: int

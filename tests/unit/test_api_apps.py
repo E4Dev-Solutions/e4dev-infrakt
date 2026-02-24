@@ -49,6 +49,7 @@ def _seed_app(server_name="srv-1", app_name="my-app", status="stopped", domain=N
 # GET /api/apps
 # ---------------------------------------------------------------------------
 
+
 class TestListApps:
     def test_returns_empty_list_when_no_apps(self, client, isolated_config):
         response = client.get("/api/apps")
@@ -105,6 +106,7 @@ class TestListApps:
 # ---------------------------------------------------------------------------
 # POST /api/apps
 # ---------------------------------------------------------------------------
+
 
 class TestCreateApp:
     def test_creates_app_and_returns_201(self, client, isolated_config):
@@ -178,11 +180,11 @@ class TestCreateApp:
 # POST /api/apps/{name}/stop
 # ---------------------------------------------------------------------------
 
+
 class TestStopApp:
     def test_stop_returns_success_message(self, client, isolated_config):
         _seed_app("srv-1", "running-app", status="running")
-        with patch("api.routes.apps.SSHClient") as mock_cls, \
-             patch("api.routes.apps.stop_app"):
+        with patch("api.routes.apps.SSHClient") as mock_cls, patch("api.routes.apps.stop_app"):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -194,8 +196,7 @@ class TestStopApp:
 
     def test_stop_updates_app_status_to_stopped_in_db(self, client, isolated_config):
         _seed_app("srv-1", "active-app", status="running")
-        with patch("api.routes.apps.SSHClient") as mock_cls, \
-             patch("api.routes.apps.stop_app"):
+        with patch("api.routes.apps.SSHClient") as mock_cls, patch("api.routes.apps.stop_app"):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -218,11 +219,11 @@ class TestStopApp:
 # DELETE /api/apps/{name}
 # ---------------------------------------------------------------------------
 
+
 class TestDestroyApp:
     def test_destroy_removes_app_from_database(self, client, isolated_config):
         _seed_app("srv-1", "doom-app")
-        with patch("api.routes.apps.SSHClient") as mock_cls, \
-             patch("api.routes.apps.destroy_app"):
+        with patch("api.routes.apps.SSHClient") as mock_cls, patch("api.routes.apps.destroy_app"):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -237,8 +238,7 @@ class TestDestroyApp:
 
     def test_destroy_returns_success_message(self, client, isolated_config):
         _seed_app("srv-1", "bye-app")
-        with patch("api.routes.apps.SSHClient") as mock_cls, \
-             patch("api.routes.apps.destroy_app"):
+        with patch("api.routes.apps.SSHClient") as mock_cls, patch("api.routes.apps.destroy_app"):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
@@ -249,9 +249,11 @@ class TestDestroyApp:
 
     def test_destroy_also_calls_remove_domain_when_domain_set(self, client, isolated_config):
         _seed_app("srv-1", "domain-app", domain="api.example.com")
-        with patch("api.routes.apps.SSHClient") as mock_cls, \
-             patch("api.routes.apps.destroy_app"), \
-             patch("api.routes.apps.remove_domain") as mock_remove:
+        with (
+            patch("api.routes.apps.SSHClient") as mock_cls,
+            patch("api.routes.apps.destroy_app"),
+            patch("api.routes.apps.remove_domain") as mock_remove,
+        ):
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)

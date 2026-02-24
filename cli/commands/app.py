@@ -195,8 +195,7 @@ def list_apps(server_name: str | None) -> None:
             info("No apps found.")
             return
         rows = [
-            (a.name, a.server.name, a.domain or "—", a.port, a.status, a.app_type)
-            for a in apps
+            (a.name, a.server.name, a.domain or "—", a.port, a.status, a.app_type) for a in apps
         ]
     print_table("Apps", ["Name", "Server", "Domain", "Port", "Status", "Type"], rows)
 

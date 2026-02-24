@@ -110,9 +110,7 @@ def deploy_app(
     # Handle image-based deployment
     elif image:
         q_app_path = shlex.quote(app_path)
-        compose_content = compose_override or _generate_compose(
-            app_name, port=port, image=image
-        )
+        compose_content = compose_override or _generate_compose(app_name, port=port, image=image)
         ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
         _log(f"Deploying image: {image}")
         ssh.run_checked(
@@ -186,19 +184,21 @@ def _generate_compose(
     elif build_context:
         lines.append(f"    build: {build_context}")
 
-    lines.extend([
-        f"    container_name: infrakt-{app_name}",
-        "    restart: unless-stopped",
-        "    env_file:",
-        "      - .env",
-        "    ports:",
-        f'      - "127.0.0.1:${{{port_var}:-{port}}}:{port}"',
-        "    networks:",
-        "      - infrakt",
-        "",
-        "networks:",
-        "  infrakt:",
-        "    name: infrakt",
-        "    external: true",
-    ])
+    lines.extend(
+        [
+            f"    container_name: infrakt-{app_name}",
+            "    restart: unless-stopped",
+            "    env_file:",
+            "      - .env",
+            "    ports:",
+            f'      - "127.0.0.1:${{{port_var}:-{port}}}:{port}"',
+            "    networks:",
+            "      - infrakt",
+            "",
+            "networks:",
+            "  infrakt:",
+            "    name: infrakt",
+            "    external: true",
+        ]
+    )
     return "\n".join(lines) + "\n"

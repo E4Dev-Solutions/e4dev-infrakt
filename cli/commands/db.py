@@ -83,27 +83,29 @@ def _generate_db_compose(db_type: str, name: str, version: str, password: str) -
     if env_vars:
         lines.append("    environment:")
         for k, v in env_vars.items():
-            lines.append(f"      {k}: \"{v}\"")
+            lines.append(f'      {k}: "{v}"')
 
     port_val = tpl.get("port")
     if not isinstance(port_val, int):
         port_val = 5432
-    lines.extend([
-        "    volumes:",
-        f"      - {volume}",
-        "    ports:",
-        f'      - "127.0.0.1:{port_val}:{port_val}"',
-        "    networks:",
-        "      - infrakt",
-        "",
-        "volumes:",
-        f"  {name}_data:",
-        "",
-        "networks:",
-        "  infrakt:",
-        "    name: infrakt",
-        "    external: true",
-    ])
+    lines.extend(
+        [
+            "    volumes:",
+            f"      - {volume}",
+            "    ports:",
+            f'      - "127.0.0.1:{port_val}:{port_val}"',
+            "    networks:",
+            "      - infrakt",
+            "",
+            "volumes:",
+            f"  {name}_data:",
+            "",
+            "networks:",
+            "  infrakt:",
+            "    name: infrakt",
+            "    external: true",
+        ]
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -238,8 +240,5 @@ def list_dbs(server_name: str | None) -> None:
         if not dbs:
             info("No database services found.")
             return
-        rows = [
-            (d.name, d.server.name, d.app_type.split(":", 1)[1], d.port, d.status)
-            for d in dbs
-        ]
+        rows = [(d.name, d.server.name, d.app_type.split(":", 1)[1], d.port, d.status) for d in dbs]
     print_table("Databases", ["Name", "Server", "Type", "Port", "Status"], rows)

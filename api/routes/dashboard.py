@@ -19,17 +19,12 @@ def dashboard_stats() -> DashboardStats:
         active_servers = session.query(Server).filter(Server.status == "active").count()
         total_apps = session.query(App).filter(~App.app_type.like("db:%")).count()
         running_apps = (
-            session.query(App)
-            .filter(App.status == "running", ~App.app_type.like("db:%"))
-            .count()
+            session.query(App).filter(App.status == "running", ~App.app_type.like("db:%")).count()
         )
         total_databases = session.query(App).filter(App.app_type.like("db:%")).count()
 
         recent_deps = (
-            session.query(Deployment)
-            .order_by(Deployment.started_at.desc())
-            .limit(10)
-            .all()
+            session.query(Deployment).order_by(Deployment.started_at.desc()).limit(10).all()
         )
         deployments = [DeploymentOut.model_validate(d) for d in recent_deps]
 

@@ -14,12 +14,19 @@ def runner():
 def test_server_add(runner, isolated_config):
     with patch("cli.commands.server.SSHClient") as mock_cls:
         mock_cls.return_value.test_connection.return_value = True
-        result = runner.invoke(cli, [
-            "server", "add",
-            "--name", "test-srv",
-            "--host", "1.2.3.4",
-            "--user", "root",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "server",
+                "add",
+                "--name",
+                "test-srv",
+                "--host",
+                "1.2.3.4",
+                "--user",
+                "root",
+            ],
+        )
     assert result.exit_code == 0
     assert "test-srv" in result.output
 
@@ -33,9 +40,19 @@ def test_server_list_empty(runner, isolated_config):
 def test_server_list_with_servers(runner, isolated_config):
     with patch("cli.commands.server.SSHClient") as mock_cls:
         mock_cls.return_value.test_connection.return_value = True
-        runner.invoke(cli, [
-            "server", "add", "--name", "srv1", "--host", "1.1.1.1", "--user", "root",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "server",
+                "add",
+                "--name",
+                "srv1",
+                "--host",
+                "1.1.1.1",
+                "--user",
+                "root",
+            ],
+        )
 
     result = runner.invoke(cli, ["server", "list"])
     assert result.exit_code == 0
@@ -45,9 +62,19 @@ def test_server_list_with_servers(runner, isolated_config):
 def test_server_remove(runner, isolated_config):
     with patch("cli.commands.server.SSHClient") as mock_cls:
         mock_cls.return_value.test_connection.return_value = True
-        runner.invoke(cli, [
-            "server", "add", "--name", "del-me", "--host", "2.2.2.2", "--user", "root",
-        ])
+        runner.invoke(
+            cli,
+            [
+                "server",
+                "add",
+                "--name",
+                "del-me",
+                "--host",
+                "2.2.2.2",
+                "--user",
+                "root",
+            ],
+        )
 
     result = runner.invoke(cli, ["server", "remove", "del-me", "--force"])
     assert result.exit_code == 0

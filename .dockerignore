@@ -41,7 +41,7 @@ env
 # Docs and non-runtime files
 docs/
 CLAUDE.md
-*.md
+# NOTE: README.md is NOT excluded — pyproject.toml references it at build time
 
 # macOS
 .DS_Store

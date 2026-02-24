@@ -270,6 +270,24 @@ export async function mockApi(page: Page): Promise<void> {
   });
 
   // App actions — must be registered before the generic /apps/* route
+
+  // Deployment log stream (must be before /deploy)
+  await page.route(/\/api\/apps\/[^/]+\/deployments\/[^/]+\/logs\/stream/, (route) => {
+    const sseBody = [
+      'data: {"line":"[1/5] Cloning repository"}\n\n',
+      'data: {"line":"[2/5] Building image"}\n\n',
+      'data: {"line":"[3/5] Starting containers"}\n\n',
+      'data: {"line":"[4/5] Configuring proxy"}\n\n',
+      'data: {"line":"[5/5] Health check passed"}\n\n',
+      'data: {"done":true,"status":"success"}\n\n',
+    ].join("");
+    return route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+      body: sseBody,
+    });
+  });
+
   await page.route("**/api/apps/*/deploy", (route) => {
     return route.fulfill({
       json: { message: "Deployment started", deployment_id: 100 },

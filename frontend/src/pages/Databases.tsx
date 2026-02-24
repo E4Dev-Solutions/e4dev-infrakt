@@ -6,6 +6,7 @@ import {
   Loader2,
   Download,
   Upload,
+  Clock,
 } from "lucide-react";
 import {
   useDatabases,
@@ -14,6 +15,8 @@ import {
   useDeleteDatabase,
   useBackupDatabase,
   useRestoreDatabase,
+  useScheduleBackup,
+  useUnscheduleBackup,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -44,11 +47,17 @@ export default function Databases() {
   const deleteDatabase = useDeleteDatabase();
   const backupDatabase = useBackupDatabase();
   const restoreDatabase = useRestoreDatabase();
+  const scheduleBackup = useScheduleBackup();
+  const unscheduleBackup = useUnscheduleBackup();
   const toast = useToast();
 
   const [showModal, setShowModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState<{ name: string; server: string } | null>(null);
   const [restoreFilename, setRestoreFilename] = useState("");
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleDb, setScheduleDb] = useState<{ name: string; server: string; currentSchedule?: string | null } | null>(null);
+  const [cronExpression, setCronExpression] = useState("0 2 * * *");
+  const [retentionDays, setRetentionDays] = useState(7);
   const [form, setForm] = useState<CreateDatabaseInput>(defaultForm);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [backingUpName, setBackingUpName] = useState<string | null>(null);
@@ -123,6 +132,48 @@ export default function Databases() {
       toast.error(
         err instanceof Error ? err.message : "Failed to restore database."
       );
+    }
+  }
+
+  function openScheduleModal(db: { name: string; server_name: string; backup_schedule?: string | null }) {
+    setScheduleDb({ name: db.name, server: db.server_name, currentSchedule: db.backup_schedule });
+    setCronExpression(db.backup_schedule ?? "0 2 * * *");
+    setRetentionDays(7);
+    setShowScheduleModal(true);
+  }
+
+  function closeScheduleModal() {
+    setShowScheduleModal(false);
+    setScheduleDb(null);
+    setCronExpression("0 2 * * *");
+    setRetentionDays(7);
+  }
+
+  async function handleSetSchedule(e: React.FormEvent) {
+    e.preventDefault();
+    if (!scheduleDb) return;
+    try {
+      await scheduleBackup.mutateAsync({
+        name: scheduleDb.name,
+        cronExpression,
+        retentionDays,
+        server: scheduleDb.server,
+      });
+      toast.success(`Backup schedule set for "${scheduleDb.name}".`);
+      closeScheduleModal();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to set backup schedule.");
+    }
+  }
+
+  async function handleUnschedule() {
+    if (!scheduleDb) return;
+    try {
+      await unscheduleBackup.mutateAsync({ name: scheduleDb.name, server: scheduleDb.server });
+      toast.success(`Backup schedule removed for "${scheduleDb.name}".`);
+      closeScheduleModal();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove backup schedule.");
     }
   }
 
@@ -262,6 +313,18 @@ export default function Databases() {
                         <Upload size={15} aria-hidden="true" />
                       </button>
                       <button
+                        onClick={() => openScheduleModal(db)}
+                        title={db.backup_schedule ? `Edit schedule (${db.backup_schedule})` : "Schedule backups"}
+                        className={[
+                          "rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500",
+                          db.backup_schedule ? "text-indigo-400 hover:text-indigo-300" : "hover:text-indigo-400",
+                        ].join(" ")}
+                        aria-label={`Schedule backups for ${db.name}`}
+                        aria-pressed={Boolean(db.backup_schedule)}
+                      >
+                        <Clock size={15} aria-hidden="true" />
+                      </button>
+                      <button
                         onClick={() => handleDelete(db.name, db.server_name)}
                         disabled={deletingName === db.name}
                         title="Delete database"
@@ -332,6 +395,137 @@ export default function Databases() {
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                 )}
                 Restore
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Schedule Backup Modal */}
+      {showScheduleModal && scheduleDb && (
+        <Modal
+          title="Schedule Backups"
+          onClose={closeScheduleModal}
+        >
+          <form onSubmit={handleSetSchedule} className="space-y-4" noValidate>
+            <p className="text-sm text-slate-400">
+              Configure automated backups for{" "}
+              <span className="font-medium text-slate-200">{scheduleDb.name}</span>.
+            </p>
+
+            {/* Current schedule indicator */}
+            {scheduleDb.currentSchedule && (
+              <div className="flex items-center justify-between rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm text-indigo-300">
+                  <Clock size={14} aria-hidden="true" />
+                  <span>
+                    Current schedule:{" "}
+                    <span className="font-mono font-medium">{scheduleDb.currentSchedule}</span>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleUnschedule()}
+                  disabled={unscheduleBackup.isPending}
+                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                >
+                  {unscheduleBackup.isPending && (
+                    <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                  )}
+                  Remove Schedule
+                </button>
+              </div>
+            )}
+
+            {/* Cron expression */}
+            <div>
+              <label
+                htmlFor="schedule-cron"
+                className="mb-1.5 block text-xs font-medium text-slate-300"
+              >
+                Cron Expression <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="schedule-cron"
+                type="text"
+                required
+                value={cronExpression}
+                onChange={(e) => setCronExpression(e.target.value)}
+                placeholder="0 2 * * *"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Standard 5-field cron syntax (minute hour day month weekday).
+              </p>
+            </div>
+
+            {/* Preset buttons */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-slate-400">Presets</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "Daily 2am", value: "0 2 * * *" },
+                  { label: "Every 12h", value: "0 */12 * * *" },
+                  { label: "Weekly Sun", value: "0 2 * * 0" },
+                ].map(({ label, value }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setCronExpression(value)}
+                    className={[
+                      "rounded-md border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500",
+                      cronExpression === value
+                        ? "border-indigo-500 bg-indigo-500/20 text-indigo-300"
+                        : "border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600",
+                    ].join(" ")}
+                  >
+                    {label}
+                    <span className="ml-1.5 font-mono text-slate-400">{value}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Retention days */}
+            <div>
+              <label
+                htmlFor="schedule-retention"
+                className="mb-1.5 block text-xs font-medium text-slate-300"
+              >
+                Retention Days
+              </label>
+              <input
+                id="schedule-retention"
+                type="number"
+                min={1}
+                max={365}
+                value={retentionDays}
+                onChange={(e) => setRetentionDays(Math.max(1, Number(e.target.value)))}
+                className="w-32 rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Backups older than this many days will be automatically removed.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={closeScheduleModal}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={scheduleBackup.isPending || !cronExpression.trim()}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              >
+                {scheduleBackup.isPending && (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                )}
+                Set Schedule
               </button>
             </div>
           </form>

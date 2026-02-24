@@ -353,6 +353,37 @@ export function useRestoreDatabase() {
   });
 }
 
+export function useScheduleBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      name,
+      cronExpression,
+      retentionDays,
+      server,
+    }: {
+      name: string;
+      cronExpression: string;
+      retentionDays?: number;
+      server?: string;
+    }) => databasesApi.schedule(name, cronExpression, retentionDays, server),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["databases"] });
+    },
+  });
+}
+
+export function useUnscheduleBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, server }: { name: string; server?: string }) =>
+      databasesApi.unschedule(name, server),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["databases"] });
+    },
+  });
+}
+
 // ─── Proxy ────────────────────────────────────────────────────────────────────
 
 export function useProxyDomains(

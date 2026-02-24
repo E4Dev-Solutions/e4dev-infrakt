@@ -82,6 +82,7 @@ export const MOCK_DATABASES = [
     db_type: "postgres",
     status: "running",
     port: 5432,
+    backup_schedule: null,
     created_at: "2025-01-18T14:00:00",
   },
 ];
@@ -426,6 +427,26 @@ export async function mockApi(page: Page): Promise<void> {
     if (route.request().method() === "POST") {
       return route.fulfill({
         json: { message: "Database restored from backup" },
+      });
+    }
+    return route.continue();
+  });
+
+  // Database schedule (must be before generic /databases/*)
+  await page.route(/\/api\/databases\/[^/]+\/schedule/, (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      return route.fulfill({
+        json: {
+          message: `Scheduled backups with cron '${body.cron_expression}'`,
+          cron_expression: body.cron_expression,
+          retention_days: String(body.retention_days ?? 7),
+        },
+      });
+    }
+    if (route.request().method() === "DELETE") {
+      return route.fulfill({
+        json: { message: "Removed scheduled backups" },
       });
     }
     return route.continue();

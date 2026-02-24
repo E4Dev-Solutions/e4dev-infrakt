@@ -201,4 +201,89 @@ test.describe("Databases", () => {
       page.getByRole("heading", { name: "Restore Database" }),
     ).not.toBeVisible();
   });
+
+  // ─── Schedule Backups ──────────────────────────────────────────────────────
+
+  test("schedule button is visible for each database", async ({ page }) => {
+    await expect(
+      page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`),
+    ).toBeVisible();
+  });
+
+  test("clicking schedule opens modal", async ({ page }) => {
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await expect(
+      page.getByRole("heading", { name: "Schedule Backups" }),
+    ).toBeVisible();
+  });
+
+  test("schedule modal has cron input and retention input", async ({ page }) => {
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await expect(page.getByLabel("Cron Expression")).toBeVisible();
+    await expect(page.getByLabel("Retention Days")).toBeVisible();
+  });
+
+  test("schedule modal has preset buttons", async ({ page }) => {
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await expect(page.getByRole("button", { name: /Daily 2am/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Every 12h/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Weekly Sun/ })).toBeVisible();
+  });
+
+  test("clicking a preset updates cron input", async ({ page }) => {
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await page.getByRole("button", { name: /Weekly Sun/ }).click();
+    await expect(page.getByLabel("Cron Expression")).toHaveValue("0 2 * * 0");
+  });
+
+  test("schedule submit shows success toast", async ({ page }) => {
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await page.getByLabel("Cron Expression").fill("0 3 * * *");
+    await page.locator("form").getByRole("button", { name: "Set Schedule" }).click();
+    await expect(
+      page.getByText(`Backup schedule set for "${MOCK_DATABASES[0].name}"`),
+    ).toBeVisible();
+  });
+
+  test("schedule modal closes after successful submit", async ({ page }) => {
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await page.locator("form").getByRole("button", { name: "Set Schedule" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Schedule Backups" }),
+    ).not.toBeVisible();
+  });
+
+  test("schedule modal shows current schedule and remove button when scheduled", async ({ page }) => {
+    // Override mock to return a database with an active schedule
+    await page.route("**/api/databases", (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          json: [{ ...MOCK_DATABASES[0], backup_schedule: "0 2 * * *" }],
+        });
+      }
+      return route.continue();
+    });
+    await page.goto("/databases");
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await expect(page.getByText("Current schedule:")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove Schedule" })).toBeVisible();
+  });
+
+  test("remove schedule shows success toast", async ({ page }) => {
+    // Override mock to return a database with an active schedule
+    await page.route("**/api/databases", (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          json: [{ ...MOCK_DATABASES[0], backup_schedule: "0 2 * * *" }],
+        });
+      }
+      return route.continue();
+    });
+    await page.goto("/databases");
+    await page.getByLabel(`Schedule backups for ${MOCK_DATABASES[0].name}`).click();
+    await page.getByRole("button", { name: "Remove Schedule" }).click();
+    await expect(
+      page.getByText(`Backup schedule removed for "${MOCK_DATABASES[0].name}"`),
+    ).toBeVisible();
+  });
 });

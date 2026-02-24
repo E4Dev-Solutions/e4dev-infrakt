@@ -1,6 +1,7 @@
-"""Tests for the 'db backup' and 'db restore' CLI commands in cli/commands/db.py."""
+"""Tests for the 'db backup', 'db restore', 'db schedule-backup', and
+'db unschedule-backup' CLI commands in cli/commands/db.py."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -178,9 +179,7 @@ class TestRestoreCommand:
             mock_ssh.__exit__ = MagicMock(return_value=False)
             mock_cls.from_server.return_value = mock_ssh
 
-            result = runner.invoke(
-                db, ["restore", "mydb", str(backup_file), "--server", "srv-1"]
-            )
+            result = runner.invoke(db, ["restore", "mydb", str(backup_file), "--server", "srv-1"])
 
         assert result.exit_code == 0
         assert "restored" in result.output
@@ -230,9 +229,7 @@ class TestRestoreCommand:
             mock_ssh.__exit__ = MagicMock(return_value=False)
             mock_cls.from_server.return_value = mock_ssh
 
-            result = runner.invoke(
-                db, ["restore", "mydb", str(backup_file), "--server", "srv-1"]
-            )
+            result = runner.invoke(db, ["restore", "mydb", str(backup_file), "--server", "srv-1"])
 
         assert result.exit_code == 0
         expected_remote = "/opt/infrakt/backups/mydb_20260224_120000.sql.gz"
@@ -254,9 +251,98 @@ class TestRestoreCommand:
             mock_ssh.__exit__ = MagicMock(return_value=False)
             mock_cls.from_server.return_value = mock_ssh
 
-            result = runner.invoke(
-                db, ["restore", "mydb", str(backup_file), "--server", "srv-1"]
-            )
+            result = runner.invoke(db, ["restore", "mydb", str(backup_file), "--server", "srv-1"])
 
         assert result.exit_code == 0
         mock_ssh.run_checked.assert_any_call("mkdir -p /opt/infrakt/backups")
+
+
+# ---------------------------------------------------------------------------
+# db schedule-backup
+# ---------------------------------------------------------------------------
+
+
+class TestScheduleBackupCommand:
+    def test_schedule_backup_installs_cron(self, runner, isolated_config):
+        """Happy path: install_backup_cron is called and output confirms the schedule."""
+        _seed_db("mydb", "srv-1")
+        with (
+            patch("cli.commands.db.SSHClient") as mock_cls,
+            patch("cli.commands.db.install_backup_cron") as mock_install,
+            patch("cli.commands.db.status_spinner"),
+        ):
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+
+            result = runner.invoke(
+                db,
+                ["schedule-backup", "mydb", "--server", "srv-1", "--cron", "0 2 * * *"],
+            )
+
+        assert result.exit_code == 0
+        assert "Scheduled" in result.output
+        mock_install.assert_called_once()
+
+    def test_schedule_backup_exits_1_for_unknown_database(self, runner, isolated_config):
+        """When the server exists but the named database is absent, exit code is 1."""
+        _seed_server("srv-1")
+
+        with (
+            patch("cli.commands.db.SSHClient"),
+            patch("cli.commands.db.status_spinner"),
+        ):
+            result = runner.invoke(
+                db,
+                [
+                    "schedule-backup",
+                    "nonexistent-db",
+                    "--server",
+                    "srv-1",
+                    "--cron",
+                    "0 2 * * *",
+                ],
+            )
+
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# db unschedule-backup
+# ---------------------------------------------------------------------------
+
+
+class TestUnscheduleBackupCommand:
+    def test_unschedule_backup_removes_cron(self, runner, isolated_config):
+        """Happy path: remove_backup_cron is called and output confirms removal."""
+        _seed_db("mydb", "srv-1")
+        with (
+            patch("cli.commands.db.SSHClient") as mock_cls,
+            patch("cli.commands.db.remove_backup_cron") as mock_remove,
+            patch("cli.commands.db.status_spinner"),
+        ):
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+
+            result = runner.invoke(db, ["unschedule-backup", "mydb", "--server", "srv-1"])
+
+        assert result.exit_code == 0
+        assert "Removed" in result.output
+        mock_remove.assert_called_once()
+
+    def test_unschedule_backup_exits_1_for_unknown_database(self, runner, isolated_config):
+        """When the server exists but the named database is absent, exit code is 1."""
+        _seed_server("srv-1")
+
+        with (
+            patch("cli.commands.db.SSHClient"),
+            patch("cli.commands.db.status_spinner"),
+        ):
+            result = runner.invoke(db, ["unschedule-backup", "nonexistent-db", "--server", "srv-1"])
+
+        assert result.exit_code == 1
+        assert "not found" in result.output

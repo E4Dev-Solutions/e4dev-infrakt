@@ -1,4 +1,7 @@
-"""Tests for FastAPI /api/databases routes."""
+"""Tests for FastAPI /api/databases routes.
+
+Covers backup, restore, schedule, and unschedule endpoints.
+"""
 
 from unittest.mock import MagicMock, patch
 
@@ -111,3 +114,65 @@ class TestRestoreEndpoint:
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/databases/{name}/schedule
+# ---------------------------------------------------------------------------
+
+
+class TestScheduleEndpoint:
+    def test_schedule_returns_success(self, client, isolated_config):
+        """Happy path: install_backup_cron is invoked and the response confirms scheduling."""
+        _seed_db("mydb")
+        with patch("api.routes.databases.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+
+            with patch("api.routes.databases.install_backup_cron") as mock_install:
+                response = client.post(
+                    "/api/databases/mydb/schedule",
+                    json={"cron_expression": "0 2 * * *", "retention_days": 7},
+                )
+
+        assert response.status_code == 200
+        assert "Scheduled" in response.json()["message"]
+        mock_install.assert_called_once()
+
+    def test_schedule_returns_404_for_unknown_db(self, client, isolated_config):
+        """Scheduling a non-existent database returns 404."""
+        response = client.post(
+            "/api/databases/ghost/schedule",
+            json={"cron_expression": "0 2 * * *", "retention_days": 7},
+        )
+        assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/databases/{name}/schedule
+# ---------------------------------------------------------------------------
+
+
+class TestUnscheduleEndpoint:
+    def test_unschedule_returns_success(self, client, isolated_config):
+        """Happy path: remove_backup_cron is invoked and the response confirms removal."""
+        _seed_db("mydb")
+        with patch("api.routes.databases.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+
+            with patch("api.routes.databases.remove_backup_cron") as mock_remove:
+                response = client.delete("/api/databases/mydb/schedule")
+
+        assert response.status_code == 200
+        assert "Removed" in response.json()["message"]
+        mock_remove.assert_called_once()
+
+    def test_unschedule_returns_404_for_unknown_db(self, client, isolated_config):
+        """Unscheduling a non-existent database returns 404."""
+        response = client.delete("/api/databases/ghost/schedule")
+        assert response.status_code == 404

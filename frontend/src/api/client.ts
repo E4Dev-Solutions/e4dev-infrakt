@@ -130,6 +130,7 @@ export interface Database {
   db_type: DbType;
   port?: number;
   status: DbStatus;
+  backup_schedule?: string | null;
 }
 
 export interface BackupResult {
@@ -390,6 +391,27 @@ export const databasesApi = {
       filename,
       server_name: serverName,
     }),
+
+  schedule: (
+    name: string,
+    cronExpression: string,
+    retentionDays?: number,
+    server?: string,
+  ): Promise<{ message: string; cron_expression: string; retention_days: string }> => {
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    return post(`/databases/${encodeURIComponent(name)}/schedule${qs}`, {
+      cron_expression: cronExpression,
+      retention_days: retentionDays ?? 7,
+    });
+  },
+
+  unschedule: (
+    name: string,
+    server?: string,
+  ): Promise<{ message: string }> => {
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    return del(`/databases/${encodeURIComponent(name)}/schedule${qs}`);
+  },
 };
 
 // ─── Proxy ────────────────────────────────────────────────────────────────────

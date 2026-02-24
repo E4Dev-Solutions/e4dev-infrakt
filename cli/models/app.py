@@ -26,6 +26,7 @@ class App(Base):
     image: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="stopped")
     app_type: Mapped[str] = mapped_column(String(50), default="compose")
+    backup_schedule: Mapped[str | None] = mapped_column(String(100), default=None)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 

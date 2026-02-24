@@ -3,7 +3,12 @@ import shlex
 
 import click
 
-from cli.core.backup import backup_database, restore_database
+from cli.core.backup import (
+    backup_database,
+    install_backup_cron,
+    remove_backup_cron,
+    restore_database,
+)
 from cli.core.config import BACKUPS_DIR
 from cli.core.console import error, info, print_table, status_spinner, success
 from cli.core.database import get_session, init_db
@@ -312,3 +317,83 @@ def restore(name: str, file: str, server_name: str) -> None:
             restore_database(ssh, db_app, remote_path)
 
     success(f"Database '{name}' restored from {file}")
+
+
+def _validate_cron(cron: str) -> None:
+    """Validate that a cron expression has exactly 5 fields."""
+    parts = cron.strip().split()
+    if len(parts) != 5:
+        error("Cron expression must have exactly 5 fields (e.g. '0 2 * * *')")
+        raise SystemExit(1)
+
+
+@db.command("schedule-backup")
+@click.argument("name")
+@click.option("--server", "server_name", required=True, help="Server name")
+@click.option("--cron", required=True, help='Cron expression, e.g. "0 2 * * *"')
+@click.option("--retention", default=7, type=int, help="Days to keep old backups (default: 7)")
+def schedule_backup(name: str, server_name: str, cron: str, retention: int) -> None:
+    """Schedule automatic backups for a database."""
+    init_db()
+    _validate_cron(cron)
+
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == server_name).first()
+        if not srv:
+            raise ServerNotFoundError(f"Server '{server_name}' not found")
+        db_app = (
+            session.query(App)
+            .filter(App.name == name, App.server_id == srv.id, App.app_type.like("db:%"))
+            .first()
+        )
+        if not db_app:
+            error(f"Database '{name}' not found on '{server_name}'")
+            raise SystemExit(1)
+        ssh = SSHClient.from_server(srv)
+
+    _validate_name(name, "database name")
+    with status_spinner(f"Scheduling backups for '{name}'"):
+        with ssh:
+            install_backup_cron(ssh, db_app, cron, retention)
+
+    with get_session() as session:
+        a = session.query(App).filter(App.name == name).first()
+        if a:
+            a.backup_schedule = cron
+
+    success(f"Scheduled backups for '{name}' with cron '{cron}'")
+    info(f"Retention: {retention} days")
+
+
+@db.command("unschedule-backup")
+@click.argument("name")
+@click.option("--server", "server_name", required=True, help="Server name")
+def unschedule_backup(name: str, server_name: str) -> None:
+    """Remove scheduled backups for a database."""
+    init_db()
+
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == server_name).first()
+        if not srv:
+            raise ServerNotFoundError(f"Server '{server_name}' not found")
+        db_app = (
+            session.query(App)
+            .filter(App.name == name, App.server_id == srv.id, App.app_type.like("db:%"))
+            .first()
+        )
+        if not db_app:
+            error(f"Database '{name}' not found on '{server_name}'")
+            raise SystemExit(1)
+        ssh = SSHClient.from_server(srv)
+
+    _validate_name(name, "database name")
+    with status_spinner(f"Removing scheduled backups for '{name}'"):
+        with ssh:
+            remove_backup_cron(ssh, db_app)
+
+    with get_session() as session:
+        a = session.query(App).filter(App.name == name).first()
+        if a:
+            a.backup_schedule = None
+
+    success(f"Removed scheduled backups for '{name}'")

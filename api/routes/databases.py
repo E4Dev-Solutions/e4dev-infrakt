@@ -6,9 +6,14 @@ import shlex
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from api.schemas import DatabaseCreate, DatabaseOut, DatabaseRestore
+from api.schemas import BackupScheduleCreate, DatabaseCreate, DatabaseOut, DatabaseRestore
 from cli.commands.db import DB_TEMPLATES, DEFAULT_VERSIONS, _generate_db_compose
-from cli.core.backup import backup_database, restore_database
+from cli.core.backup import (
+    backup_database,
+    install_backup_cron,
+    remove_backup_cron,
+    restore_database,
+)
 from cli.core.database import get_session, init_db
 from cli.core.deployer import _validate_name
 from cli.core.exceptions import SSHConnectionError
@@ -207,3 +212,61 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
         raise HTTPException(500, str(exc))
 
     return {"message": f"Database '{name}' restored from {body.filename}"}
+
+
+@router.post("/{name}/schedule")
+def schedule_backup_endpoint(
+    name: str, body: BackupScheduleCreate, server: str | None = None
+) -> dict[str, str]:
+    """Schedule automatic backups for a database via cron."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        srv = db_app.server
+        ssh = SSHClient.from_server(srv)
+        app_id = db_app.id
+
+    with ssh:
+        install_backup_cron(ssh, db_app, body.cron_expression, body.retention_days)
+
+    with get_session() as session:
+        a = session.query(App).filter(App.id == app_id).first()
+        if a:
+            a.backup_schedule = body.cron_expression
+
+    return {
+        "message": f"Scheduled backups for '{name}' with cron '{body.cron_expression}'",
+        "cron_expression": body.cron_expression,
+        "retention_days": str(body.retention_days),
+    }
+
+
+@router.delete("/{name}/schedule")
+def unschedule_backup_endpoint(name: str, server: str | None = None) -> dict[str, str]:
+    """Remove scheduled backups for a database."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        srv = db_app.server
+        ssh = SSHClient.from_server(srv)
+        app_id = db_app.id
+
+    with ssh:
+        remove_backup_cron(ssh, db_app)
+
+    with get_session() as session:
+        a = session.query(App).filter(App.id == app_id).first()
+        if a:
+            a.backup_schedule = None
+
+    return {"message": f"Removed scheduled backups for '{name}'"}

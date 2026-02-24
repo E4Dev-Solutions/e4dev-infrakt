@@ -250,6 +250,19 @@ class DatabaseRestore(BaseModel):
     server_name: str | None = None
 
 
+class BackupScheduleCreate(BaseModel):
+    cron_expression: str = Field(..., min_length=5, max_length=100)
+    retention_days: int = Field(default=7, ge=1, le=365)
+
+    @field_validator("cron_expression")
+    @classmethod
+    def validate_cron(cls, v: str) -> str:
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError("Cron expression must have exactly 5 fields")
+        return v.strip()
+
+
 # ── Proxy ───────────────────────────────────────────────
 
 

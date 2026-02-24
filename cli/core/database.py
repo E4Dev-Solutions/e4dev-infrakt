@@ -36,6 +36,7 @@ def _apply_migrations(engine: Engine) -> None:
     """Apply incremental schema migrations for existing databases."""
     migrations = [
         "ALTER TABLE deployments ADD COLUMN image_used VARCHAR(500)",
+        "ALTER TABLE apps ADD COLUMN backup_schedule VARCHAR(100)",
     ]
     with engine.connect() as conn:
         for sql in migrations:

@@ -176,3 +176,78 @@ class TestUnscheduleEndpoint:
         """Unscheduling a non-existent database returns 404."""
         response = client.delete("/api/databases/ghost/schedule")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/databases/{name}
+# ---------------------------------------------------------------------------
+
+
+class TestGetDatabaseEndpoint:
+    def test_returns_database_details(self, client, isolated_config):
+        """GET /databases/{name} returns database details with new fields."""
+        _seed_db("mydb")
+        response = client.get("/api/databases/mydb")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "mydb"
+        assert data["db_type"] == "postgres"
+        assert "backup_schedule" in data
+        assert "created_at" in data
+
+    def test_returns_404_for_unknown(self, client, isolated_config):
+        """GET /databases/{name} returns 404 for non-existent database."""
+        response = client.get("/api/databases/ghost")
+        assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/databases/{name}/backups
+# ---------------------------------------------------------------------------
+
+
+class TestListBackupsEndpoint:
+    def test_returns_backup_list(self, client, isolated_config):
+        """GET /databases/{name}/backups returns backup file list."""
+        _seed_db("mydb")
+        with patch("api.routes.databases.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+            with patch("api.routes.databases.list_backups") as mock_list:
+                mock_list.return_value = [
+                    {
+                        "filename": "mydb_20260224.sql.gz",
+                        "size": "1.0 MB",
+                        "size_bytes": 1048576,
+                        "modified": "2026-02-24T12:00:00+00:00",
+                    }
+                ]
+                response = client.get("/api/databases/mydb/backups")
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+        assert response.json()[0]["filename"] == "mydb_20260224.sql.gz"
+
+    def test_returns_empty_on_ssh_failure(self, client, isolated_config):
+        """GET /databases/{name}/backups returns empty list when server is unreachable."""
+        from cli.core.exceptions import SSHConnectionError
+
+        _seed_db("mydb")
+        with patch("api.routes.databases.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+            with patch(
+                "api.routes.databases.list_backups",
+                side_effect=SSHConnectionError("offline"),
+            ):
+                response = client.get("/api/databases/mydb/backups")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_returns_404_for_unknown_database(self, client, isolated_config):
+        """GET /databases/{name}/backups returns 404 for non-existent database."""
+        response = client.get("/api/databases/ghost/backups")
+        assert response.status_code == 404

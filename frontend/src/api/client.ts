@@ -131,12 +131,21 @@ export interface Database {
   port?: number;
   status: DbStatus;
   backup_schedule?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface BackupResult {
   message: string;
   filename: string;
   remote_path: string;
+}
+
+export interface BackupFile {
+  filename: string;
+  size: string;
+  size_bytes: number;
+  modified: string;
 }
 
 export interface ProxyDomain {
@@ -364,6 +373,16 @@ export const databasesApi = {
   list: (server?: string): Promise<Database[]> => {
     const qs = server ? `?server=${encodeURIComponent(server)}` : "";
     return get(`/databases${qs}`);
+  },
+
+  get: (name: string, server?: string): Promise<Database> => {
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    return get(`/databases/${encodeURIComponent(name)}${qs}`);
+  },
+
+  listBackups: (name: string, server?: string): Promise<BackupFile[]> => {
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    return get(`/databases/${encodeURIComponent(name)}/backups${qs}`);
   },
 
   create: (input: CreateDatabaseInput): Promise<Database> =>

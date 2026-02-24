@@ -87,6 +87,21 @@ export const MOCK_DATABASES = [
   },
 ];
 
+export const MOCK_BACKUP_FILES = [
+  {
+    filename: "main-pg_20260224_020000.sql.gz",
+    size: "2.4 MB",
+    size_bytes: 2516582,
+    modified: "2026-02-24T02:00:00+00:00",
+  },
+  {
+    filename: "main-pg_20260223_020000.sql.gz",
+    size: "2.1 MB",
+    size_bytes: 2202009,
+    modified: "2026-02-23T02:00:00+00:00",
+  },
+];
+
 export const MOCK_DEPLOYMENTS = [
   {
     id: 3,
@@ -432,6 +447,16 @@ export async function mockApi(page: Page): Promise<void> {
     return route.continue();
   });
 
+  // Database backups list (must be before generic /databases/*)
+  await page.route(/\/api\/databases\/[^/]+\/backups/, (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        json: MOCK_BACKUP_FILES,
+      });
+    }
+    return route.continue();
+  });
+
   // Database schedule (must be before generic /databases/*)
   await page.route(/\/api\/databases\/[^/]+\/schedule/, (route) => {
     if (route.request().method() === "POST") {
@@ -452,7 +477,17 @@ export async function mockApi(page: Page): Promise<void> {
     return route.continue();
   });
 
-  await page.route("**/api/databases/*", (route) => {
+  // Single database detail GET (must be before generic DELETE)
+  await page.route(/\/api\/databases\/[^/]+$/, (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        json: {
+          ...MOCK_DATABASES[0],
+          created_at: "2025-01-18T14:00:00",
+          updated_at: "2025-01-18T14:00:00",
+        },
+      });
+    }
     if (route.request().method() === "DELETE") {
       return route.fulfill({ json: { message: "Database destroyed" } });
     }

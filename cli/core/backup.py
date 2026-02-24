@@ -264,3 +264,65 @@ def remove_backup_cron(
     ssh.run(f"crontab -l 2>/dev/null | grep -v {q_marker} | crontab -")
     # Remove script file
     ssh.run(f"rm -f {q_script}")
+
+
+# ---------------------------------------------------------------------------
+# List backups
+# ---------------------------------------------------------------------------
+
+
+def _human_size(size_bytes: int) -> str:
+    """Convert bytes to a human-readable size string."""
+    if size_bytes >= 1_073_741_824:
+        return f"{size_bytes / 1_073_741_824:.1f} GB"
+    if size_bytes >= 1_048_576:
+        return f"{size_bytes / 1_048_576:.1f} MB"
+    if size_bytes >= 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    return f"{size_bytes} B"
+
+
+def list_backups(
+    ssh: SSHClient,
+    db_app: App,
+    backup_dir: str = "/opt/infrakt/backups",
+) -> list[dict[str, str | int]]:
+    """List backup files for a database on the remote server.
+
+    Returns a list of dicts with keys: filename, size, size_bytes, modified.
+    Results are sorted newest-first. Returns an empty list if no backups exist
+    or the directory is missing.
+    """
+    q_dir = shlex.quote(backup_dir)
+    q_pattern = shlex.quote(db_app.name + "_*")
+
+    # GNU find -printf: filename\tsize_bytes\tmtime_epoch
+    stdout, _, rc = ssh.run(
+        f"find {q_dir} -maxdepth 1 -name {q_pattern} -type f"
+        f" -printf '%f\\t%s\\t%T@\\n' 2>/dev/null"
+        f" | sort -t$'\\t' -k3 -rn"
+    )
+    if rc != 0 or not stdout.strip():
+        return []
+
+    results: list[dict[str, str | int]] = []
+    for line in stdout.strip().splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        fname, size_str, mtime_str = parts
+        try:
+            size_bytes = int(size_str)
+            epoch = float(mtime_str.split(".")[0])
+        except (ValueError, IndexError):
+            continue
+        dt = datetime.fromtimestamp(epoch, tz=UTC)
+        results.append(
+            {
+                "filename": fname,
+                "size": _human_size(size_bytes),
+                "size_bytes": size_bytes,
+                "modified": dt.isoformat(),
+            }
+        )
+    return results

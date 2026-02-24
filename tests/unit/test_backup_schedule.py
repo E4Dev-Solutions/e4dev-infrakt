@@ -8,7 +8,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cli.core.backup import generate_backup_script, install_backup_cron, remove_backup_cron
+from cli.core.backup import (
+    generate_backup_script,
+    install_backup_cron,
+    list_backups,
+    remove_backup_cron,
+)
 
 
 def _make_app(name: str = "mydb", app_type: str = "db:postgres") -> types.SimpleNamespace:
@@ -169,3 +174,43 @@ class TestRemoveBackupCron:
         assert any("rm -f" in c and "backup-mydb.sh" in c for c in run_calls), (
             "Expected an 'rm -f … backup-mydb.sh' call to delete the script"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestListBackups
+# ---------------------------------------------------------------------------
+
+
+class TestListBackups:
+    def test_parses_find_output(self, isolated_config):
+        """list_backups correctly parses find -printf output into structured dicts."""
+        app = _make_app(name="mydb", app_type="db:postgres")
+        ssh = MagicMock()
+        ssh.run.return_value = (
+            "mydb_20260224_120000.sql.gz\t1048576\t1740412800.0\n"
+            "mydb_20260223_120000.sql.gz\t524288\t1740326400.0\n",
+            "",
+            0,
+        )
+        result = list_backups(ssh, app)
+        assert len(result) == 2
+        assert result[0]["filename"] == "mydb_20260224_120000.sql.gz"
+        assert result[0]["size"] == "1.0 MB"
+        assert result[0]["size_bytes"] == 1048576
+        assert result[1]["size"] == "512.0 KB"
+
+    def test_returns_empty_on_failure(self, isolated_config):
+        """Returns empty list when find command fails (e.g. directory missing)."""
+        app = _make_app(name="mydb", app_type="db:postgres")
+        ssh = MagicMock()
+        ssh.run.return_value = ("", "", 1)
+        result = list_backups(ssh, app)
+        assert result == []
+
+    def test_returns_empty_on_no_output(self, isolated_config):
+        """Returns empty list when find succeeds but finds no matching files."""
+        app = _make_app(name="mydb", app_type="db:postgres")
+        ssh = MagicMock()
+        ssh.run.return_value = ("", "", 0)
+        result = list_backups(ssh, app)
+        assert result == []

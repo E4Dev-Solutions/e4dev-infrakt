@@ -241,8 +241,18 @@ class DatabaseOut(BaseModel):
     db_type: str
     port: int
     status: str
+    backup_schedule: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class BackupFileOut(BaseModel):
+    filename: str
+    size: str
+    size_bytes: int
+    modified: str
 
 
 class DatabaseRestore(BaseModel):

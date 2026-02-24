@@ -9,6 +9,9 @@ from cli.core.backup import (
     remove_backup_cron,
     restore_database,
 )
+from cli.core.backup import (
+    list_backups as list_backups_fn,
+)
 from cli.core.config import BACKUPS_DIR
 from cli.core.console import error, info, print_table, status_spinner, success
 from cli.core.database import get_session, init_db
@@ -397,3 +400,71 @@ def unschedule_backup(name: str, server_name: str) -> None:
             a.backup_schedule = None
 
     success(f"Removed scheduled backups for '{name}'")
+
+
+@db.command()
+@click.argument("name")
+@click.option("--server", "server_name", required=True, help="Server name")
+def backups(name: str, server_name: str) -> None:
+    """List available backups for a database."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == server_name).first()
+        if not srv:
+            raise ServerNotFoundError(f"Server '{server_name}' not found")
+        db_app = (
+            session.query(App)
+            .filter(App.name == name, App.server_id == srv.id, App.app_type.like("db:%"))
+            .first()
+        )
+        if not db_app:
+            error(f"Database '{name}' not found on '{server_name}'")
+            raise SystemExit(1)
+        ssh = SSHClient.from_server(srv)
+
+    with status_spinner(f"Listing backups for '{name}'"):
+        with ssh:
+            backup_list = list_backups_fn(ssh, db_app)
+
+    if not backup_list:
+        info("No backups found.")
+        return
+
+    rows = [(b["filename"], b["size"], b["modified"]) for b in backup_list]
+    print_table(f"Backups for {name}", ["Filename", "Size", "Date"], rows)
+
+
+@db.command("info")
+@click.argument("name")
+@click.option("--server", "server_name", required=True, help="Server name")
+def info_cmd(name: str, server_name: str) -> None:
+    """Show database details."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == server_name).first()
+        if not srv:
+            raise ServerNotFoundError(f"Server '{server_name}' not found")
+        db_app = (
+            session.query(App)
+            .filter(App.name == name, App.server_id == srv.id, App.app_type.like("db:%"))
+            .first()
+        )
+        if not db_app:
+            error(f"Database '{name}' not found on '{server_name}'")
+            raise SystemExit(1)
+
+        db_type = db_app.app_type.split(":", 1)[1]
+        from rich.panel import Panel
+        from rich.table import Table
+
+        from cli.core.console import console
+
+        t = Table(show_header=False, box=None, pad_edge=False)
+        t.add_row("Name", db_app.name)
+        t.add_row("Server", srv.name)
+        t.add_row("Type", db_type)
+        t.add_row("Port", str(db_app.port))
+        t.add_row("Status", db_app.status)
+        t.add_row("Schedule", db_app.backup_schedule or "None")
+        t.add_row("Created", str(db_app.created_at))
+        console.print(Panel(t, title=f"Database: {name}"))

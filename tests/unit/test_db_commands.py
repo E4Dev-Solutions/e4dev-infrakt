@@ -346,3 +346,79 @@ class TestUnscheduleBackupCommand:
 
         assert result.exit_code == 1
         assert "not found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# db backups
+# ---------------------------------------------------------------------------
+
+
+class TestBackupsCommand:
+    def test_lists_backups(self, runner, isolated_config):
+        """Happy path: list_backups_fn is called and output shows filenames."""
+        _seed_db("mydb", "srv-1")
+        with (
+            patch("cli.commands.db.SSHClient") as mock_cls,
+            patch("cli.commands.db.list_backups_fn") as mock_list,
+            patch("cli.commands.db.status_spinner"),
+        ):
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+            mock_list.return_value = [
+                {
+                    "filename": "mydb_20260224_120000.sql.gz",
+                    "size": "1.0 MB",
+                    "size_bytes": 1048576,
+                    "modified": "2026-02-24T12:00:00+00:00",
+                }
+            ]
+            result = runner.invoke(db, ["backups", "mydb", "--server", "srv-1"])
+        assert result.exit_code == 0
+        assert "mydb_20260224_120000.sql.gz" in result.output
+
+    def test_shows_no_backups_message(self, runner, isolated_config):
+        """When no backups exist, shows 'No backups found' message."""
+        _seed_db("mydb", "srv-1")
+        with (
+            patch("cli.commands.db.SSHClient") as mock_cls,
+            patch("cli.commands.db.list_backups_fn") as mock_list,
+            patch("cli.commands.db.status_spinner"),
+        ):
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+            mock_list.return_value = []
+            result = runner.invoke(db, ["backups", "mydb", "--server", "srv-1"])
+        assert result.exit_code == 0
+        assert "No backups" in result.output
+
+    def test_exits_1_for_unknown_database(self, runner, isolated_config):
+        """When database not found, exits with code 1."""
+        _seed_server("srv-1")
+        with patch("cli.commands.db.status_spinner"):
+            result = runner.invoke(db, ["backups", "ghost", "--server", "srv-1"])
+        assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# db info
+# ---------------------------------------------------------------------------
+
+
+class TestInfoCommand:
+    def test_shows_database_info(self, runner, isolated_config):
+        """Happy path: info command prints database details."""
+        _seed_db("mydb", "srv-1")
+        result = runner.invoke(db, ["info", "mydb", "--server", "srv-1"])
+        assert result.exit_code == 0
+        assert "mydb" in result.output
+        assert "postgres" in result.output
+
+    def test_exits_1_for_unknown_database(self, runner, isolated_config):
+        """When database not found, exits with code 1."""
+        _seed_server("srv-1")
+        result = runner.invoke(db, ["info", "ghost", "--server", "srv-1"])
+        assert result.exit_code == 1

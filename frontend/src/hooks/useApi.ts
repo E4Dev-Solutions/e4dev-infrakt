@@ -25,6 +25,7 @@ import {
   type AppLogs,
   type Deployment,
   type Database,
+  type BackupFile,
   type ProxyDomain,
 } from "@/api/client";
 
@@ -40,6 +41,8 @@ export const queryKeys = {
   appEnv: (name: string) => ["apps", name, "env"] as const,
   appHealth: (name: string) => ["apps", name, "health"] as const,
   databases: (server?: string) => ["databases", server ?? "all"] as const,
+  database: (name: string) => ["databases", name] as const,
+  databaseBackups: (name: string) => ["databases", name, "backups"] as const,
   proxyDomains: (server: string) => ["proxy", server, "domains"] as const,
 };
 
@@ -309,6 +312,24 @@ export function useDatabases(
   });
 }
 
+export function useDatabase(name: string, options?: Partial<UseQueryOptions<Database>>) {
+  return useQuery({
+    queryKey: queryKeys.database(name),
+    queryFn: () => databasesApi.get(name),
+    enabled: Boolean(name),
+    ...options,
+  });
+}
+
+export function useDatabaseBackups(name: string, server?: string, options?: Partial<UseQueryOptions<BackupFile[]>>) {
+  return useQuery({
+    queryKey: queryKeys.databaseBackups(name),
+    queryFn: () => databasesApi.listBackups(name, server),
+    enabled: Boolean(name),
+    ...options,
+  });
+}
+
 export function useCreateDatabase() {
   const qc = useQueryClient();
   return useMutation({
@@ -333,9 +354,13 @@ export function useDeleteDatabase() {
 }
 
 export function useBackupDatabase() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ name, server }: { name: string; server?: string }) =>
       databasesApi.backup(name, server),
+    onSuccess: (_data, { name }) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.databaseBackups(name) });
+    },
   });
 }
 

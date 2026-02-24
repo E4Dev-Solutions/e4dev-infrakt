@@ -6,11 +6,18 @@ import shlex
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
-from api.schemas import BackupScheduleCreate, DatabaseCreate, DatabaseOut, DatabaseRestore
+from api.schemas import (
+    BackupFileOut,
+    BackupScheduleCreate,
+    DatabaseCreate,
+    DatabaseOut,
+    DatabaseRestore,
+)
 from cli.commands.db import DB_TEMPLATES, DEFAULT_VERSIONS, _generate_db_compose
 from cli.core.backup import (
     backup_database,
     install_backup_cron,
+    list_backups,
     remove_backup_cron,
     restore_database,
 )
@@ -42,6 +49,9 @@ def list_databases(server: str | None = None) -> list[DatabaseOut]:
                 db_type=d.app_type.split(":", 1)[1],
                 port=d.port,
                 status=d.status,
+                backup_schedule=d.backup_schedule,
+                created_at=d.created_at,
+                updated_at=d.updated_at,
             )
             for d in dbs
         ]
@@ -129,6 +139,58 @@ def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks) -> 
 
     background_tasks.add_task(_do_create)
     return {"message": f"Creating {body.db_type} database '{body.name}'", "password": password}
+
+
+def _get_db_out(db_app: App) -> DatabaseOut:
+    """Build a DatabaseOut from an App record."""
+    return DatabaseOut(
+        id=db_app.id,
+        name=db_app.name,
+        server_name=db_app.server.name,
+        db_type=db_app.app_type.split(":", 1)[1],
+        port=db_app.port,
+        status=db_app.status,
+        backup_schedule=db_app.backup_schedule,
+        created_at=db_app.created_at,
+        updated_at=db_app.updated_at,
+    )
+
+
+@router.get("/{name}/backups", response_model=list[BackupFileOut])
+def list_database_backups(name: str, server: str | None = None) -> list[BackupFileOut]:
+    """List backup files for a database on the remote server."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        srv = db_app.server
+        ssh = SSHClient.from_server(srv)
+
+    try:
+        with ssh:
+            backups = list_backups(ssh, db_app)
+    except (SSHConnectionError, Exception):
+        return []
+
+    return [BackupFileOut(**b) for b in backups]
+
+
+@router.get("/{name}", response_model=DatabaseOut)
+def get_database(name: str, server: str | None = None) -> DatabaseOut:
+    """Get details for a single database."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        return _get_db_out(db_app)
 
 
 @router.delete("/{name}")

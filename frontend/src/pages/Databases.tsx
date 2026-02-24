@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Plus,
   Trash2,
@@ -265,9 +266,12 @@ export default function Databases() {
                         className="shrink-0 text-slate-500"
                         aria-hidden="true"
                       />
-                      <span className="font-medium text-slate-200">
+                      <Link
+                        to={`/databases/${encodeURIComponent(db.name)}`}
+                        className="font-medium text-slate-200 hover:text-indigo-400 transition-colors"
+                      >
                         {db.name}
-                      </span>
+                      </Link>
                     </div>
                   </td>
                   {/* Server */}

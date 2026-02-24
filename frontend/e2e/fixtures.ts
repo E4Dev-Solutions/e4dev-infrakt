@@ -207,11 +207,15 @@ export async function mockApi(page: Page): Promise<void> {
   await page.route("**/api/servers/*/status", (route) => {
     return route.fulfill({
       json: {
-        cpu_usage: "12%",
-        memory_usage: "45%",
-        disk_usage: "30%",
-        docker_running: true,
-        containers: 3,
+        name: "prod-1",
+        host: "203.0.113.10",
+        uptime: "up 5 days, 3 hours",
+        memory: { total: "7.6 GB", used: "3.4 GB", free: "4.2 GB", percent: 44.7 },
+        disk: { total: "78.7 GB", used: "23.6 GB", free: "55.1 GB", percent: 30.0 },
+        containers: [
+          { id: "abc123", name: "infrakt-web-api", status: "Up 2 hours", image: "nginx:latest" },
+          { id: "def456", name: "infrakt-redis", status: "Up 2 hours", image: "redis:7" },
+        ],
       },
     });
   });
@@ -238,11 +242,11 @@ export async function mockApi(page: Page): Promise<void> {
 
   // Server test
   await page.route("**/api/servers/*/test", (route) => {
-    return route.fulfill({ json: { success: true, message: "Connection OK" } });
+    return route.fulfill({ json: { reachable: true } });
   });
 
   // Apps
-  await page.route("**/api/apps", (route) => {
+  await page.route(/\/api\/apps(\?.*)?$/, (route) => {
     if (route.request().method() === "GET") {
       return route.fulfill({ json: MOCK_APPS });
     }

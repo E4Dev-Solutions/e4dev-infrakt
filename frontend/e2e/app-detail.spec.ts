@@ -160,7 +160,7 @@ test.describe("App Detail", () => {
     await page.getByRole("tab", { name: "Environment" }).click();
     await expect(page.getByPlaceholder("DATABASE_URL")).toBeVisible();
     await expect(page.getByPlaceholder("postgres://...")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Add" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add", exact: true })).toBeVisible();
   });
 
   test("Environment tab has delete buttons for each variable", async ({

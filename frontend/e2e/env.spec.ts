@@ -21,17 +21,17 @@ test.describe("Environment Variables", () => {
   test("add form has key, value inputs and Add button", async ({ page }) => {
     await expect(page.getByRole("textbox", { name: "Key" })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Value" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Add" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add", exact: true })).toBeVisible();
   });
 
   test("Add button is disabled when key is empty", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Add" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Add", exact: true })).toBeDisabled();
   });
 
   test("add new env var shows success toast", async ({ page }) => {
     await page.getByRole("textbox", { name: "Key" }).fill("NEW_VAR");
     await page.getByRole("textbox", { name: "Value" }).fill("some-value");
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
 
     await expect(page.getByText(/NEW_VAR.*saved/)).toBeVisible();
   });
@@ -39,7 +39,7 @@ test.describe("Environment Variables", () => {
   test("add form clears after successful submission", async ({ page }) => {
     await page.getByRole("textbox", { name: "Key" }).fill("TEMP_KEY");
     await page.getByRole("textbox", { name: "Value" }).fill("temp-value");
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
 
     // Wait for toast to confirm success
     await expect(page.getByText(/TEMP_KEY.*saved/)).toBeVisible();
@@ -94,7 +94,7 @@ test.describe("Environment Variables", () => {
 
     await page.getByRole("textbox", { name: "Key" }).fill("BAD_VAR");
     await page.getByRole("textbox", { name: "Value" }).fill("value");
-    await page.getByRole("button", { name: "Add" }).click();
+    await page.getByRole("button", { name: "Add", exact: true }).click();
 
     await expect(page.getByText(/failed|error/i)).toBeVisible();
   });

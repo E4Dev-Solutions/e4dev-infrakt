@@ -134,6 +134,8 @@ def deploy(name: str, server_name: str | None) -> None:
         app_branch = app_obj.branch
         app_image = app_obj.image
         app_domain = app_obj.domain
+        app_cpu_limit = app_obj.cpu_limit
+        app_memory_limit = app_obj.memory_limit
 
         # Get env content
         env_content = env_content_for_app(app_id)
@@ -154,6 +156,8 @@ def deploy(name: str, server_name: str | None) -> None:
                 image=app_image,
                 port=app_port,
                 env_content=env_content,
+                cpu_limit=app_cpu_limit,
+                memory_limit=app_memory_limit,
             )
 
             # Set up reverse proxy if domain is configured
@@ -311,12 +315,19 @@ def health(name: str, server_name: str | None) -> None:
         srv = app_obj.server
         db_status = app_obj.status
         app_id = app_obj.id
+        health_url = app_obj.health_check_url
+        app_port = app_obj.port
         ssh = _ssh_for_server(srv)
 
+    http_health = None
     with status_spinner(f"Checking health of '{name}'"):
         with ssh:
             containers = get_container_health(ssh, name)
             actual_status = reconcile_app_status(ssh, name)
+            if health_url:
+                from cli.core.health import check_app_health
+
+                http_health = check_app_health(ssh, app_port, health_url)
 
     if actual_status != db_status:
         with get_session() as session:
@@ -327,6 +338,18 @@ def health(name: str, server_name: str | None) -> None:
 
     if not containers:
         info(f"No containers found for '{name}' (status: {actual_status})")
+        if http_health is not None:
+            if http_health["healthy"]:
+                success(
+                    f"HTTP health ({health_url}): {http_health['status_code']} "
+                    f"({http_health['response_time_ms']}ms)"
+                )
+            else:
+                error(
+                    f"HTTP health ({health_url}): "
+                    f"{http_health.get('status_code', 'N/A')} — "
+                    f"{http_health.get('error', 'unhealthy')}"
+                )
         return
 
     rows = [
@@ -338,6 +361,19 @@ def health(name: str, server_name: str | None) -> None:
         rows,
     )
     info(f"DB status: {db_status}  |  Actual: {actual_status}")
+
+    if http_health is not None:
+        if http_health["healthy"]:
+            success(
+                f"HTTP health ({health_url}): {http_health['status_code']} "
+                f"({http_health['response_time_ms']}ms)"
+            )
+        else:
+            error(
+                f"HTTP health ({health_url}): "
+                f"{http_health.get('status_code', 'N/A')} — "
+                f"{http_health.get('error', 'unhealthy')}"
+            )
 
 
 @app.command()
@@ -448,3 +484,48 @@ def rollback(name: str, dep_id: int | None, server_name: str | None) -> None:
                 app_record.status = "error"
         error(f"Rollback failed: {exc}")
         raise SystemExit(1)
+
+
+@app.command("set-health")
+@click.argument("name")
+@click.option("--url", "health_url", required=True, help="Health check path (e.g. /health)")
+@click.option("--interval", default=60, type=int, help="Check interval in seconds")
+@click.option("--server", "server_name", default=None)
+def set_health(name: str, health_url: str, interval: int, server_name: str | None) -> None:
+    """Configure HTTP health check for an app."""
+    init_db()
+    if not health_url.startswith("/"):
+        error("Health check URL must start with /")
+        raise SystemExit(1)
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        app_obj.health_check_url = health_url
+        app_obj.health_check_interval = interval
+    success(f"Health check configured for '{name}': {health_url} (every {interval}s)")
+
+
+@app.command("set-limits")
+@click.argument("name")
+@click.option("--cpu", "cpu_limit", default=None, help="CPU limit (e.g. 1.0, 0.5)")
+@click.option("--memory", "memory_limit", default=None, help="Memory limit (e.g. 512m, 1g)")
+@click.option("--server", "server_name", default=None)
+def set_limits(
+    name: str, cpu_limit: str | None, memory_limit: str | None, server_name: str | None
+) -> None:
+    """Set resource limits for an app."""
+    init_db()
+    if not cpu_limit and not memory_limit:
+        error("Specify at least one of --cpu or --memory")
+        raise SystemExit(1)
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        if cpu_limit is not None:
+            app_obj.cpu_limit = cpu_limit
+        if memory_limit is not None:
+            app_obj.memory_limit = memory_limit
+    parts = []
+    if cpu_limit:
+        parts.append(f"CPU: {cpu_limit}")
+    if memory_limit:
+        parts.append(f"Memory: {memory_limit}")
+    success(f"Resource limits for '{name}' updated: {', '.join(parts)}")

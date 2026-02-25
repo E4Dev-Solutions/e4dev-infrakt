@@ -17,6 +17,7 @@ from api.log_broadcaster import broadcaster
 from api.schemas import (
     AppCreate,
     AppHealth,
+    AppHealthCheckResult,
     AppLogs,
     AppOut,
     AppUpdate,
@@ -73,6 +74,10 @@ def list_apps(server: str | None = None) -> list[AppOut]:
                 image=a.image,
                 status=a.status,
                 app_type=a.app_type,
+                cpu_limit=a.cpu_limit,
+                memory_limit=a.memory_limit,
+                health_check_url=a.health_check_url,
+                health_check_interval=a.health_check_interval,
                 created_at=a.created_at,
                 updated_at=a.updated_at,
             )
@@ -103,6 +108,10 @@ def create_app(body: AppCreate) -> AppOut:
             image=body.image,
             app_type=app_type,
             status="stopped",
+            cpu_limit=body.cpu_limit,
+            memory_limit=body.memory_limit,
+            health_check_url=body.health_check_url,
+            health_check_interval=body.health_check_interval,
         )
         session.add(new_app)
         session.flush()
@@ -119,6 +128,10 @@ def create_app(body: AppCreate) -> AppOut:
             image=new_app.image,
             status=new_app.status,
             app_type=new_app.app_type,
+            cpu_limit=new_app.cpu_limit,
+            memory_limit=new_app.memory_limit,
+            health_check_url=new_app.health_check_url,
+            health_check_interval=new_app.health_check_interval,
             created_at=new_app.created_at,
             updated_at=new_app.updated_at,
         )
@@ -146,6 +159,14 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
             app_obj.branch = body.branch
         if body.image is not None:
             app_obj.image = body.image
+        if body.cpu_limit is not None:
+            app_obj.cpu_limit = body.cpu_limit
+        if body.memory_limit is not None:
+            app_obj.memory_limit = body.memory_limit
+        if body.health_check_url is not None:
+            app_obj.health_check_url = body.health_check_url
+        if body.health_check_interval is not None:
+            app_obj.health_check_interval = body.health_check_interval
 
         if body.image is not None or body.git_repo is not None:
             if app_obj.image:
@@ -169,6 +190,10 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
             image=app_obj.image,
             status=app_obj.status,
             app_type=app_obj.app_type,
+            cpu_limit=app_obj.cpu_limit,
+            memory_limit=app_obj.memory_limit,
+            health_check_url=app_obj.health_check_url,
+            health_check_interval=app_obj.health_check_interval,
             created_at=app_obj.created_at,
             updated_at=app_obj.updated_at,
         )
@@ -202,6 +227,8 @@ def deploy(
             "branch": app_obj.branch,
             "image": app_obj.image,
             "domain": app_obj.domain,
+            "cpu_limit": app_obj.cpu_limit,
+            "memory_limit": app_obj.memory_limit,
         }
         ssh_data: dict[str, str | int | None] = {
             "host": srv.host,
@@ -240,6 +267,12 @@ def deploy(
                 port = app_data.get("port")
                 if not isinstance(port, int):
                     port = 3000
+                cpu_limit = app_data.get("cpu_limit")
+                if not isinstance(cpu_limit, (str, type(None))):
+                    cpu_limit = None
+                memory_limit = app_data.get("memory_limit")
+                if not isinstance(memory_limit, (str, type(None))):
+                    memory_limit = None
                 result = deploy_app(
                     ssh,
                     name,
@@ -249,6 +282,8 @@ def deploy(
                     port=port,
                     env_content=env_content,
                     log_fn=_on_log,
+                    cpu_limit=cpu_limit,
+                    memory_limit=memory_limit,
                 )
                 domain = app_data.get("domain")
                 if domain:
@@ -660,12 +695,19 @@ def app_health(name: str, server: str | None = None) -> AppHealth:
             raise HTTPException(404, f"App '{name}' not found")
         db_status = app_obj.status
         app_id = app_obj.id
+        health_check_url = app_obj.health_check_url
+        app_port = app_obj.port
         ssh = _ssh_for(app_obj.server)
 
+    http_result = None
     try:
         with ssh:
             raw_containers = get_container_health(ssh, name)
             actual_status = reconcile_app_status(ssh, name)
+            if health_check_url:
+                from cli.core.health import check_app_health
+
+                http_result = check_app_health(ssh, app_port, health_check_url)
     except SSHConnectionError as exc:
         raise HTTPException(502, f"Cannot reach server: {exc}")
 
@@ -686,12 +728,17 @@ def app_health(name: str, server: str | None = None) -> AppHealth:
         for c in raw_containers
     ]
 
+    http_health = None
+    if http_result:
+        http_health = AppHealthCheckResult(**http_result)
+
     return AppHealth(
         app_name=name,
         db_status=db_status,
         actual_status=actual_status,
         status_mismatch=(actual_status != db_status),
         containers=containers,
+        http_health=http_health,
         checked_at=datetime.utcnow(),
     )
 

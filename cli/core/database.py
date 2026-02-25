@@ -37,6 +37,10 @@ def _apply_migrations(engine: Engine) -> None:
     migrations = [
         "ALTER TABLE deployments ADD COLUMN image_used VARCHAR(500)",
         "ALTER TABLE apps ADD COLUMN backup_schedule VARCHAR(100)",
+        "ALTER TABLE apps ADD COLUMN cpu_limit VARCHAR(20)",
+        "ALTER TABLE apps ADD COLUMN memory_limit VARCHAR(20)",
+        "ALTER TABLE apps ADD COLUMN health_check_url VARCHAR(500)",
+        "ALTER TABLE apps ADD COLUMN health_check_interval INTEGER",
     ]
     with engine.connect() as conn:
         for sql in migrations:

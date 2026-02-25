@@ -36,6 +36,8 @@ const defaultForm: CreateAppInput = {
   git_repo: "",
   branch: "main",
   image: "",
+  cpu_limit: "",
+  memory_limit: "",
 };
 
 export default function Apps() {
@@ -72,6 +74,8 @@ export default function Apps() {
         git_repo: form.git_repo || undefined,
         branch: form.branch || undefined,
         image: form.image || undefined,
+        cpu_limit: form.cpu_limit || undefined,
+        memory_limit: form.memory_limit || undefined,
       };
       await createApp.mutateAsync(payload);
       toast.success(`App "${form.name}" created.`);
@@ -461,6 +465,22 @@ export default function Apps() {
                 placeholder="nginx:latest"
                 className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
               />
+            </div>
+
+            {/* Resource Limits */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="app-cpu-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  CPU Limit
+                </label>
+                <input id="app-cpu-limit" name="cpu_limit" type="text" value={form.cpu_limit ?? ""} onChange={handleChange} placeholder="0.5" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
+              </div>
+              <div>
+                <label htmlFor="app-memory-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Memory Limit
+                </label>
+                <input id="app-memory-limit" name="memory_limit" type="text" value={form.memory_limit ?? ""} onChange={handleChange} placeholder="512M" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
+              </div>
             </div>
 
             {/* Actions */}

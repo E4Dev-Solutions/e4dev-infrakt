@@ -18,6 +18,8 @@ VALID_EVENTS = frozenset(
         "deploy.failure",
         "backup.complete",
         "backup.restore",
+        "health.down",
+        "health.up",
     ]
 )
 

@@ -11,6 +11,7 @@ import {
   databasesApi,
   proxyApi,
   webhooksApi,
+  keysApi,
   type CreateServerInput,
   type UpdateServerInput,
   type CreateAppInput,
@@ -31,6 +32,8 @@ import {
   type Webhook,
   type CreateWebhookInput,
   type ServerMetric,
+  type SSHKey,
+  type DatabaseStats,
 } from "@/api/client";
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -51,6 +54,8 @@ export const queryKeys = {
   webhooks: ["webhooks"] as const,
   serverMetrics: (name: string, hours?: number) =>
     ["servers", name, "metrics", hours ?? 24] as const,
+  keys: ["keys"] as const,
+  databaseStats: (name: string) => ["databases", name, "stats"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -490,6 +495,58 @@ export function useDeleteWebhook() {
 export function useTestWebhook() {
   return useMutation({
     mutationFn: (id: number) => webhooksApi.test(id),
+  });
+}
+
+// ─── SSH Keys ─────────────────────────────────────────────────────────────────
+
+export function useSSHKeys(options?: Partial<UseQueryOptions<SSHKey[]>>) {
+  return useQuery({
+    queryKey: queryKeys.keys,
+    queryFn: keysApi.list,
+    ...options,
+  });
+}
+
+export function useGenerateSSHKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => keysApi.generate(name),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.keys });
+    },
+  });
+}
+
+export function useDeleteSSHKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => keysApi.delete(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.keys });
+    },
+  });
+}
+
+export function useDeploySSHKey() {
+  return useMutation({
+    mutationFn: ({ id, serverName }: { id: number; serverName: string }) =>
+      keysApi.deploy(id, serverName),
+  });
+}
+
+// ─── Database Stats ────────────────────────────────────────────────────────────
+
+export function useDatabaseStats(
+  name: string,
+  server?: string,
+  options?: Partial<UseQueryOptions<DatabaseStats>>
+) {
+  return useQuery({
+    queryKey: queryKeys.databaseStats(name),
+    queryFn: () => databasesApi.stats(name, server),
+    enabled: Boolean(name),
+    ...options,
   });
 }
 

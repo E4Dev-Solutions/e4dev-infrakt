@@ -79,6 +79,10 @@ export interface App {
   app_type?: string;
   created_at: string;
   updated_at: string;
+  cpu_limit?: string;
+  memory_limit?: string;
+  health_check_url?: string;
+  health_check_interval?: number;
 }
 
 export interface Deployment {
@@ -115,6 +119,13 @@ export interface ContainerHealthInfo {
   health: string;
 }
 
+export interface AppHealthCheckResult {
+  healthy: boolean;
+  status_code?: number;
+  response_time_ms?: number;
+  error?: string;
+}
+
 export interface AppHealth {
   app_name: string;
   db_status: string;
@@ -122,6 +133,7 @@ export interface AppHealth {
   status_mismatch: boolean;
   containers: ContainerHealthInfo[];
   checked_at: string;
+  http_health?: AppHealthCheckResult;
 }
 
 export interface Database {
@@ -185,6 +197,8 @@ export interface CreateAppInput {
   git_repo?: string;
   branch?: string;
   image?: string;
+  cpu_limit?: string;
+  memory_limit?: string;
 }
 
 export interface UpdateAppInput {
@@ -193,6 +207,10 @@ export interface UpdateAppInput {
   git_repo?: string;
   branch?: string;
   image?: string;
+  cpu_limit?: string;
+  memory_limit?: string;
+  health_check_url?: string;
+  health_check_interval?: number;
 }
 
 export interface ProxyRouteCreateInput {
@@ -206,6 +224,26 @@ export interface CreateDatabaseInput {
   name: string;
   db_type: DbType;
   version?: string;
+}
+
+// ─── SSH Keys ─────────────────────────────────────────────────────────────────
+
+export interface SSHKey {
+  id: number;
+  name: string;
+  fingerprint: string;
+  key_type: string;
+  public_key: string;
+  created_at: string;
+}
+
+// ─── Database Stats ────────────────────────────────────────────────────────────
+
+export interface DatabaseStats {
+  disk_size?: string;
+  active_connections?: number;
+  version?: string;
+  uptime?: string;
 }
 
 // ─── Webhooks ─────────────────────────────────────────────────────────────────
@@ -461,6 +499,11 @@ export const databasesApi = {
     const qs = server ? `?server=${encodeURIComponent(server)}` : "";
     return del(`/databases/${encodeURIComponent(name)}/schedule${qs}`);
   },
+
+  stats: (name: string, server?: string): Promise<DatabaseStats> => {
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    return get(`/databases/${encodeURIComponent(name)}/stats${qs}`);
+  },
 };
 
 // ─── Proxy ────────────────────────────────────────────────────────────────────
@@ -494,6 +537,16 @@ export const webhooksApi = {
 
   test: (id: number): Promise<{ message: string }> =>
     post(`/webhooks/${id}/test`),
+};
+
+// ─── SSH Keys API ─────────────────────────────────────────────────────────────
+
+export const keysApi = {
+  list: (): Promise<SSHKey[]> => get("/keys"),
+  generate: (name: string): Promise<SSHKey> => post("/keys/generate", { name }),
+  delete: (id: number): Promise<void> => del(`/keys/${id}`),
+  deploy: (id: number, serverName: string): Promise<{ message: string }> =>
+    post(`/keys/${id}/deploy`, { server_name: serverName }),
 };
 
 export { ApiError };

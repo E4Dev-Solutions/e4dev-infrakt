@@ -143,6 +143,10 @@ class AppCreate(BaseModel):
     git_repo: str | None = None
     branch: str = "main"
     image: str | None = None
+    cpu_limit: str | None = None
+    memory_limit: str | None = None
+    health_check_url: str | None = None
+    health_check_interval: int | None = None
 
     @field_validator("name")
     @classmethod
@@ -168,6 +172,10 @@ class AppUpdate(BaseModel):
     git_repo: str | None = None
     branch: str | None = None
     image: str | None = None
+    cpu_limit: str | None = None
+    memory_limit: str | None = None
+    health_check_url: str | None = None
+    health_check_interval: int | None = None
 
     @field_validator("domain")
     @classmethod
@@ -194,6 +202,10 @@ class AppOut(BaseModel):
     image: str | None
     status: str
     app_type: str
+    cpu_limit: str | None = None
+    memory_limit: str | None = None
+    health_check_url: str | None = None
+    health_check_interval: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -317,13 +329,28 @@ class ContainerHealth(BaseModel):
     health: str = ""  # healthy, unhealthy, starting, or empty
 
 
+class AppHealthCheckResult(BaseModel):
+    healthy: bool
+    status_code: int | None = None
+    response_time_ms: float | None = None
+    error: str | None = None
+
+
 class AppHealth(BaseModel):
     app_name: str
     db_status: str
     actual_status: str
     status_mismatch: bool
     containers: list[ContainerHealth]
+    http_health: AppHealthCheckResult | None = None
     checked_at: datetime
+
+
+class DatabaseStats(BaseModel):
+    disk_size: str | None = None
+    active_connections: int | None = None
+    version: str | None = None
+    uptime: str | None = None
 
 
 # ── Dashboard ───────────────────────────────────────────
@@ -345,6 +372,8 @@ VALID_WEBHOOK_EVENTS = [
     "deploy.failure",
     "backup.complete",
     "backup.restore",
+    "health.down",
+    "health.up",
 ]
 
 
@@ -375,6 +404,33 @@ class WebhookOut(BaseModel):
     id: int
     url: str
     events: list[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ── SSH Keys ──────────────────────────────────────────
+
+
+class SSHKeyGenerate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return _validate_safe_name(v)
+
+
+class SSHKeyDeploy(BaseModel):
+    server_name: str
+
+
+class SSHKeyOut(BaseModel):
+    id: int
+    name: str
+    fingerprint: str
+    key_type: str
+    public_key: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

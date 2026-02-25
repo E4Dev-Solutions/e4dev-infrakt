@@ -583,6 +583,37 @@ function HealthTab({ appName }: { appName: string }) {
               </table>
             </div>
           )}
+
+          {/* HTTP Health Check */}
+          {data?.http_health && (
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-200">HTTP Health Check</h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-slate-500">Status</p>
+                  <StatusBadge status={data.http_health.healthy ? "healthy" : "unhealthy"} />
+                </div>
+                {data.http_health.status_code != null && (
+                  <div>
+                    <p className="text-xs text-slate-500">HTTP Code</p>
+                    <p className="font-mono text-sm text-slate-200">{data.http_health.status_code}</p>
+                  </div>
+                )}
+                {data.http_health.response_time_ms != null && (
+                  <div>
+                    <p className="text-xs text-slate-500">Response Time</p>
+                    <p className="font-mono text-sm text-slate-200">{data.http_health.response_time_ms.toFixed(0)}ms</p>
+                  </div>
+                )}
+                {data.http_health.error && (
+                  <div className="col-span-full">
+                    <p className="text-xs text-slate-500">Error</p>
+                    <p className="text-sm text-red-400">{data.http_health.error}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </>
       ) : null}
     </div>
@@ -616,6 +647,10 @@ export default function AppDetail() {
     git_repo: "",
     branch: "",
     image: "",
+    cpu_limit: "",
+    memory_limit: "",
+    health_check_url: "",
+    health_check_interval: undefined,
   });
 
   const stream = useDeploymentStream(
@@ -682,15 +717,24 @@ export default function AppDetail() {
       git_repo: app.git_repo ?? "",
       branch: app.branch ?? "main",
       image: app.image ?? "",
+      cpu_limit: app.cpu_limit ?? "",
+      memory_limit: app.memory_limit ?? "",
+      health_check_url: app.health_check_url ?? "",
+      health_check_interval: app.health_check_interval,
     });
     setShowEditModal(true);
   }
 
   function handleEditChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
+    const numericFields = ["port", "health_check_interval"];
     setEditForm((prev) => ({
       ...prev,
-      [name]: name === "port" ? (value === "" ? undefined : Number(value)) : value,
+      [name]: numericFields.includes(name)
+        ? value === ""
+          ? undefined
+          : Number(value)
+        : value,
     }));
   }
 
@@ -752,6 +796,12 @@ export default function AppDetail() {
                     <GitBranch size={11} aria-hidden="true" />
                     {app.branch}
                   </span>
+                )}
+                {app.cpu_limit && (
+                  <span className="text-xs text-slate-400">CPU: {app.cpu_limit}</span>
+                )}
+                {app.memory_limit && (
+                  <span className="text-xs text-slate-400">Mem: {app.memory_limit}</span>
                 )}
               </div>
             )}
@@ -984,6 +1034,68 @@ export default function AppDetail() {
                 value={editForm.image ?? ""}
                 onChange={handleEditChange}
                 placeholder="nginx:latest"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="edit-cpu-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  CPU Limit
+                </label>
+                <input
+                  id="edit-cpu-limit"
+                  name="cpu_limit"
+                  type="text"
+                  value={editForm.cpu_limit ?? ""}
+                  onChange={handleEditChange}
+                  placeholder="0.5"
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-memory-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Memory Limit
+                </label>
+                <input
+                  id="edit-memory-limit"
+                  name="memory_limit"
+                  type="text"
+                  value={editForm.memory_limit ?? ""}
+                  onChange={handleEditChange}
+                  placeholder="512M"
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="edit-health-check-url" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Health Check URL
+              </label>
+              <input
+                id="edit-health-check-url"
+                name="health_check_url"
+                type="text"
+                value={editForm.health_check_url ?? ""}
+                onChange={handleEditChange}
+                placeholder="https://app.example.com/health"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="edit-health-check-interval" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Health Check Interval (seconds)
+              </label>
+              <input
+                id="edit-health-check-interval"
+                name="health_check_interval"
+                type="number"
+                min={5}
+                value={editForm.health_check_interval ?? ""}
+                onChange={handleEditChange}
+                placeholder="30"
                 className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
               />
             </div>

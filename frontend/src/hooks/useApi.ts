@@ -521,7 +521,7 @@ export function useGenerateSSHKey() {
 export function useDeleteSSHKey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => keysApi.delete(id),
+    mutationFn: (name: string) => keysApi.delete(name),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.keys });
     },
@@ -530,8 +530,8 @@ export function useDeleteSSHKey() {
 
 export function useDeploySSHKey() {
   return useMutation({
-    mutationFn: ({ id, serverName }: { id: number; serverName: string }) =>
-      keysApi.deploy(id, serverName),
+    mutationFn: ({ name, serverName }: { name: string; serverName: string }) =>
+      keysApi.deploy(name, serverName),
   });
 }
 

@@ -575,10 +575,10 @@ export const webhooksApi = {
 
 export const keysApi = {
   list: (): Promise<SSHKey[]> => get("/keys"),
-  generate: (name: string): Promise<SSHKey> => post("/keys/generate", { name }),
-  delete: (id: number): Promise<void> => del(`/keys/${id}`),
-  deploy: (id: number, serverName: string): Promise<{ message: string }> =>
-    post(`/keys/${id}/deploy`, { server_name: serverName }),
+  generate: (name: string): Promise<SSHKey> => post("/keys", { name }),
+  delete: (name: string): Promise<void> => del(`/keys/${name}`),
+  deploy: (name: string, serverName: string): Promise<{ message: string }> =>
+    post(`/keys/${name}/deploy`, { server_name: serverName }),
 };
 
 export { ApiError };

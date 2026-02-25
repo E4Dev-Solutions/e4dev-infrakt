@@ -35,13 +35,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Install system packages needed at runtime only:
-#   - libpq-dev is NOT needed (we use SQLite, not Postgres)
-#   - openssh-client is needed because paramiko shells out to ssh for deployments
-#   - ca-certificates ensures TLS works when the app calls external APIs
+#   - openssh-client: paramiko uses it for SSH-based deployments
+#   - ca-certificates: TLS for external API calls
+#   - docker.io: self-update endpoint pulls new images via Docker socket
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         openssh-client \
         ca-certificates \
+        docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user. Running as root inside a container is a security
@@ -83,10 +84,10 @@ USER infrakt
 # that happens in docker-compose or `docker run -p`.
 EXPOSE 8000
 
-# Health check: hit the FastAPI /docs endpoint (always present) to verify
-# the server is accepting connections. Fail after 3 missed checks.
+# Health check: hit the unauthenticated /api/health endpoint to verify the
+# server is accepting connections. Fail after 3 missed checks.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
 
 # Use exec form (JSON array) so the process is PID 1 and receives SIGTERM
 # directly, enabling graceful shutdown.

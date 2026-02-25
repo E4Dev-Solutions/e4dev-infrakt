@@ -89,9 +89,9 @@ export default function Settings() {
 
   const [showGenerateKeyModal, setShowGenerateKeyModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
-  const [deletingKeyId, setDeletingKeyId] = useState<number | null>(null);
+  const [deletingKeyName, setDeletingKeyName] = useState<string | null>(null);
   const [showDeployKeyModal, setShowDeployKeyModal] = useState(false);
-  const [deployKeyId, setDeployKeyId] = useState<number | null>(null);
+  const [deployKeyName, setDeployKeyName] = useState<string | null>(null);
   const [deployServerName, setDeployServerName] = useState("");
 
   const [showModal, setShowModal] = useState(false);
@@ -114,33 +114,33 @@ export default function Settings() {
     }
   }
 
-  async function handleDeleteKey(id: number, name: string) {
+  async function handleDeleteKey(name: string) {
     if (!window.confirm(`Delete SSH key "${name}"? This cannot be undone.`)) return;
-    setDeletingKeyId(id);
+    setDeletingKeyName(name);
     try {
-      await deleteKey.mutateAsync(id);
+      await deleteKey.mutateAsync(name);
       toast.success(`SSH key "${name}" deleted.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete key.");
     } finally {
-      setDeletingKeyId(null);
+      setDeletingKeyName(null);
     }
   }
 
-  function openDeployKeyModal(id: number) {
-    setDeployKeyId(id);
+  function openDeployKeyModal(name: string) {
+    setDeployKeyName(name);
     setDeployServerName(servers[0]?.name ?? "");
     setShowDeployKeyModal(true);
   }
 
   async function handleDeployKey(e: React.FormEvent) {
     e.preventDefault();
-    if (deployKeyId == null || !deployServerName) return;
+    if (deployKeyName == null || !deployServerName) return;
     try {
-      const result = await deployKey.mutateAsync({ id: deployKeyId, serverName: deployServerName });
+      const result = await deployKey.mutateAsync({ name: deployKeyName, serverName: deployServerName });
       toast.success(result.message ?? "Key deployed.");
       setShowDeployKeyModal(false);
-      setDeployKeyId(null);
+      setDeployKeyName(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to deploy key.");
     }
@@ -335,7 +335,7 @@ export default function Settings() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => openDeployKeyModal(key.id)}
+                          onClick={() => openDeployKeyModal(key.name)}
                           title="Deploy to server"
                           aria-label={`Deploy ${key.name} to server`}
                           className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
@@ -343,13 +343,13 @@ export default function Settings() {
                           <ServerIcon size={15} aria-hidden="true" />
                         </button>
                         <button
-                          onClick={() => void handleDeleteKey(key.id, key.name)}
-                          disabled={deletingKeyId === key.id}
+                          onClick={() => void handleDeleteKey(key.name)}
+                          disabled={deletingKeyName === key.name}
                           title="Delete key"
                           aria-label={`Delete ${key.name}`}
                           className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
                         >
-                          {deletingKeyId === key.id ? (
+                          {deletingKeyName === key.name ? (
                             <Loader2 size={15} className="animate-spin" aria-hidden="true" />
                           ) : (
                             <Trash2 size={15} aria-hidden="true" />
@@ -572,7 +572,7 @@ export default function Settings() {
 
       {/* Deploy SSH Key Modal */}
       {showDeployKeyModal && (
-        <Modal title="Deploy Key to Server" onClose={() => { setShowDeployKeyModal(false); setDeployKeyId(null); }}>
+        <Modal title="Deploy Key to Server" onClose={() => { setShowDeployKeyModal(false); setDeployKeyName(null); }}>
           <form onSubmit={(e) => void handleDeployKey(e)} className="space-y-4" noValidate>
             <p className="text-sm text-slate-400">
               Copy this SSH key to the authorized_keys file on the selected server.
@@ -599,7 +599,7 @@ export default function Settings() {
             <div className="flex justify-end gap-3 pt-1">
               <button
                 type="button"
-                onClick={() => { setShowDeployKeyModal(false); setDeployKeyId(null); }}
+                onClick={() => { setShowDeployKeyModal(false); setDeployKeyName(null); }}
                 className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
               >
                 Cancel

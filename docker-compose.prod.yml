@@ -1,0 +1,54 @@
+# =============================================================================
+# Production Docker Compose for infrakt
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Environment variables (set in .env or export):
+#   SSH_KEY_PATH           — directory containing SSH keys for server management
+#                            (default: ~/.ssh)
+#   CORS_ORIGINS           — comma-separated allowed origins for CORS
+#                            (default: empty, same-origin only)
+#   GITHUB_WEBHOOK_SECRET  — HMAC secret for verifying GitHub webhook payloads
+#                            (required for self-update feature)
+# =============================================================================
+services:
+  infrakt:
+    image: ghcr.io/e4dev-solutions/e4dev-infrakt:latest
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      # Named volume for persistent state: SQLite DB, encrypted env files,
+      # master encryption key, and auto-generated API key.
+      - infrakt-data:/home/infrakt/.infrakt
+
+      # SSH keys for managing remote servers via Paramiko. Read-only mount
+      # so the container cannot modify host keys.
+      - ${SSH_KEY_PATH:-~/.ssh}:/home/infrakt/.ssh:ro
+
+      # Docker socket — allows the self-update endpoint to pull new images
+      # and restart the container when a GitHub webhook fires.
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Mount this compose file into the container so the self-update
+      # endpoint can run `docker compose -f ... pull && up -d`.
+      - ./docker-compose.prod.yml:/opt/infrakt/docker-compose.prod.yml:ro
+
+    environment:
+      - CORS_ORIGINS=${CORS_ORIGINS:-}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-}
+      - COMPOSE_FILE=/opt/infrakt/docker-compose.prod.yml
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  infrakt-data:

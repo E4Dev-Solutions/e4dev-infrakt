@@ -117,7 +117,19 @@ class ServerStatus(BaseModel):
     uptime: str
     memory: MemoryUsage | None = None
     disk: DiskUsage | None = None
+    cpu: float | None = None
     containers: list[ServerContainerInfo] = []
+
+
+class ServerMetricOut(BaseModel):
+    id: int
+    server_id: int
+    recorded_at: datetime
+    cpu_percent: float | None
+    mem_percent: float | None
+    disk_percent: float | None
+
+    model_config = {"from_attributes": True}
 
 
 # ── App ─────────────────────────────────────────────────
@@ -324,3 +336,45 @@ class DashboardStats(BaseModel):
     running_apps: int
     total_databases: int
     recent_deployments: list[DeploymentOut]
+
+
+# ── Webhooks ───────────────────────────────────────────
+
+VALID_WEBHOOK_EVENTS = [
+    "deploy.success",
+    "deploy.failure",
+    "backup.complete",
+    "backup.restore",
+]
+
+
+class WebhookCreate(BaseModel):
+    url: str = Field(..., min_length=8, max_length=2048)
+    events: list[str]
+    secret: str | None = None
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if not v.startswith("https://"):
+            raise ValueError("Webhook URL must use HTTPS")
+        return v
+
+    @field_validator("events")
+    @classmethod
+    def validate_events(cls, v: list[str]) -> list[str]:
+        invalid = [e for e in v if e not in VALID_WEBHOOK_EVENTS]
+        if invalid:
+            raise ValueError(f"Invalid events: {invalid}")
+        if not v:
+            raise ValueError("At least one event is required")
+        return v
+
+
+class WebhookOut(BaseModel):
+    id: int
+    url: str
+    events: list[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

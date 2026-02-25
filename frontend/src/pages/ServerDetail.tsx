@@ -22,12 +22,14 @@ import {
   useProvisionServer,
   useTestServer,
   useUpdateServer,
+  useServerMetrics,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { useProvisionStream } from "@/hooks/useProvisionStream";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
+import SparklineChart from "@/components/SparklineChart";
 import type { UpdateServerInput } from "@/api/client";
 
 interface InfoRowProps {
@@ -156,6 +158,7 @@ export default function ServerDetail() {
   } = useServerStatus(decodedName);
 
   const { data: apps = [] } = useApps(decodedName);
+  const { data: metrics = [] } = useServerMetrics(decodedName);
 
   const provisionServer = useProvisionServer();
   const testServer = useTestServer();
@@ -421,6 +424,15 @@ export default function ServerDetail() {
                 </p>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
+                  {statusData.cpu != null && (
+                    <UsageBar
+                      label="CPU"
+                      used={`${statusData.cpu}%`}
+                      total="100%"
+                      percent={statusData.cpu}
+                      icon={<Cpu size={13} aria-hidden="true" />}
+                    />
+                  )}
                   {statusData.memory && (
                     <UsageBar
                       label="Memory"
@@ -474,6 +486,52 @@ export default function ServerDetail() {
               </div>
             </div>
           )}
+
+          {/* 24h Metrics History */}
+          <div className="rounded-xl border border-slate-700 bg-slate-800">
+            <div className="border-b border-slate-700 px-5 py-3">
+              <h2 className="text-sm font-semibold text-slate-200">
+                24h Metrics History
+              </h2>
+            </div>
+            <div className="space-y-4 p-5">
+              {metrics.length === 0 ? (
+                <p className="text-center text-sm text-slate-500">
+                  No metrics yet — data will appear after the server status is fetched.
+                </p>
+              ) : (
+                <>
+                  <SparklineChart
+                    data={metrics.map((m) => ({
+                      time: m.recorded_at,
+                      value: m.cpu_percent ?? 0,
+                    }))}
+                    color="#10b981"
+                    fillColor="rgba(16,185,129,0.15)"
+                    label="CPU"
+                  />
+                  <SparklineChart
+                    data={metrics.map((m) => ({
+                      time: m.recorded_at,
+                      value: m.mem_percent ?? 0,
+                    }))}
+                    color="#6366f1"
+                    fillColor="rgba(99,102,241,0.15)"
+                    label="Memory"
+                  />
+                  <SparklineChart
+                    data={metrics.map((m) => ({
+                      time: m.recorded_at,
+                      value: m.disk_percent ?? 0,
+                    }))}
+                    color="#f59e0b"
+                    fillColor="rgba(245,158,11,0.15)"
+                    label="Disk"
+                  />
+                </>
+              )}
+            </div>
+          </div>
 
           {/* Apps on server */}
           <div className="rounded-xl border border-slate-700 bg-slate-800">

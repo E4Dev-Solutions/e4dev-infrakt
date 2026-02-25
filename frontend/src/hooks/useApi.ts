@@ -10,6 +10,7 @@ import {
   appsApi,
   databasesApi,
   proxyApi,
+  webhooksApi,
   type CreateServerInput,
   type UpdateServerInput,
   type CreateAppInput,
@@ -27,6 +28,9 @@ import {
   type Database,
   type BackupFile,
   type ProxyDomain,
+  type Webhook,
+  type CreateWebhookInput,
+  type ServerMetric,
 } from "@/api/client";
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -44,6 +48,9 @@ export const queryKeys = {
   database: (name: string) => ["databases", name] as const,
   databaseBackups: (name: string) => ["databases", name, "backups"] as const,
   proxyDomains: (server: string) => ["proxy", server, "domains"] as const,
+  webhooks: ["webhooks"] as const,
+  serverMetrics: (name: string, hours?: number) =>
+    ["servers", name, "metrics", hours ?? 24] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -447,5 +454,57 @@ export function useRemoveProxyRoute() {
 export function useReloadProxy() {
   return useMutation({
     mutationFn: (server: string) => proxyApi.reload(server),
+  });
+}
+
+// ─── Webhooks ─────────────────────────────────────────────────────────────────
+
+export function useWebhooks(options?: Partial<UseQueryOptions<Webhook[]>>) {
+  return useQuery({
+    queryKey: queryKeys.webhooks,
+    queryFn: webhooksApi.list,
+    ...options,
+  });
+}
+
+export function useCreateWebhook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateWebhookInput) => webhooksApi.create(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.webhooks });
+    },
+  });
+}
+
+export function useDeleteWebhook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => webhooksApi.delete(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.webhooks });
+    },
+  });
+}
+
+export function useTestWebhook() {
+  return useMutation({
+    mutationFn: (id: number) => webhooksApi.test(id),
+  });
+}
+
+// ─── Server Metrics ───────────────────────────────────────────────────────────
+
+export function useServerMetrics(
+  name: string,
+  hours = 24,
+  options?: Partial<UseQueryOptions<ServerMetric[]>>
+) {
+  return useQuery({
+    queryKey: queryKeys.serverMetrics(name, hours),
+    queryFn: () => serversApi.metrics(name, hours),
+    enabled: Boolean(name),
+    refetchInterval: 30_000,
+    ...options,
   });
 }

@@ -9,6 +9,7 @@ import AppDetail from "@/pages/AppDetail";
 import Databases from "@/pages/Databases";
 import DatabaseDetail from "@/pages/DatabaseDetail";
 import ProxyDomains from "@/pages/ProxyDomains";
+import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
 import { getApiKey, clearApiKey } from "@/api/client";
 
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="databases" element={<Databases />} />
         <Route path="databases/:name" element={<DatabaseDetail />} />
         <Route path="proxy" element={<ProxyDomains />} />
+        <Route path="settings" element={<Settings />} />
         {/* Catch-all redirect to dashboard */}
         <Route path="*" element={<Dashboard />} />
       </Route>

@@ -158,6 +158,48 @@ export const MOCK_PROXY_DOMAINS = [
   { domain: "app.example.com", port: 8080 },
 ];
 
+export const MOCK_WEBHOOKS = [
+  {
+    id: 1,
+    url: "https://hooks.slack.com/services/T00/B00/xxxx",
+    events: ["deploy.success", "deploy.failure"],
+    created_at: new Date(Date.now() - 3600_000).toISOString(),
+  },
+  {
+    id: 2,
+    url: "https://discord.com/api/webhooks/123/abc",
+    events: ["backup.complete"],
+    created_at: new Date(Date.now() - 86400_000).toISOString(),
+  },
+];
+
+export const MOCK_SERVER_METRICS = [
+  {
+    id: 1,
+    server_id: 1,
+    recorded_at: new Date(Date.now() - 3600_000).toISOString(),
+    cpu_percent: 25.0,
+    mem_percent: 44.7,
+    disk_percent: 30.0,
+  },
+  {
+    id: 2,
+    server_id: 1,
+    recorded_at: new Date(Date.now() - 1800_000).toISOString(),
+    cpu_percent: 30.5,
+    mem_percent: 46.2,
+    disk_percent: 30.1,
+  },
+  {
+    id: 3,
+    server_id: 1,
+    recorded_at: new Date(Date.now() - 600_000).toISOString(),
+    cpu_percent: 18.3,
+    mem_percent: 43.1,
+    disk_percent: 30.0,
+  },
+];
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -228,6 +270,7 @@ export async function mockApi(page: Page): Promise<void> {
         uptime: "up 5 days, 3 hours",
         memory: { total: "7.6 GB", used: "3.4 GB", free: "4.2 GB", percent: 44.7 },
         disk: { total: "78.7 GB", used: "23.6 GB", free: "55.1 GB", percent: 30.0 },
+        cpu: 25.3,
         containers: [
           { id: "abc123", name: "infrakt-web-api", status: "Up 2 hours", image: "nginx:latest" },
           { id: "def456", name: "infrakt-redis", status: "Up 2 hours", image: "redis:7" },
@@ -490,6 +533,50 @@ export async function mockApi(page: Page): Promise<void> {
     }
     if (route.request().method() === "DELETE") {
       return route.fulfill({ json: { message: "Database destroyed" } });
+    }
+    return route.continue();
+  });
+
+  // Server metrics
+  await page.route(/\/api\/servers\/[^/]+\/metrics/, (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: MOCK_SERVER_METRICS });
+    }
+    return route.continue();
+  });
+
+  // Webhooks - test endpoint (must be before generic /webhooks/*)
+  await page.route(/\/api\/webhooks\/\d+\/test/, (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({ json: { message: "Test ping sent" } });
+    }
+    return route.continue();
+  });
+
+  // Webhooks - delete (must be before generic /webhooks)
+  await page.route(/\/api\/webhooks\/\d+$/, (route) => {
+    if (route.request().method() === "DELETE") {
+      return route.fulfill({ json: { message: "Webhook deleted" } });
+    }
+    return route.continue();
+  });
+
+  // Webhooks list & create
+  await page.route("**/api/webhooks", (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: MOCK_WEBHOOKS });
+    }
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      return route.fulfill({
+        status: 201,
+        json: {
+          id: 99,
+          url: body.url,
+          events: body.events,
+          created_at: new Date().toISOString(),
+        },
+      });
     }
     return route.continue();
   });

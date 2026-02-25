@@ -42,6 +42,7 @@ export interface ServerStatusData {
   name: string;
   host: string;
   uptime?: string;
+  cpu?: number;
   memory?: {
     total: string;
     used: string;
@@ -207,6 +208,32 @@ export interface CreateDatabaseInput {
   version?: string;
 }
 
+// ─── Webhooks ─────────────────────────────────────────────────────────────────
+
+export interface Webhook {
+  id: number;
+  url: string;
+  events: string[];
+  created_at: string;
+}
+
+export interface CreateWebhookInput {
+  url: string;
+  events: string[];
+  secret?: string;
+}
+
+// ─── Server Metrics ───────────────────────────────────────────────────────────
+
+export interface ServerMetric {
+  id: number;
+  server_id: number;
+  recorded_at: string;
+  cpu_percent: number | null;
+  mem_percent: number | null;
+  disk_percent: number | null;
+}
+
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
 class ApiError extends Error {
@@ -316,6 +343,9 @@ export const serversApi = {
 
   update: (name: string, input: UpdateServerInput): Promise<Server> =>
     put(`/servers/${encodeURIComponent(name)}`, input),
+
+  metrics: (name: string, hours = 24): Promise<ServerMetric[]> =>
+    get(`/servers/${encodeURIComponent(name)}/metrics?hours=${hours}`),
 };
 
 // ─── Apps ─────────────────────────────────────────────────────────────────────
@@ -450,6 +480,20 @@ export const proxyApi = {
 
   status: (server: string): Promise<{ status: string }> =>
     get(`/proxy/${encodeURIComponent(server)}/status`),
+};
+
+// ─── Webhooks API ─────────────────────────────────────────────────────────────
+
+export const webhooksApi = {
+  list: (): Promise<Webhook[]> => get("/webhooks"),
+
+  create: (input: CreateWebhookInput): Promise<Webhook> =>
+    post("/webhooks", input),
+
+  delete: (id: number): Promise<void> => del(`/webhooks/${id}`),
+
+  test: (id: number): Promise<{ message: string }> =>
+    post(`/webhooks/${id}/test`),
 };
 
 export { ApiError };

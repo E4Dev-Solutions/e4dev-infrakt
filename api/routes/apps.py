@@ -38,6 +38,7 @@ from cli.core.deployer import (
 from cli.core.exceptions import SSHConnectionError
 from cli.core.proxy_manager import add_domain, remove_domain
 from cli.core.ssh import SSHClient
+from cli.core.webhook_sender import fire_webhooks
 from cli.models.app import App
 from cli.models.deployment import Deployment
 from cli.models.server import Server
@@ -266,6 +267,15 @@ def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "running"
+            fire_webhooks(
+                "deploy.success",
+                {
+                    "app": name,
+                    "deployment_id": dep_id,
+                    "commit_hash": result.commit_hash,
+                    "image_used": result.image_used,
+                },
+            )
         except SSHConnectionError as exc:
             logger.error("Deployment SSH error for %s: %s", name, exc)
             broadcaster.publish(dep_id, f"[ERROR] {exc}")
@@ -278,6 +288,14 @@ def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "error"
+            fire_webhooks(
+                "deploy.failure",
+                {
+                    "app": name,
+                    "deployment_id": dep_id,
+                    "error": str(exc),
+                },
+            )
         except Exception as exc:
             logger.exception("Unexpected deployment error for %s", name)
             broadcaster.publish(dep_id, f"[ERROR] {exc}")
@@ -290,6 +308,14 @@ def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "error"
+            fire_webhooks(
+                "deploy.failure",
+                {
+                    "app": name,
+                    "deployment_id": dep_id,
+                    "error": str(exc),
+                },
+            )
         finally:
             broadcaster.finish(dep_id)
             # Clean up broadcaster state after 5 minutes
@@ -431,6 +457,15 @@ def rollback(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "running"
+            fire_webhooks(
+                "deploy.success",
+                {
+                    "app": name,
+                    "deployment_id": dep_id,
+                    "commit_hash": result.commit_hash,
+                    "image_used": result.image_used,
+                },
+            )
         except Exception as exc:
             logger.exception("Rollback error for %s", name)
             broadcaster.publish(dep_id, f"[ERROR] {exc}")
@@ -443,6 +478,14 @@ def rollback(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "error"
+            fire_webhooks(
+                "deploy.failure",
+                {
+                    "app": name,
+                    "deployment_id": dep_id,
+                    "error": str(exc),
+                },
+            )
         finally:
             broadcaster.finish(dep_id)
             threading.Timer(300, broadcaster.cleanup, args=[dep_id]).start()

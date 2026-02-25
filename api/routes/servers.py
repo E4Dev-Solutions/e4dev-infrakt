@@ -5,6 +5,7 @@ import json
 import logging
 import threading
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
@@ -16,6 +17,7 @@ from api.schemas import (
     MemoryUsage,
     ServerContainerInfo,
     ServerCreate,
+    ServerMetricOut,
     ServerOut,
     ServerStatus,
     ServerUpdate,
@@ -25,6 +27,7 @@ from cli.core.exceptions import SSHConnectionError
 from cli.core.provisioner import provision_server
 from cli.core.ssh import SSHClient
 from cli.models.server import Server
+from cli.models.server_metric import ServerMetric
 
 router = APIRouter(prefix="/servers", tags=["servers"])
 logger = logging.getLogger(__name__)
@@ -297,6 +300,14 @@ def _parse_disk(raw: str) -> DiskUsage | None:
     )
 
 
+def _parse_cpu(raw: str) -> float | None:
+    """Parse CPU usage percentage from top output."""
+    try:
+        return round(float(raw.strip()), 1)
+    except (ValueError, AttributeError):
+        return None
+
+
 def _parse_containers(raw: str) -> list[ServerContainerInfo]:
     """Parse docker ps --format JSON output into ServerContainerInfo list."""
     results: list[ServerContainerInfo] = []
@@ -328,6 +339,7 @@ def server_status(name: str) -> ServerStatus:
         if not srv:
             raise HTTPException(404, f"Server '{name}' not found")
         ssh = _ssh_for(srv)
+        srv_id = srv.id
         srv_name = srv.name
         srv_host = srv.host
 
@@ -336,6 +348,7 @@ def server_status(name: str) -> ServerStatus:
             uptime = ssh.run_checked("uptime -p").strip()
             mem_raw, _, _ = ssh.run("free -b | awk '/^Mem:/{print $2, $3, $4}'", timeout=10)
             disk_raw, _, _ = ssh.run("df -B1 / | awk 'NR==2{print $2, $3, $4, $5}'", timeout=10)
+            cpu_raw, _, _ = ssh.run("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'", timeout=10)
             containers_raw, _, _ = ssh.run(
                 'docker ps --format \'{"ID":"{{.ID}}","Names":"{{.Names}}",'
                 '"Status":"{{.Status}}","Image":"{{.Image}}"}\' 2>/dev/null',
@@ -344,14 +357,57 @@ def server_status(name: str) -> ServerStatus:
     except SSHConnectionError as exc:
         raise HTTPException(502, f"Cannot reach server: {exc}")
 
+    memory = _parse_memory(mem_raw.strip())
+    disk = _parse_disk(disk_raw.strip())
+    cpu_pct = _parse_cpu(cpu_raw.strip())
+
+    # Persist metric snapshot
+    with get_session() as session:
+        session.add(
+            ServerMetric(
+                server_id=srv_id,
+                cpu_percent=cpu_pct,
+                mem_percent=memory.percent if memory else None,
+                disk_percent=disk.percent if disk else None,
+            )
+        )
+        # Clean up metrics older than 30 days
+        cutoff = datetime.now(UTC) - timedelta(days=30)
+        session.query(ServerMetric).filter(
+            ServerMetric.server_id == srv_id,
+            ServerMetric.recorded_at < cutoff,
+        ).delete()
+
     return ServerStatus(
         name=srv_name,
         host=srv_host,
         uptime=uptime,
-        memory=_parse_memory(mem_raw.strip()),
-        disk=_parse_disk(disk_raw.strip()),
+        memory=memory,
+        disk=disk,
+        cpu=cpu_pct,
         containers=_parse_containers(containers_raw.strip()),
     )
+
+
+@router.get("/{name}/metrics", response_model=list[ServerMetricOut])
+def server_metrics(name: str, hours: int = 24) -> list[ServerMetricOut]:
+    """Return time-series metric snapshots for a server."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == name).first()
+        if not srv:
+            raise HTTPException(404, f"Server '{name}' not found")
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
+        metrics = (
+            session.query(ServerMetric)
+            .filter(
+                ServerMetric.server_id == srv.id,
+                ServerMetric.recorded_at >= cutoff,
+            )
+            .order_by(ServerMetric.recorded_at.asc())
+            .all()
+        )
+        return [ServerMetricOut.model_validate(m) for m in metrics]
 
 
 @router.post("/{name}/test")

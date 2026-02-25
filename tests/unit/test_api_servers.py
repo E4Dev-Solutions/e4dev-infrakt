@@ -198,6 +198,7 @@ class TestServerStatus:
             mock_ssh.run.side_effect = [
                 ("8000000000 2000000000 5000000000", "", 0),  # free -b
                 ("20000000000 5000000000 15000000000 25%", "", 0),  # df -B1
+                ("12.5", "", 0),  # top CPU
                 ("", "", 0),  # docker ps
             ]
             mock_cls.from_server.return_value = mock_ssh
@@ -212,6 +213,7 @@ class TestServerStatus:
         assert isinstance(data["disk"], dict)
         assert isinstance(data["disk"]["percent"], float)
         assert isinstance(data["containers"], list)
+        assert data["cpu"] == 12.5
 
     def test_returns_containers_from_docker_ps(self, client, isolated_config):
         _seed_server("docker-srv")
@@ -224,6 +226,7 @@ class TestServerStatus:
             mock_ssh.run.side_effect = [
                 ("4000000000 1000000000 3000000000", "", 0),
                 ("10000000000 2000000000 8000000000 20%", "", 0),
+                ("15.0", "", 0),  # top CPU
                 (docker_json, "", 0),
             ]
             mock_cls.from_server.return_value = mock_ssh

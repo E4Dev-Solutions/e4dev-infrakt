@@ -25,6 +25,7 @@ from cli.core.database import get_session, init_db
 from cli.core.deployer import _validate_name
 from cli.core.exceptions import SSHConnectionError
 from cli.core.ssh import SSHClient
+from cli.core.webhook_sender import fire_webhooks
 from cli.models.app import App
 from cli.models.server import Server
 
@@ -243,6 +244,7 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
         remote_path = backup_database(ssh, db_app)
 
     filename = remote_path.rsplit("/", 1)[-1]
+    fire_webhooks("backup.complete", {"database": name, "filename": filename})
     return {
         "message": f"Backup created: {filename}",
         "filename": filename,
@@ -273,6 +275,7 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
             raise HTTPException(404, f"Backup file not found: {body.filename}")
         raise HTTPException(500, str(exc))
 
+    fire_webhooks("backup.restore", {"database": name, "filename": body.filename})
     return {"message": f"Database '{name}' restored from {body.filename}"}
 
 

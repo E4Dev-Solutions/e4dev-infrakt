@@ -152,6 +152,44 @@ def status(name: str) -> None:
 
 @server.command()
 @click.argument("name")
+@click.option("--hours", default=24, show_default=True, help="Hours of history to show")
+def metrics(name: str, hours: int) -> None:
+    """Show recent server metric history."""
+    from datetime import UTC, datetime, timedelta
+
+    from cli.models.server_metric import ServerMetric
+
+    init_db()
+    srv = _get_server(name)
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    with get_session() as session:
+        recs = (
+            session.query(ServerMetric)
+            .filter(
+                ServerMetric.server_id == srv.id,
+                ServerMetric.recorded_at >= cutoff,
+            )
+            .order_by(ServerMetric.recorded_at.desc())
+            .limit(50)
+            .all()
+        )
+        if not recs:
+            info(f"No metrics recorded for '{name}' in the last {hours}h.")
+            return
+        rows = [
+            (
+                r.recorded_at.strftime("%Y-%m-%d %H:%M:%S"),
+                f"{r.cpu_percent:.1f}%" if r.cpu_percent is not None else "—",
+                f"{r.mem_percent:.1f}%" if r.mem_percent is not None else "—",
+                f"{r.disk_percent:.1f}%" if r.disk_percent is not None else "—",
+            )
+            for r in recs
+        ]
+    print_table(f"Metrics for {name} (last {hours}h)", ["Time", "CPU", "Memory", "Disk"], rows)
+
+
+@server.command()
+@click.argument("name")
 def ssh(name: str) -> None:
     """Open an interactive SSH session to the server."""
     import subprocess

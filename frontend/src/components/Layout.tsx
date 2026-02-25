@@ -1,5 +1,14 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { BarChart3, Server, Box, Database, Globe, Zap, LogOut } from "lucide-react";
+import {
+  BarChart3,
+  Server,
+  Box,
+  Database,
+  Globe,
+  Zap,
+  LogOut,
+  Settings as SettingsIcon,
+} from "lucide-react";
 
 interface NavItem {
   to: string;
@@ -32,6 +41,11 @@ const navItems: NavItem[] = [
     to: "/proxy",
     label: "Proxy",
     icon: <Globe size={18} aria-hidden="true" />,
+  },
+  {
+    to: "/settings",
+    label: "Settings",
+    icon: <SettingsIcon size={18} aria-hidden="true" />,
   },
 ];
 

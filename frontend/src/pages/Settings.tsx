@@ -1,0 +1,479 @@
+import { useState } from "react";
+import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2 } from "lucide-react";
+import {
+  useWebhooks,
+  useCreateWebhook,
+  useDeleteWebhook,
+  useTestWebhook,
+} from "@/hooks/useApi";
+import { useToast } from "@/hooks/useToast";
+import { ToastContainer } from "@/components/Toast";
+import Modal from "@/components/Modal";
+import EmptyState from "@/components/EmptyState";
+import type { CreateWebhookInput } from "@/api/client";
+
+// ─── Available webhook event types ────────────────────────────────────────────
+
+const WEBHOOK_EVENTS: { value: string; label: string }[] = [
+  { value: "deploy.success", label: "Deploy Success" },
+  { value: "deploy.failure", label: "Deploy Failure" },
+  { value: "backup.complete", label: "Backup Complete" },
+  { value: "backup.restore", label: "Backup Restore" },
+];
+
+// ─── Event badge color map ─────────────────────────────────────────────────────
+
+function eventBadgeClass(event: string): string {
+  switch (event) {
+    case "deploy.success":
+      return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30";
+    case "deploy.failure":
+      return "bg-red-500/15 text-red-300 ring-1 ring-red-500/30";
+    case "backup.complete":
+      return "bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/30";
+    case "backup.restore":
+      return "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30";
+    default:
+      return "bg-slate-700 text-slate-300";
+  }
+}
+
+// ─── Relative time helper ─────────────────────────────────────────────────────
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+// ─── Default form state ────────────────────────────────────────────────────────
+
+const defaultForm: CreateWebhookInput & { urlError: string } = {
+  url: "",
+  events: [],
+  secret: "",
+  urlError: "",
+};
+
+// ─── Settings page ────────────────────────────────────────────────────────────
+
+export default function Settings() {
+  const { data: webhooks = [], isLoading, isError, error } = useWebhooks();
+  const createWebhook = useCreateWebhook();
+  const deleteWebhook = useDeleteWebhook();
+  const testWebhook = useTestWebhook();
+  const toast = useToast();
+
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState(defaultForm);
+  const [testingId, setTestingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // ─── Form handlers ──────────────────────────────────────────────────────────
+
+  function handleUrlChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const { value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      url: value,
+      urlError:
+        value && !value.startsWith("https://")
+          ? "URL must start with https://"
+          : "",
+    }));
+  }
+
+  function handleSecretChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setForm((prev) => ({ ...prev, secret: e.target.value }));
+  }
+
+  function handleEventToggle(eventValue: string) {
+    setForm((prev) => {
+      const already = prev.events.includes(eventValue);
+      return {
+        ...prev,
+        events: already
+          ? prev.events.filter((ev) => ev !== eventValue)
+          : [...prev.events, eventValue],
+      };
+    });
+  }
+
+  function closeModal() {
+    setShowModal(false);
+    setForm(defaultForm);
+  }
+
+  function validateForm(): boolean {
+    if (!form.url.startsWith("https://")) {
+      setForm((prev) => ({
+        ...prev,
+        urlError: "URL must start with https://",
+      }));
+      return false;
+    }
+    if (form.events.length === 0) {
+      toast.error("Select at least one event.");
+      return false;
+    }
+    return true;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    const payload: CreateWebhookInput = {
+      url: form.url,
+      events: form.events,
+      ...(form.secret ? { secret: form.secret } : {}),
+    };
+
+    try {
+      await createWebhook.mutateAsync(payload);
+      toast.success("Webhook added.");
+      closeModal();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add webhook.");
+    }
+  }
+
+  // ─── Action handlers ────────────────────────────────────────────────────────
+
+  async function handleTest(id: number) {
+    setTestingId(id);
+    try {
+      const result = await testWebhook.mutateAsync(id);
+      toast.success(result.message ?? "Test delivery sent.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Test delivery failed.");
+    } finally {
+      setTestingId(null);
+    }
+  }
+
+  async function handleDelete(id: number, url: string) {
+    if (
+      !window.confirm(`Remove webhook for "${url}"? This cannot be undone.`)
+    )
+      return;
+    setDeletingId(id);
+    try {
+      await deleteWebhook.mutateAsync(id);
+      toast.success("Webhook removed.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to remove webhook."
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <div>
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
+
+      {/* Page header */}
+      <div className="mb-7 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-700">
+          <SettingsIcon size={20} className="text-indigo-400" aria-hidden="true" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Settings</h1>
+          <p className="mt-0.5 text-sm text-slate-400">
+            Platform configuration and integrations
+          </p>
+        </div>
+      </div>
+
+      {/* Webhooks section */}
+      <section aria-labelledby="webhooks-heading">
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h2
+              id="webhooks-heading"
+              className="text-base font-semibold text-slate-100"
+            >
+              Notification Webhooks
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Send HTTP POST payloads to external URLs when deployment and backup
+              events occur.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          >
+            <Plus size={16} aria-hidden="true" />
+            Add Webhook
+          </button>
+        </div>
+
+        {/* Loading */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2
+              size={28}
+              className="animate-spin text-indigo-400"
+              aria-label="Loading webhooks"
+            />
+          </div>
+        )}
+
+        {/* Error */}
+        {isError && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-5 text-red-400">
+            <p className="font-medium">Failed to load webhooks</p>
+            <p className="mt-1 text-sm text-red-400/70">
+              {error instanceof Error ? error.message : "Unknown error"}
+            </p>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && !isError && webhooks.length === 0 && (
+          <EmptyState
+            icon={<Bell size={28} />}
+            title="No webhooks configured"
+            description="Add a webhook to receive notifications when deployment or backup events happen."
+            action={{
+              label: "Add Webhook",
+              onClick: () => setShowModal(true),
+            }}
+          />
+        )}
+
+        {/* Webhooks table */}
+        {webhooks.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-slate-700">
+            <table className="w-full text-sm" role="table">
+              <thead>
+                <tr className="border-b border-slate-700 bg-slate-800/60">
+                  {["URL", "Events", "Created", "Actions"].map((h) => (
+                    <th
+                      key={h}
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/40">
+                {webhooks.map((webhook) => (
+                  <tr
+                    key={webhook.id}
+                    className="bg-slate-800/30 transition-colors hover:bg-slate-800/70"
+                  >
+                    {/* URL */}
+                    <td className="max-w-xs px-4 py-3">
+                      <span
+                        className="block truncate font-mono text-xs text-slate-200"
+                        title={webhook.url}
+                      >
+                        {webhook.url.length > 50
+                          ? `${webhook.url.slice(0, 50)}…`
+                          : webhook.url}
+                      </span>
+                    </td>
+
+                    {/* Events */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {webhook.events.map((ev) => (
+                          <span
+                            key={ev}
+                            className={[
+                              "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+                              eventBadgeClass(ev),
+                            ].join(" ")}
+                          >
+                            {ev}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+
+                    {/* Created */}
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                      {relativeTime(webhook.created_at)}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => void handleTest(webhook.id)}
+                          disabled={testingId === webhook.id}
+                          title="Send test delivery"
+                          aria-label={`Send test delivery to ${webhook.url}`}
+                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        >
+                          {testingId === webhook.id ? (
+                            <Loader2
+                              size={15}
+                              className="animate-spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Send size={15} aria-hidden="true" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() =>
+                            void handleDelete(webhook.id, webhook.url)
+                          }
+                          disabled={deletingId === webhook.id}
+                          title="Remove webhook"
+                          aria-label={`Remove webhook for ${webhook.url}`}
+                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        >
+                          {deletingId === webhook.id ? (
+                            <Loader2
+                              size={15}
+                              className="animate-spin"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Trash2 size={15} aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Add Webhook Modal */}
+      {showModal && (
+        <Modal title="Add Webhook" onClose={closeModal}>
+          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+            {/* URL */}
+            <div>
+              <label
+                htmlFor="webhook-url"
+                className="mb-1.5 block text-xs font-medium text-slate-300"
+              >
+                Endpoint URL <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="webhook-url"
+                type="url"
+                required
+                value={form.url}
+                onChange={handleUrlChange}
+                placeholder="https://hooks.slack.com/..."
+                className={[
+                  "w-full rounded-lg border bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:ring-1 focus-visible:outline-none",
+                  form.urlError
+                    ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                    : "border-slate-600 focus:border-indigo-500 focus:ring-indigo-500",
+                ].join(" ")}
+                aria-describedby={form.urlError ? "webhook-url-error" : undefined}
+                aria-invalid={Boolean(form.urlError)}
+              />
+              {form.urlError && (
+                <p
+                  id="webhook-url-error"
+                  className="mt-1 text-xs text-red-400"
+                  role="alert"
+                >
+                  {form.urlError}
+                </p>
+              )}
+            </div>
+
+            {/* Events */}
+            <fieldset>
+              <legend className="mb-2 text-xs font-medium text-slate-300">
+                Events <span className="text-red-400">*</span>
+              </legend>
+              <div className="grid grid-cols-2 gap-2">
+                {WEBHOOK_EVENTS.map(({ value, label }) => {
+                  const checked = form.events.includes(value);
+                  return (
+                    <label
+                      key={value}
+                      className={[
+                        "flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                        checked
+                          ? "border-indigo-500/60 bg-indigo-500/10 text-slate-200"
+                          : "border-slate-600 bg-slate-700/50 text-slate-400 hover:border-slate-500 hover:text-slate-300",
+                      ].join(" ")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleEventToggle(value)}
+                        className="h-3.5 w-3.5 rounded border-slate-500 bg-slate-600 accent-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
+            {/* Secret */}
+            <div>
+              <label
+                htmlFor="webhook-secret"
+                className="mb-1.5 block text-xs font-medium text-slate-300"
+              >
+                Signing Secret{" "}
+                <span className="font-normal text-slate-500">(optional)</span>
+              </label>
+              <input
+                id="webhook-secret"
+                type="password"
+                value={form.secret ?? ""}
+                onChange={handleSecretChange}
+                placeholder="Optional HMAC signing secret"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Used to sign the X-Infrakt-Signature header sent with each
+                delivery.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={createWebhook.isPending}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              >
+                {createWebhook.isPending && (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                )}
+                Add Webhook
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </div>
+  );
+}

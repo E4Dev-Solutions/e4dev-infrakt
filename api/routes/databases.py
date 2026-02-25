@@ -12,6 +12,7 @@ from api.schemas import (
     DatabaseCreate,
     DatabaseOut,
     DatabaseRestore,
+    DatabaseStats,
 )
 from cli.commands.db import DB_TEMPLATES, DEFAULT_VERSIONS, _generate_db_compose
 from cli.core.backup import (
@@ -22,6 +23,7 @@ from cli.core.backup import (
     restore_database,
 )
 from cli.core.database import get_session, init_db
+from cli.core.db_stats import get_database_stats
 from cli.core.deployer import _validate_name
 from cli.core.exceptions import SSHConnectionError
 from cli.core.ssh import SSHClient
@@ -192,6 +194,29 @@ def get_database(name: str, server: str | None = None) -> DatabaseOut:
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
         return _get_db_out(db_app)
+
+
+@router.get("/{name}/stats", response_model=DatabaseStats)
+def database_stats(name: str, server: str | None = None) -> DatabaseStats:
+    """Get live database statistics."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        db_type = db_app.app_type.split(":", 1)[1]
+        ssh = SSHClient.from_server(db_app.server)
+
+    try:
+        with ssh:
+            stats = get_database_stats(ssh, name, db_type)
+    except Exception as exc:
+        raise HTTPException(502, f"Cannot reach server: {exc}")
+
+    return DatabaseStats(**stats)
 
 
 @router.delete("/{name}")

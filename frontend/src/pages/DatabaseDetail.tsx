@@ -8,6 +8,7 @@ import {
   Upload,
   Clock,
   Loader2,
+  BarChart2,
 } from "lucide-react";
 import {
   useDatabase,
@@ -17,6 +18,7 @@ import {
   useRestoreDatabase,
   useScheduleBackup,
   useUnscheduleBackup,
+  useDatabaseStats,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -108,6 +110,11 @@ export default function DatabaseDetail() {
     decodedName,
     db?.server_name,
   );
+  const {
+    data: stats,
+    isFetching: statsFetching,
+    refetch: refetchStats,
+  } = useDatabaseStats(decodedName, db?.server_name, { enabled: false, staleTime: Infinity });
 
   const backupDatabase = useBackupDatabase();
   const deleteDatabase = useDeleteDatabase();
@@ -252,6 +259,40 @@ export default function DatabaseDetail() {
 
   const typeLabel = DB_TYPE_LABELS[db.db_type] ?? db.db_type;
 
+  const buildConnectionString = (): string => {
+    const host = db.server_name;
+    const port = db.port ?? "";
+    const n = decodedName;
+    switch (db.db_type) {
+      case "postgres":
+        return `postgresql://${n}:<password>@${host}:${port}/${n}`;
+      case "mysql":
+        return `mysql://${n}:<password>@${host}:${port}/${n}`;
+      case "redis":
+        return `redis://:<password>@${host}:${port}`;
+      case "mongo":
+        return `mongodb://${n}:<password>@${host}:${port}/${n}`;
+      default:
+        return `${db.db_type}://${n}:<password>@${host}:${port}/${n}`;
+    }
+  };
+
+  type StatKey = "disk_size" | "active_connections" | "version" | "uptime";
+
+  const getStatKeys = (): StatKey[] => {
+    switch (db.db_type) {
+      case "postgres":
+      case "mysql":
+        return ["disk_size", "active_connections", "version", "uptime"];
+      case "redis":
+        return ["version", "uptime"];
+      case "mongo":
+        return ["disk_size", "version"];
+      default:
+        return ["disk_size", "active_connections", "version", "uptime"];
+    }
+  };
+
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -356,33 +397,102 @@ export default function DatabaseDetail() {
             hidden={activeTab !== "overview"}
           >
             {activeTab === "overview" && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <InfoCard label="Type">
-                  {typeLabel}
-                </InfoCard>
-                <InfoCard label="Server">
-                  {db.server_name}
-                </InfoCard>
-                <InfoCard label="Port">
-                  {db.port ? (
-                    <span className="font-mono">{db.port}</span>
-                  ) : (
-                    <span className="text-slate-500">—</span>
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <InfoCard label="Type">
+                    {typeLabel}
+                  </InfoCard>
+                  <InfoCard label="Server">
+                    {db.server_name}
+                  </InfoCard>
+                  <InfoCard label="Port">
+                    {db.port ? (
+                      <span className="font-mono">{db.port}</span>
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
+                  </InfoCard>
+                  <InfoCard label="Status">
+                    <StatusBadge status={db.status} />
+                  </InfoCard>
+                  <InfoCard label="Created">
+                    {db.created_at ? formatDate(db.created_at) : <span className="text-slate-500">—</span>}
+                  </InfoCard>
+                  <InfoCard label="Backup Schedule">
+                    {db.backup_schedule ? (
+                      <span className="font-mono text-indigo-300">{db.backup_schedule}</span>
+                    ) : (
+                      <span className="text-slate-500">None</span>
+                    )}
+                  </InfoCard>
+                </div>
+
+                {/* Connection String */}
+                <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Connection String
+                  </p>
+                  <p className="break-all font-mono text-xs text-slate-300">
+                    {buildConnectionString()}
+                  </p>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Replace <span className="font-mono text-slate-400">&lt;password&gt;</span> with the password shown when the database was created.
+                  </p>
+                </div>
+
+                {/* Stats section */}
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-200">Live Stats</h3>
+                    <button
+                      onClick={() => void refetchStats()}
+                      disabled={statsFetching}
+                      className="flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                    >
+                      {statsFetching ? (
+                        <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                      ) : (
+                        <BarChart2 size={12} aria-hidden="true" />
+                      )}
+                      {statsFetching ? "Fetching..." : "Fetch Stats"}
+                    </button>
+                  </div>
+
+                  {!stats && !statsFetching && (
+                    <p className="py-6 text-center text-sm text-slate-500">
+                      Click &quot;Fetch Stats&quot; to query live database metrics from the server.
+                    </p>
                   )}
-                </InfoCard>
-                <InfoCard label="Status">
-                  <StatusBadge status={db.status} />
-                </InfoCard>
-                <InfoCard label="Created">
-                  {db.created_at ? formatDate(db.created_at) : <span className="text-slate-500">—</span>}
-                </InfoCard>
-                <InfoCard label="Backup Schedule">
-                  {db.backup_schedule ? (
-                    <span className="font-mono text-indigo-300">{db.backup_schedule}</span>
-                  ) : (
-                    <span className="text-slate-500">None</span>
+
+                  {statsFetching && (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Fetching stats" />
+                    </div>
                   )}
-                </InfoCard>
+
+                  {stats && !statsFetching && (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {getStatKeys().map((key) => {
+                        const value = stats[key];
+                        if (value == null) return null;
+                        const labels: Record<string, string> = {
+                          disk_size: "Disk Size",
+                          active_connections: "Active Connections",
+                          version: "Version",
+                          uptime: "Uptime",
+                        };
+                        return (
+                          <div key={key} className="rounded-lg border border-slate-700 bg-slate-800/50 p-3">
+                            <p className="mb-1 text-xs font-medium uppercase tracking-wider text-slate-500">
+                              {labels[key] ?? key}
+                            </p>
+                            <p className="font-mono text-sm text-slate-200">{String(value)}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -31,8 +31,8 @@ test.describe("Database Detail", () => {
   // ─── Overview tab ───────────────────────────────────────────────────────────
 
   test("overview tab shows database info", async ({ page }) => {
-    await expect(page.getByText(String(MOCK_DATABASES[0].port))).toBeVisible();
-    await expect(page.getByText(MOCK_DATABASES[0].server_name)).toBeVisible();
+    await expect(page.getByText(String(MOCK_DATABASES[0].port), { exact: true })).toBeVisible();
+    await expect(page.getByText(MOCK_DATABASES[0].server_name).first()).toBeVisible();
   });
 
   // ─── Backups tab ────────────────────────────────────────────────────────────

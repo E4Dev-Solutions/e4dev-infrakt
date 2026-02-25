@@ -24,7 +24,7 @@ VALID_EVENTS = frozenset(
 )
 
 
-def build_payload(event: str, data: dict) -> dict:
+def build_payload(event: str, data: dict[str, object]) -> dict[str, object]:
     """Build a webhook payload with event type and timestamp."""
     return {
         "event": event,
@@ -33,7 +33,7 @@ def build_payload(event: str, data: dict) -> dict:
     }
 
 
-def deliver_webhook(url: str, secret: str | None, payload: dict, timeout: int = 10) -> None:
+def deliver_webhook(url: str, secret: str | None, payload: dict[str, object], timeout: int = 10) -> None:
     """HTTP POST the payload to url. Logs errors — never raises."""
     body = json.dumps(payload).encode()
     req = urllib.request.Request(
@@ -54,7 +54,7 @@ def deliver_webhook(url: str, secret: str | None, payload: dict, timeout: int = 
         logger.warning("Webhook delivery to %s failed: %s", url, exc)
 
 
-def fire_webhooks(event: str, data: dict) -> None:
+def fire_webhooks(event: str, data: dict[str, object]) -> None:
     """Load matching webhooks from DB and fire each."""
     from cli.core.database import get_session
     from cli.models.webhook import Webhook

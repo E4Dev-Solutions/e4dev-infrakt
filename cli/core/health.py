@@ -7,7 +7,7 @@ import shlex
 from cli.core.ssh import SSHClient
 
 
-def check_app_health(ssh: SSHClient, port: int, health_path: str) -> dict:
+def check_app_health(ssh: SSHClient, port: int, health_path: str) -> dict[str, object]:
     """Curl the health check URL from the server.
 
     Constructs: http://127.0.0.1:{port}{health_path}

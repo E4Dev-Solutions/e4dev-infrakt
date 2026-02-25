@@ -53,6 +53,10 @@ export const MOCK_APPS = [
     image: null,
     status: "running",
     app_type: "git",
+    cpu_limit: "1.0",
+    memory_limit: "512M",
+    health_check_url: "/health",
+    health_check_interval: 30,
     created_at: "2025-01-20T08:00:00",
     updated_at: "2025-01-20T08:00:00",
   },
@@ -68,6 +72,10 @@ export const MOCK_APPS = [
     image: "redis:7",
     status: "stopped",
     app_type: "image",
+    cpu_limit: null,
+    memory_limit: null,
+    health_check_url: null,
+    health_check_interval: null,
     created_at: "2025-01-21T09:00:00",
     updated_at: "2025-01-21T09:00:00",
   },
@@ -199,6 +207,32 @@ export const MOCK_SERVER_METRICS = [
     disk_percent: 30.0,
   },
 ];
+
+export const MOCK_SSH_KEYS = [
+  {
+    id: 1,
+    name: "prod-key",
+    fingerprint: "SHA256:abcdef1234567890abcdef1234567890abcdef12",
+    key_type: "ed25519",
+    public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... prod-key",
+    created_at: new Date(Date.now() - 86400_000).toISOString(),
+  },
+  {
+    id: 2,
+    name: "staging-key",
+    fingerprint: "SHA256:xyz789abc123def456ghi789jkl012mno345pqr6",
+    key_type: "ed25519",
+    public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... staging-key",
+    created_at: new Date(Date.now() - 3600_000).toISOString(),
+  },
+];
+
+export const MOCK_DATABASE_STATS = {
+  disk_size: "42 MB",
+  active_connections: 5,
+  version: "16.2",
+  uptime: "3 days 02:15:30.123456",
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -405,6 +439,12 @@ export async function mockApi(page: Page): Promise<void> {
             health: "healthy",
           },
         ],
+        http_health: {
+          healthy: true,
+          status_code: 200,
+          response_time_ms: 42.5,
+          error: null,
+        },
         checked_at: new Date().toISOString(),
       },
     });
@@ -609,5 +649,56 @@ export async function mockApi(page: Page): Promise<void> {
 
   await page.route("**/api/proxy/*/status", (route) => {
     return route.fulfill({ json: { running: true, version: "2.7.6" } });
+  });
+
+  // SSH Keys - deploy (must be before generic /keys/*)
+  await page.route(/\/api\/keys\/\d+\/deploy/, (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({ json: { message: "Key deployed to server." } });
+    }
+    return route.continue();
+  });
+
+  // SSH Keys - delete (must be before generic /keys)
+  await page.route(/\/api\/keys\/\d+$/, (route) => {
+    if (route.request().method() === "DELETE") {
+      return route.fulfill({ json: { message: "Key deleted" } });
+    }
+    return route.continue();
+  });
+
+  // SSH Keys - generate
+  await page.route("**/api/keys/generate", (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      return route.fulfill({
+        status: 201,
+        json: {
+          id: 99,
+          name: body.name,
+          fingerprint: "SHA256:newkey1234567890newkey1234567890newkey12",
+          key_type: "ed25519",
+          public_key: `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... ${body.name}`,
+          created_at: new Date().toISOString(),
+        },
+      });
+    }
+    return route.continue();
+  });
+
+  // SSH Keys - list
+  await page.route("**/api/keys", (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: MOCK_SSH_KEYS });
+    }
+    return route.continue();
+  });
+
+  // Database stats (must be before generic /databases/*)
+  await page.route(/\/api\/databases\/[^/]+\/stats/, (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: MOCK_DATABASE_STATS });
+    }
+    return route.continue();
   });
 }

@@ -7,7 +7,7 @@ import shlex
 from cli.core.ssh import SSHClient
 
 
-def get_database_stats(ssh: SSHClient, app_name: str, db_type: str) -> dict:
+def get_database_stats(ssh: SSHClient, app_name: str, db_type: str) -> dict[str, str | int | None]:
     """Query database-specific stats via Docker exec.
 
     Returns dict with keys: disk_size, active_connections, version, uptime.
@@ -35,7 +35,7 @@ def get_database_stats(ssh: SSHClient, app_name: str, db_type: str) -> dict:
     return stats
 
 
-def _postgres_stats(ssh: SSHClient, container: str, db_name: str, stats: dict) -> None:
+def _postgres_stats(ssh: SSHClient, container: str, db_name: str, stats: dict[str, str | int | None]) -> None:
     q_name = shlex.quote(db_name)
 
     # Database size
@@ -77,7 +77,7 @@ def _postgres_stats(ssh: SSHClient, container: str, db_name: str, stats: dict) -
         stats["uptime"] = stdout.strip()
 
 
-def _mysql_stats(ssh: SSHClient, container: str, stats: dict) -> None:
+def _mysql_stats(ssh: SSHClient, container: str, stats: dict[str, str | int | None]) -> None:
     # Version
     stdout, _, code = ssh.run(
         f'docker exec {container} mysql -u root -e "SELECT VERSION()" -s -N',
@@ -116,7 +116,7 @@ def _mysql_stats(ssh: SSHClient, container: str, stats: dict) -> None:
                 pass
 
 
-def _redis_stats(ssh: SSHClient, container: str, stats: dict) -> None:
+def _redis_stats(ssh: SSHClient, container: str, stats: dict[str, str | int | None]) -> None:
     # Memory
     stdout, _, code = ssh.run(
         f"docker exec {container} redis-cli INFO memory",
@@ -162,7 +162,7 @@ def _redis_stats(ssh: SSHClient, container: str, stats: dict) -> None:
                     pass
 
 
-def _mongo_stats(ssh: SSHClient, container: str, stats: dict) -> None:
+def _mongo_stats(ssh: SSHClient, container: str, stats: dict[str, str | int | None]) -> None:
     import json
 
     # Version

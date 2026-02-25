@@ -868,11 +868,7 @@ def list_dependencies(name: str) -> list[AppDependencyOut]:
         app_obj = session.query(App).filter(App.name == name).first()
         if not app_obj:
             raise HTTPException(404, f"App '{name}' not found")
-        deps = (
-            session.query(AppDependency)
-            .filter(AppDependency.app_id == app_obj.id)
-            .all()
-        )
+        deps = session.query(AppDependency).filter(AppDependency.app_id == app_obj.id).all()
         result = []
         for d in deps:
             dep_app = session.query(App).filter(App.id == d.depends_on_app_id).first()

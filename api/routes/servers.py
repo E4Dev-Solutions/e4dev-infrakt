@@ -44,9 +44,11 @@ def list_servers(tag: str | None = None) -> list[ServerOut]:
     """List all registered servers, optionally filtered by tag."""
     init_db()
     with get_session() as session:
-        q = session.query(Server).options(
-            selectinload(Server.apps), selectinload(Server.tags)
-        ).order_by(Server.name)
+        q = (
+            session.query(Server)
+            .options(selectinload(Server.apps), selectinload(Server.tags))
+            .order_by(Server.name)
+        )
         if tag:
             q = q.join(ServerTag).filter(ServerTag.tag == tag)
         servers = q.all()

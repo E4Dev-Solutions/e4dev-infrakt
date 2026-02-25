@@ -100,9 +100,7 @@ def list_servers(filter_tag: str | None) -> None:
             )
             for s in servers
         ]
-    print_table(
-        "Servers", ["Name", "Host", "User", "Port", "Status", "Provider", "Tags"], rows
-    )
+    print_table("Servers", ["Name", "Host", "User", "Port", "Status", "Provider", "Tags"], rows)
 
 
 @server.command()

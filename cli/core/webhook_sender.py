@@ -33,7 +33,9 @@ def build_payload(event: str, data: dict[str, object]) -> dict[str, object]:
     }
 
 
-def deliver_webhook(url: str, secret: str | None, payload: dict[str, object], timeout: int = 10) -> None:
+def deliver_webhook(
+    url: str, secret: str | None, payload: dict[str, object], timeout: int = 10
+) -> None:
     """HTTP POST the payload to url. Logs errors — never raises."""
     body = json.dumps(payload).encode()
     req = urllib.request.Request(

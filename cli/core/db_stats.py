@@ -35,7 +35,9 @@ def get_database_stats(ssh: SSHClient, app_name: str, db_type: str) -> dict[str,
     return stats
 
 
-def _postgres_stats(ssh: SSHClient, container: str, db_name: str, stats: dict[str, str | int | None]) -> None:
+def _postgres_stats(
+    ssh: SSHClient, container: str, db_name: str, stats: dict[str, str | int | None]
+) -> None:
     q_name = shlex.quote(db_name)
 
     # Database size

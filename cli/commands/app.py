@@ -240,7 +240,9 @@ def list_apps(server_name: str | None) -> None:
 @click.argument("name")
 @click.option("--server", "server_name", default=None)
 @click.option("--lines", default=100, help="Number of log lines")
-@click.option("--deployment", "dep_id", type=int, default=None, help="View historical deployment log")
+@click.option(
+    "--deployment", "dep_id", type=int, default=None, help="View historical deployment log"
+)
 def logs(name: str, server_name: str | None, lines: int, dep_id: int | None) -> None:
     """View app container logs or historical deployment logs."""
     init_db()
@@ -698,11 +700,7 @@ def list_deps(name: str, server_name: str | None) -> None:
     init_db()
     with get_session() as session:
         app_obj = _get_app(session, name, server_name)
-        deps = (
-            session.query(AppDependency)
-            .filter(AppDependency.app_id == app_obj.id)
-            .all()
-        )
+        deps = session.query(AppDependency).filter(AppDependency.app_id == app_obj.id).all()
         if not deps:
             info(f"'{name}' has no dependencies")
             return

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.auth import require_api_key
-from api.routes import apps, dashboard, databases, env, proxy, servers, webhooks
+from api.routes import apps, dashboard, databases, deploy, env, keys, proxy, servers, webhooks
 from cli.core.database import init_db
 
 app = FastAPI(
@@ -33,6 +33,8 @@ app.include_router(env.router, prefix="/api", dependencies=api_deps)
 app.include_router(databases.router, prefix="/api", dependencies=api_deps)
 app.include_router(proxy.router, prefix="/api", dependencies=api_deps)
 app.include_router(webhooks.router, prefix="/api", dependencies=api_deps)
+app.include_router(keys.router, prefix="/api", dependencies=api_deps)
+app.include_router(deploy.router, prefix="/api")  # uses own auth dependency
 
 # Serve built frontend in production
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"

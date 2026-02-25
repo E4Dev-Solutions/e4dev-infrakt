@@ -21,8 +21,10 @@ def init() -> None:
 
 # Register command groups
 from cli.commands.app import app  # noqa: E402
+from cli.commands.ci import ci  # noqa: E402
 from cli.commands.db import db  # noqa: E402
 from cli.commands.env import env  # noqa: E402
+from cli.commands.key import key  # noqa: E402
 from cli.commands.proxy import proxy  # noqa: E402
 from cli.commands.server import server  # noqa: E402
 from cli.commands.webhook import webhook  # noqa: E402
@@ -33,6 +35,8 @@ cli.add_command(env)
 cli.add_command(db)
 cli.add_command(proxy)
 cli.add_command(webhook)
+cli.add_command(key)
+cli.add_command(ci)
 
 if __name__ == "__main__":
     cli()

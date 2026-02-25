@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2 } from "lucide-react";
+import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon } from "lucide-react";
 import {
   useWebhooks,
   useCreateWebhook,
   useDeleteWebhook,
   useTestWebhook,
+  useSSHKeys,
+  useGenerateSSHKey,
+  useDeleteSSHKey,
+  useDeploySSHKey,
+  useServers,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -19,6 +24,8 @@ const WEBHOOK_EVENTS: { value: string; label: string }[] = [
   { value: "deploy.failure", label: "Deploy Failure" },
   { value: "backup.complete", label: "Backup Complete" },
   { value: "backup.restore", label: "Backup Restore" },
+  { value: "health.down", label: "Health Down" },
+  { value: "health.up", label: "Health Up" },
 ];
 
 // ─── Event badge color map ─────────────────────────────────────────────────────
@@ -33,6 +40,10 @@ function eventBadgeClass(event: string): string {
       return "bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/30";
     case "backup.restore":
       return "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30";
+    case "health.down":
+      return "bg-red-500/15 text-red-300 ring-1 ring-red-500/30";
+    case "health.up":
+      return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30";
     default:
       return "bg-slate-700 text-slate-300";
   }
@@ -69,10 +80,71 @@ export default function Settings() {
   const testWebhook = useTestWebhook();
   const toast = useToast();
 
+  // SSH Keys state
+  const { data: sshKeys = [], isLoading: keysLoading } = useSSHKeys();
+  const { data: servers = [] } = useServers();
+  const generateKey = useGenerateSSHKey();
+  const deleteKey = useDeleteSSHKey();
+  const deployKey = useDeploySSHKey();
+
+  const [showGenerateKeyModal, setShowGenerateKeyModal] = useState(false);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [deletingKeyId, setDeletingKeyId] = useState<number | null>(null);
+  const [showDeployKeyModal, setShowDeployKeyModal] = useState(false);
+  const [deployKeyId, setDeployKeyId] = useState<number | null>(null);
+  const [deployServerName, setDeployServerName] = useState("");
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [testingId, setTestingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // ─── SSH Key handlers ────────────────────────────────────────────────────────
+
+  async function handleGenerateKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newKeyName.trim()) return;
+    try {
+      await generateKey.mutateAsync(newKeyName.trim());
+      toast.success(`SSH key "${newKeyName.trim()}" generated.`);
+      setShowGenerateKeyModal(false);
+      setNewKeyName("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate key.");
+    }
+  }
+
+  async function handleDeleteKey(id: number, name: string) {
+    if (!window.confirm(`Delete SSH key "${name}"? This cannot be undone.`)) return;
+    setDeletingKeyId(id);
+    try {
+      await deleteKey.mutateAsync(id);
+      toast.success(`SSH key "${name}" deleted.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete key.");
+    } finally {
+      setDeletingKeyId(null);
+    }
+  }
+
+  function openDeployKeyModal(id: number) {
+    setDeployKeyId(id);
+    setDeployServerName(servers[0]?.name ?? "");
+    setShowDeployKeyModal(true);
+  }
+
+  async function handleDeployKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (deployKeyId == null || !deployServerName) return;
+    try {
+      const result = await deployKey.mutateAsync({ id: deployKeyId, serverName: deployServerName });
+      toast.success(result.message ?? "Key deployed.");
+      setShowDeployKeyModal(false);
+      setDeployKeyId(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to deploy key.");
+    }
+  }
 
   // ─── Form handlers ──────────────────────────────────────────────────────────
 
@@ -193,6 +265,105 @@ export default function Settings() {
           </p>
         </div>
       </div>
+
+      {/* SSH Keys section */}
+      <section aria-labelledby="ssh-keys-heading" className="mb-10">
+        <div className="mb-4 flex items-start justify-between">
+          <div>
+            <h2 id="ssh-keys-heading" className="text-base font-semibold text-slate-100">
+              SSH Keys
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Generate and manage SSH key pairs for server access. Deploy keys to servers to enable passwordless authentication.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowGenerateKeyModal(true)}
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          >
+            <Plus size={16} aria-hidden="true" />
+            Generate Key
+          </button>
+        </div>
+
+        {keysLoading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={28} className="animate-spin text-indigo-400" aria-label="Loading SSH keys" />
+          </div>
+        )}
+
+        {!keysLoading && sshKeys.length === 0 && (
+          <EmptyState
+            icon={<Key size={28} />}
+            title="No SSH keys"
+            description="Generate an SSH key pair to use for server authentication."
+            action={{ label: "Generate Key", onClick: () => setShowGenerateKeyModal(true) }}
+          />
+        )}
+
+        {sshKeys.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-slate-700">
+            <table className="w-full text-sm" role="table">
+              <thead>
+                <tr className="border-b border-slate-700 bg-slate-800/60">
+                  {["Name", "Type", "Fingerprint", "Created", "Actions"].map((h) => (
+                    <th
+                      key={h}
+                      scope="col"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/40">
+                {sshKeys.map((key) => (
+                  <tr key={key.id} className="bg-slate-800/30 transition-colors hover:bg-slate-800/70">
+                    <td className="px-4 py-3 font-medium text-slate-200">{key.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded-md bg-slate-700 px-2 py-0.5 font-mono text-xs text-slate-300">
+                        {key.key_type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-400" title={key.fingerprint}>
+                      {key.fingerprint.length > 32 ? `${key.fingerprint.slice(0, 32)}…` : key.fingerprint}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                      {relativeTime(key.created_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openDeployKeyModal(key.id)}
+                          title="Deploy to server"
+                          aria-label={`Deploy ${key.name} to server`}
+                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                        >
+                          <ServerIcon size={15} aria-hidden="true" />
+                        </button>
+                        <button
+                          onClick={() => void handleDeleteKey(key.id, key.name)}
+                          disabled={deletingKeyId === key.id}
+                          title="Delete key"
+                          aria-label={`Delete ${key.name}`}
+                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        >
+                          {deletingKeyId === key.id ? (
+                            <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Trash2 size={15} aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* Webhooks section */}
       <section aria-labelledby="webhooks-heading">
@@ -357,6 +528,96 @@ export default function Settings() {
           </div>
         )}
       </section>
+
+      {/* Generate SSH Key Modal */}
+      {showGenerateKeyModal && (
+        <Modal title="Generate SSH Key" onClose={() => { setShowGenerateKeyModal(false); setNewKeyName(""); }}>
+          <form onSubmit={(e) => void handleGenerateKey(e)} className="space-y-4" noValidate>
+            <div>
+              <label htmlFor="key-name" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Key Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="key-name"
+                type="text"
+                required
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                placeholder="my-server-key"
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowGenerateKeyModal(false); setNewKeyName(""); }}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={generateKey.isPending || !newKeyName.trim()}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              >
+                {generateKey.isPending && (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                )}
+                Generate
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Deploy SSH Key Modal */}
+      {showDeployKeyModal && (
+        <Modal title="Deploy Key to Server" onClose={() => { setShowDeployKeyModal(false); setDeployKeyId(null); }}>
+          <form onSubmit={(e) => void handleDeployKey(e)} className="space-y-4" noValidate>
+            <p className="text-sm text-slate-400">
+              Copy this SSH key to the authorized_keys file on the selected server.
+            </p>
+            <div>
+              <label htmlFor="deploy-server" className="mb-1.5 block text-xs font-medium text-slate-300">
+                Server <span className="text-red-400">*</span>
+              </label>
+              <select
+                id="deploy-server"
+                required
+                value={deployServerName}
+                onChange={(e) => setDeployServerName(e.target.value)}
+                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              >
+                <option value="">Select a server</option>
+                {servers.map((s) => (
+                  <option key={s.id} value={s.name}>
+                    {s.name} ({s.host})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => { setShowDeployKeyModal(false); setDeployKeyId(null); }}
+                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={deployKey.isPending || !deployServerName}
+                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              >
+                {deployKey.isPending && (
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                )}
+                Deploy
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* Add Webhook Modal */}
       {showModal && (

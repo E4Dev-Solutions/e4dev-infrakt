@@ -6,14 +6,27 @@ services:
 {% elif build_context %}
     build: {{ build_context }}
 {% endif %}
+{% if replicas <= 1 %}
     container_name: infrakt-{{ app_name }}
+{% endif %}
     restart: unless-stopped
     env_file:
       - .env
     ports:
       - "127.0.0.1:${{ '{' }}{{ port_var }}:-{{ port }}{{ '}' }}:{{ port }}"
-{% if cpu_limit or memory_limit %}
+{% if replicas > 1 or deploy_strategy == "rolling" or cpu_limit or memory_limit %}
     deploy:
+{% if replicas > 1 %}
+      replicas: {{ replicas }}
+{% endif %}
+{% if deploy_strategy == "rolling" %}
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+{% endif %}
+{% if cpu_limit or memory_limit %}
       resources:
         limits:
 {% if cpu_limit %}
@@ -22,6 +35,15 @@ services:
 {% if memory_limit %}
           memory: {{ memory_limit }}
 {% endif %}
+{% endif %}
+{% endif %}
+{% if deploy_strategy == "rolling" and health_check_url %}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:{{ port }}{{ health_check_url }}"]
+      interval: {{ health_check_interval or 30 }}s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 {% endif %}
     networks:
       - infrakt

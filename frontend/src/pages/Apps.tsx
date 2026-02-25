@@ -193,7 +193,7 @@ export default function Apps() {
           <table className="w-full text-sm" role="table">
             <thead>
               <tr className="border-b border-slate-700 bg-slate-800/60">
-                {["Name", "Server", "Domain", "Type", "Status", "Actions"].map(
+                {["Name", "Server", "Domain", "Type", "Replicas", "Status", "Actions"].map(
                   (h) => (
                     <th
                       key={h}
@@ -248,6 +248,10 @@ export default function Apps() {
                   {/* Type */}
                   <td className="px-4 py-3 text-slate-400">
                     {app.app_type ?? "—"}
+                  </td>
+                  {/* Replicas */}
+                  <td className="px-4 py-3 text-slate-300">
+                    {app.replicas ?? 1}
                   </td>
                   {/* Status */}
                   <td className="px-4 py-3">

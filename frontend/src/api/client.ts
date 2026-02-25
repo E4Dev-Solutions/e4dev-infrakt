@@ -36,6 +36,7 @@ export interface Server {
   created_at: string;
   updated_at: string;
   app_count: number;
+  tags?: string[];
 }
 
 export interface ServerStatusData {
@@ -83,6 +84,9 @@ export interface App {
   memory_limit?: string;
   health_check_url?: string;
   health_check_interval?: number;
+  replicas?: number;
+  deploy_strategy?: string;
+  dependencies?: string[];
 }
 
 export interface Deployment {
@@ -199,6 +203,8 @@ export interface CreateAppInput {
   image?: string;
   cpu_limit?: string;
   memory_limit?: string;
+  replicas?: number;
+  deploy_strategy?: string;
 }
 
 export interface UpdateAppInput {
@@ -211,6 +217,8 @@ export interface UpdateAppInput {
   memory_limit?: string;
   health_check_url?: string;
   health_check_interval?: number;
+  replicas?: number;
+  deploy_strategy?: string;
 }
 
 export interface ProxyRouteCreateInput {
@@ -384,6 +392,15 @@ export const serversApi = {
 
   metrics: (name: string, hours = 24): Promise<ServerMetric[]> =>
     get(`/servers/${encodeURIComponent(name)}/metrics?hours=${hours}`),
+
+  listTags: (name: string): Promise<string[]> =>
+    get(`/servers/${encodeURIComponent(name)}/tags`),
+
+  addTag: (name: string, tag: string): Promise<{ message: string }> =>
+    post(`/servers/${encodeURIComponent(name)}/tags`, { tag }),
+
+  removeTag: (name: string, tag: string): Promise<{ message: string }> =>
+    del(`/servers/${encodeURIComponent(name)}/tags/${encodeURIComponent(tag)}`),
 };
 
 // ─── Apps ─────────────────────────────────────────────────────────────────────
@@ -433,6 +450,21 @@ export const appsApi = {
     const qs = deploymentId ? `?deployment_id=${deploymentId}` : "";
     return post(`/apps/${encodeURIComponent(name)}/rollback${qs}`);
   },
+
+  scale: (name: string, replicas: number): Promise<{ message: string }> =>
+    post(`/apps/${encodeURIComponent(name)}/scale`, { replicas }),
+
+  getDeployment: (name: string, depId: number): Promise<Deployment> =>
+    get(`/apps/${encodeURIComponent(name)}/deployments/${depId}`),
+
+  getDependencies: (name: string): Promise<{ id: number; app_name: string; depends_on_app_name: string }[]> =>
+    get(`/apps/${encodeURIComponent(name)}/dependencies`),
+
+  addDependency: (name: string, dependsOn: string): Promise<{ message: string }> =>
+    post(`/apps/${encodeURIComponent(name)}/dependencies`, { depends_on: dependsOn }),
+
+  removeDependency: (name: string, depName: string): Promise<{ message: string }> =>
+    del(`/apps/${encodeURIComponent(name)}/dependencies/${encodeURIComponent(depName)}`),
 };
 
 // ─── Databases ────────────────────────────────────────────────────────────────

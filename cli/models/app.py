@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from cli.core.database import Base
 
 if TYPE_CHECKING:
+    from cli.models.app_dependency import AppDependency
     from cli.models.deployment import Deployment
     from cli.models.server import Server
 
@@ -31,12 +32,19 @@ class App(Base):
     memory_limit: Mapped[str | None] = mapped_column(String(20), default=None)
     health_check_url: Mapped[str | None] = mapped_column(String(500), default=None)
     health_check_interval: Mapped[int | None] = mapped_column(Integer, default=None)
+    replicas: Mapped[int] = mapped_column(Integer, default=1)
+    deploy_strategy: Mapped[str] = mapped_column(String(20), default="restart")
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     server: Mapped[Server] = relationship(back_populates="apps")
     deployments: Mapped[list[Deployment]] = relationship(
         back_populates="app", cascade="all, delete-orphan"
+    )
+    dependencies: Mapped[list[AppDependency]] = relationship(
+        "AppDependency",
+        foreign_keys="AppDependency.app_id",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (UniqueConstraint("name", "server_id"),)

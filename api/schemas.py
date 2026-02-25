@@ -86,6 +86,7 @@ class ServerOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     app_count: int = 0
+    tags: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -147,6 +148,8 @@ class AppCreate(BaseModel):
     memory_limit: str | None = None
     health_check_url: str | None = None
     health_check_interval: int | None = None
+    replicas: int = 1
+    deploy_strategy: str = "restart"
 
     @field_validator("name")
     @classmethod
@@ -176,6 +179,8 @@ class AppUpdate(BaseModel):
     memory_limit: str | None = None
     health_check_url: str | None = None
     health_check_interval: int | None = None
+    replicas: int | None = None
+    deploy_strategy: str | None = None
 
     @field_validator("domain")
     @classmethod
@@ -206,6 +211,9 @@ class AppOut(BaseModel):
     memory_limit: str | None = None
     health_check_url: str | None = None
     health_check_interval: int | None = None
+    replicas: int = 1
+    deploy_strategy: str = "restart"
+    dependencies: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -423,6 +431,30 @@ class SSHKeyGenerate(BaseModel):
 
 class SSHKeyDeploy(BaseModel):
     server_name: str
+
+
+# ── Server Tags ──────────────────────────────────────────
+
+
+class ServerTagCreate(BaseModel):
+    tag: str = Field(..., min_length=1, max_length=100)
+
+
+# ── App Dependencies ─────────────────────────────────────
+
+
+class AppDependencyCreate(BaseModel):
+    depends_on: str = Field(..., min_length=1, max_length=100)
+
+
+class AppDependencyOut(BaseModel):
+    id: int
+    app_name: str
+    depends_on_app_name: str
+
+
+class ScaleInput(BaseModel):
+    replicas: int = Field(..., ge=1, le=100)
 
 
 class SSHKeyOut(BaseModel):

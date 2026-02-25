@@ -565,3 +565,76 @@ export function useServerMetrics(
     ...options,
   });
 }
+
+// ─── Server Tags ──────────────────────────────────────────────────────────────
+
+export function useAddServerTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, tag }: { name: string; tag: string }) =>
+      serversApi.addTag(name, tag),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.servers });
+    },
+  });
+}
+
+export function useRemoveServerTag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, tag }: { name: string; tag: string }) =>
+      serversApi.removeTag(name, tag),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.servers });
+    },
+  });
+}
+
+// ─── App Scaling ──────────────────────────────────────────────────────────────
+
+export function useScaleApp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, replicas }: { name: string; replicas: number }) =>
+      appsApi.scale(name, replicas),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.apps() });
+    },
+  });
+}
+
+// ─── App Dependencies ─────────────────────────────────────────────────────────
+
+export function useAppDependencies(
+  name: string,
+  options?: Partial<UseQueryOptions<{ id: number; app_name: string; depends_on_app_name: string }[]>>
+) {
+  return useQuery({
+    queryKey: [...queryKeys.apps(), name, "dependencies"] as const,
+    queryFn: () => appsApi.getDependencies(name),
+    enabled: Boolean(name),
+    ...options,
+  });
+}
+
+export function useAddAppDependency() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, dependsOn }: { name: string; dependsOn: string }) =>
+      appsApi.addDependency(name, dependsOn),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.apps() });
+    },
+  });
+}
+
+export function useRemoveAppDependency() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, depName }: { name: string; depName: string }) =>
+      appsApi.removeDependency(name, depName),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.apps() });
+    },
+  });
+}

@@ -16,6 +16,8 @@ from sqlalchemy.orm import joinedload
 from api.log_broadcaster import broadcaster
 from api.schemas import (
     AppCreate,
+    AppDependencyCreate,
+    AppDependencyOut,
     AppHealth,
     AppHealthCheckResult,
     AppLogs,
@@ -23,6 +25,7 @@ from api.schemas import (
     AppUpdate,
     ContainerHealth,
     DeploymentOut,
+    ScaleInput,
 )
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
@@ -41,6 +44,7 @@ from cli.core.proxy_manager import add_domain, remove_domain
 from cli.core.ssh import SSHClient
 from cli.core.webhook_sender import fire_webhooks
 from cli.models.app import App
+from cli.models.app_dependency import AppDependency
 from cli.models.deployment import Deployment
 from cli.models.server import Server
 
@@ -52,6 +56,43 @@ def _ssh_for(srv: Server) -> SSHClient:
     return SSHClient.from_server(srv)
 
 
+def _app_out(a: App, session: object | None = None) -> AppOut:
+    """Build an AppOut from an App model, resolving dependencies if session is provided."""
+    dep_names: list[str] = []
+    if session is not None:
+        deps = (
+            session.query(AppDependency)  # type: ignore[attr-defined]
+            .filter(AppDependency.app_id == a.id)
+            .all()
+        )
+        for d in deps:
+            dep_app = session.query(App).filter(App.id == d.depends_on_app_id).first()  # type: ignore[attr-defined]
+            if dep_app:
+                dep_names.append(dep_app.name)
+    return AppOut(
+        id=a.id,
+        name=a.name,
+        server_id=a.server_id,
+        server_name=a.server.name,
+        domain=a.domain,
+        port=a.port,
+        git_repo=a.git_repo,
+        branch=a.branch,
+        image=a.image,
+        status=a.status,
+        app_type=a.app_type,
+        cpu_limit=a.cpu_limit,
+        memory_limit=a.memory_limit,
+        health_check_url=a.health_check_url,
+        health_check_interval=a.health_check_interval,
+        replicas=a.replicas,
+        deploy_strategy=a.deploy_strategy,
+        dependencies=dep_names,
+        created_at=a.created_at,
+        updated_at=a.updated_at,
+    )
+
+
 @router.get("", response_model=list[AppOut])
 def list_apps(server: str | None = None) -> list[AppOut]:
     """List all apps, optionally filtered by server."""
@@ -61,28 +102,7 @@ def list_apps(server: str | None = None) -> list[AppOut]:
         if server:
             q = q.filter(Server.name == server)
         apps = q.filter(~App.app_type.like("db:%")).order_by(Server.name, App.name).all()
-        return [
-            AppOut(
-                id=a.id,
-                name=a.name,
-                server_id=a.server_id,
-                server_name=a.server.name,
-                domain=a.domain,
-                port=a.port,
-                git_repo=a.git_repo,
-                branch=a.branch,
-                image=a.image,
-                status=a.status,
-                app_type=a.app_type,
-                cpu_limit=a.cpu_limit,
-                memory_limit=a.memory_limit,
-                health_check_url=a.health_check_url,
-                health_check_interval=a.health_check_interval,
-                created_at=a.created_at,
-                updated_at=a.updated_at,
-            )
-            for a in apps
-        ]
+        return [_app_out(a, session) for a in apps]
 
 
 @router.post("", response_model=AppOut, status_code=201)
@@ -112,29 +132,13 @@ def create_app(body: AppCreate) -> AppOut:
             memory_limit=body.memory_limit,
             health_check_url=body.health_check_url,
             health_check_interval=body.health_check_interval,
+            replicas=body.replicas,
+            deploy_strategy=body.deploy_strategy,
         )
         session.add(new_app)
         session.flush()
 
-        return AppOut(
-            id=new_app.id,
-            name=new_app.name,
-            server_id=new_app.server_id,
-            server_name=srv.name,
-            domain=new_app.domain,
-            port=new_app.port,
-            git_repo=new_app.git_repo,
-            branch=new_app.branch,
-            image=new_app.image,
-            status=new_app.status,
-            app_type=new_app.app_type,
-            cpu_limit=new_app.cpu_limit,
-            memory_limit=new_app.memory_limit,
-            health_check_url=new_app.health_check_url,
-            health_check_interval=new_app.health_check_interval,
-            created_at=new_app.created_at,
-            updated_at=new_app.updated_at,
-        )
+        return _app_out(new_app, session)
 
 
 @router.put("/{name}", response_model=AppOut)
@@ -167,6 +171,10 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
             app_obj.health_check_url = body.health_check_url
         if body.health_check_interval is not None:
             app_obj.health_check_interval = body.health_check_interval
+        if body.replicas is not None:
+            app_obj.replicas = body.replicas
+        if body.deploy_strategy is not None:
+            app_obj.deploy_strategy = body.deploy_strategy
 
         if body.image is not None or body.git_repo is not None:
             if app_obj.image:
@@ -178,25 +186,7 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
 
         session.flush()
 
-        return AppOut(
-            id=app_obj.id,
-            name=app_obj.name,
-            server_id=app_obj.server_id,
-            server_name=app_obj.server.name,
-            domain=app_obj.domain,
-            port=app_obj.port,
-            git_repo=app_obj.git_repo,
-            branch=app_obj.branch,
-            image=app_obj.image,
-            status=app_obj.status,
-            app_type=app_obj.app_type,
-            cpu_limit=app_obj.cpu_limit,
-            memory_limit=app_obj.memory_limit,
-            health_check_url=app_obj.health_check_url,
-            health_check_interval=app_obj.health_check_interval,
-            created_at=app_obj.created_at,
-            updated_at=app_obj.updated_at,
-        )
+        return _app_out(app_obj, session)
 
 
 @router.post("/{name}/deploy")
@@ -229,6 +219,10 @@ def deploy(
             "domain": app_obj.domain,
             "cpu_limit": app_obj.cpu_limit,
             "memory_limit": app_obj.memory_limit,
+            "replicas": app_obj.replicas,
+            "deploy_strategy": app_obj.deploy_strategy,
+            "health_check_url": app_obj.health_check_url,
+            "health_check_interval": app_obj.health_check_interval,
         }
         ssh_data: dict[str, str | int | None] = {
             "host": srv.host,
@@ -273,6 +267,18 @@ def deploy(
                 memory_limit = app_data.get("memory_limit")
                 if not isinstance(memory_limit, (str, type(None))):
                     memory_limit = None
+                replicas = app_data.get("replicas")
+                if not isinstance(replicas, int):
+                    replicas = 1
+                deploy_strategy = app_data.get("deploy_strategy")
+                if not isinstance(deploy_strategy, str):
+                    deploy_strategy = "restart"
+                health_check_url = app_data.get("health_check_url")
+                if not isinstance(health_check_url, (str, type(None))):
+                    health_check_url = None
+                health_check_interval = app_data.get("health_check_interval")
+                if not isinstance(health_check_interval, (int, type(None))):
+                    health_check_interval = None
                 result = deploy_app(
                     ssh,
                     name,
@@ -284,6 +290,10 @@ def deploy(
                     log_fn=_on_log,
                     cpu_limit=cpu_limit,
                     memory_limit=memory_limit,
+                    replicas=replicas,
+                    deploy_strategy=deploy_strategy,
+                    health_check_url=health_check_url,
+                    health_check_interval=health_check_interval,
                 )
                 domain = app_data.get("domain")
                 if domain:
@@ -809,3 +819,146 @@ def destroy(name: str, server: str | None = None) -> dict[str, str]:
             session.delete(a)
 
     return {"message": f"App '{name}' destroyed"}
+
+
+# ── Scale ─────────────────────────────────────────────────────────────────────
+
+
+@router.post("/{name}/scale")
+def scale_app(name: str, body: ScaleInput) -> dict[str, str | int]:
+    """Scale an app to N replicas."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        app_obj.replicas = body.replicas
+    return {"message": f"Scaled '{name}' to {body.replicas} replica(s)", "replicas": body.replicas}
+
+
+# ── Single Deployment ─────────────────────────────────────────────────────────
+
+
+@router.get("/{name}/deployments/{dep_id}", response_model=DeploymentOut)
+def get_deployment(name: str, dep_id: int) -> DeploymentOut:
+    """Get a single deployment with full log."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        dep = (
+            session.query(Deployment)
+            .filter(Deployment.id == dep_id, Deployment.app_id == app_obj.id)
+            .first()
+        )
+        if not dep:
+            raise HTTPException(404, f"Deployment {dep_id} not found")
+        return DeploymentOut.model_validate(dep)
+
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+
+
+@router.get("/{name}/dependencies", response_model=list[AppDependencyOut])
+def list_dependencies(name: str) -> list[AppDependencyOut]:
+    """List dependencies of an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        deps = (
+            session.query(AppDependency)
+            .filter(AppDependency.app_id == app_obj.id)
+            .all()
+        )
+        result = []
+        for d in deps:
+            dep_app = session.query(App).filter(App.id == d.depends_on_app_id).first()
+            if dep_app:
+                result.append(
+                    AppDependencyOut(
+                        id=d.id,
+                        app_name=app_obj.name,
+                        depends_on_app_name=dep_app.name,
+                    )
+                )
+        return result
+
+
+@router.post("/{name}/dependencies")
+def add_dependency(name: str, body: AppDependencyCreate) -> dict[str, str]:
+    """Add a dependency to an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        dep_app = session.query(App).filter(App.name == body.depends_on).first()
+        if not dep_app:
+            raise HTTPException(404, f"App '{body.depends_on}' not found")
+        if app_obj.id == dep_app.id:
+            raise HTTPException(400, "An app cannot depend on itself")
+
+        # Cycle detection
+        if _would_create_cycle_api(session, app_obj.id, dep_app.id):
+            raise HTTPException(400, "Adding this dependency would create a cycle")
+
+        existing = (
+            session.query(AppDependency)
+            .filter(
+                AppDependency.app_id == app_obj.id,
+                AppDependency.depends_on_app_id == dep_app.id,
+            )
+            .first()
+        )
+        if existing:
+            raise HTTPException(400, f"'{name}' already depends on '{body.depends_on}'")
+        session.add(AppDependency(app_id=app_obj.id, depends_on_app_id=dep_app.id))
+    return {"message": f"'{name}' now depends on '{body.depends_on}'"}
+
+
+@router.delete("/{name}/dependencies/{dep_name}")
+def remove_dependency(name: str, dep_name: str) -> dict[str, str]:
+    """Remove a dependency from an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        dep_app = session.query(App).filter(App.name == dep_name).first()
+        if not dep_app:
+            raise HTTPException(404, f"App '{dep_name}' not found")
+        dep = (
+            session.query(AppDependency)
+            .filter(
+                AppDependency.app_id == app_obj.id,
+                AppDependency.depends_on_app_id == dep_app.id,
+            )
+            .first()
+        )
+        if not dep:
+            raise HTTPException(404, f"'{name}' does not depend on '{dep_name}'")
+        session.delete(dep)
+    return {"message": f"Removed dependency: '{name}' no longer depends on '{dep_name}'"}
+
+
+def _would_create_cycle_api(session: object, app_id: int, depends_on_id: int) -> bool:
+    """Return True if adding app_id -> depends_on_id creates a cycle."""
+    visited: set[int] = set()
+    stack = [depends_on_id]
+    while stack:
+        current = stack.pop()
+        if current == app_id:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        deps = (
+            session.query(AppDependency)  # type: ignore[attr-defined]
+            .filter(AppDependency.app_id == current)
+            .all()
+        )
+        stack.extend(d.depends_on_app_id for d in deps)
+    return False

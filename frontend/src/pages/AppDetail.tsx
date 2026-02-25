@@ -21,6 +21,9 @@ import {
   ChevronDown,
   ChevronRight,
   RotateCcw,
+  Layers,
+  Link2,
+  X,
 } from "lucide-react";
 import {
   useApps,
@@ -36,6 +39,9 @@ import {
   useSetEnv,
   useDeleteEnv,
   useUpdateApp,
+  useScaleApp,
+  useAddAppDependency,
+  useRemoveAppDependency,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { useDeploymentStream } from "@/hooks/useDeploymentStream";
@@ -635,11 +641,16 @@ export default function AppDetail() {
   const stopApp = useStopApp();
   const destroyApp = useDestroyApp();
   const updateApp = useUpdateApp();
+  const scaleApp = useScaleApp();
+  const addDep = useAddAppDependency();
+  const removeDep = useRemoveAppDependency();
   const toast = useToast();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("logs");
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [activeDeploymentId, setActiveDeploymentId] = useState<string | null>(null);
+  const [scaleInput, setScaleInput] = useState<number | "">(app?.replicas ?? 1);
+  const [newDep, setNewDep] = useState("");
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<UpdateAppInput>({
     domain: "",
@@ -651,6 +662,8 @@ export default function AppDetail() {
     memory_limit: "",
     health_check_url: "",
     health_check_interval: undefined,
+    replicas: 1,
+    deploy_strategy: "restart",
   });
 
   const stream = useDeploymentStream(
@@ -721,13 +734,15 @@ export default function AppDetail() {
       memory_limit: app.memory_limit ?? "",
       health_check_url: app.health_check_url ?? "",
       health_check_interval: app.health_check_interval,
+      replicas: app.replicas ?? 1,
+      deploy_strategy: app.deploy_strategy ?? "restart",
     });
     setShowEditModal(true);
   }
 
-  function handleEditChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleEditChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
-    const numericFields = ["port", "health_check_interval"];
+    const numericFields = ["port", "health_check_interval", "replicas"];
     setEditForm((prev) => ({
       ...prev,
       [name]: numericFields.includes(name)
@@ -746,6 +761,38 @@ export default function AppDetail() {
       setShowEditModal(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update app.");
+    }
+  }
+
+  async function handleScale() {
+    if (scaleInput === "" || scaleInput < 1) return;
+    try {
+      await scaleApp.mutateAsync({ name: decodedName, replicas: scaleInput });
+      toast.success(`Scaled to ${scaleInput} replica(s).`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Scaling failed.");
+    }
+  }
+
+  async function handleAddDep(e: React.FormEvent) {
+    e.preventDefault();
+    const dep = newDep.trim();
+    if (!dep) return;
+    try {
+      await addDep.mutateAsync({ name: decodedName, dependsOn: dep });
+      setNewDep("");
+      toast.success(`Dependency on "${dep}" added.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add dependency.");
+    }
+  }
+
+  async function handleRemoveDep(depName: string) {
+    try {
+      await removeDep.mutateAsync({ name: decodedName, depName });
+      toast.success(`Dependency on "${depName}" removed.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove dependency.");
     }
   }
 
@@ -802,6 +849,15 @@ export default function AppDetail() {
                 )}
                 {app.memory_limit && (
                   <span className="text-xs text-slate-400">Mem: {app.memory_limit}</span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Layers size={11} aria-hidden="true" />
+                  {app.replicas ?? 1} replica{(app.replicas ?? 1) !== 1 ? "s" : ""}
+                </span>
+                {app.deploy_strategy && app.deploy_strategy !== "restart" && (
+                  <span className="inline-flex items-center rounded-md bg-indigo-500/15 px-1.5 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30">
+                    {app.deploy_strategy}
+                  </span>
                 )}
               </div>
             )}
@@ -958,6 +1014,104 @@ export default function AppDetail() {
         </div>
       </div>
 
+      {/* Scaling & Dependencies */}
+      {app && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {/* Scaling */}
+          <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200">
+              <Layers size={14} className="text-indigo-400" aria-hidden="true" />
+              Scaling
+            </h3>
+            <div className="flex items-center gap-3">
+              <label htmlFor="scale-input" className="text-xs text-slate-400">
+                Replicas:
+              </label>
+              <input
+                id="scale-input"
+                type="number"
+                min={1}
+                max={20}
+                value={scaleInput}
+                onChange={(e) =>
+                  setScaleInput(e.target.value === "" ? "" : Number(e.target.value))
+                }
+                className="w-20 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              />
+              <button
+                onClick={() => void handleScale()}
+                disabled={scaleApp.isPending || scaleInput === "" || scaleInput === (app.replicas ?? 1)}
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {scaleApp.isPending ? (
+                  <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  "Scale"
+                )}
+              </button>
+              <span className="text-xs text-slate-500">
+                Current: {app.replicas ?? 1}
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Strategy: {app.deploy_strategy ?? "restart"}
+            </p>
+          </div>
+
+          {/* Dependencies */}
+          <div className="rounded-xl border border-slate-700 bg-slate-800 p-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200">
+              <Link2 size={14} className="text-indigo-400" aria-hidden="true" />
+              Dependencies
+            </h3>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {(app.dependencies ?? []).length > 0 ? (
+                app.dependencies!.map((dep) => (
+                  <span
+                    key={dep}
+                    className="inline-flex items-center gap-1 rounded-md bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-300"
+                  >
+                    {dep}
+                    <button
+                      onClick={() => void handleRemoveDep(dep)}
+                      className="ml-0.5 rounded hover:text-red-400"
+                      aria-label={`Remove dependency ${dep}`}
+                    >
+                      <X size={11} aria-hidden="true" />
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-slate-500">No dependencies</span>
+              )}
+            </div>
+            <form onSubmit={(e) => void handleAddDep(e)} className="flex gap-2">
+              <select
+                value={newDep}
+                onChange={(e) => setNewDep(e.target.value)}
+                className="flex-1 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+              >
+                <option value="">Select app…</option>
+                {apps
+                  .filter((a) => a.name !== decodedName && !(app.dependencies ?? []).includes(a.name))
+                  .map((a) => (
+                    <option key={a.id} value={a.name}>
+                      {a.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="submit"
+                disabled={!newDep || addDep.isPending}
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+              >
+                Add
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Edit App Modal */}
       {showEditModal && (
         <Modal title="Edit App" onClose={() => setShowEditModal(false)}>
@@ -1098,6 +1252,39 @@ export default function AppDetail() {
                 placeholder="30"
                 className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="edit-replicas" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Replicas
+                </label>
+                <input
+                  id="edit-replicas"
+                  name="replicas"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={editForm.replicas ?? 1}
+                  onChange={handleEditChange}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-deploy-strategy" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Deploy Strategy
+                </label>
+                <select
+                  id="edit-deploy-strategy"
+                  name="deploy_strategy"
+                  value={editForm.deploy_strategy ?? "restart"}
+                  onChange={handleEditChange}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                >
+                  <option value="restart">restart</option>
+                  <option value="rolling">rolling</option>
+                </select>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-2">

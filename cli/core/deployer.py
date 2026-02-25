@@ -57,6 +57,10 @@ def deploy_app(
     pinned_commit: str | None = None,
     cpu_limit: str | None = None,
     memory_limit: str | None = None,
+    replicas: int = 1,
+    deploy_strategy: str = "restart",
+    health_check_url: str | None = None,
+    health_check_interval: int | None = None,
 ) -> DeployResult:
     """Deploy or redeploy an app on a remote server.
 
@@ -141,6 +145,10 @@ def deploy_app(
                 build_context="./repo",
                 cpu_limit=cpu_limit,
                 memory_limit=memory_limit,
+                replicas=replicas,
+                deploy_strategy=deploy_strategy,
+                health_check_url=health_check_url,
+                health_check_interval=health_check_interval,
             )
             ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
             _log("Generated docker-compose.yml")
@@ -158,6 +166,10 @@ def deploy_app(
             image=image,
             cpu_limit=cpu_limit,
             memory_limit=memory_limit,
+            replicas=replicas,
+            deploy_strategy=deploy_strategy,
+            health_check_url=health_check_url,
+            health_check_interval=health_check_interval,
         )
         ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
         _log(f"Deploying image: {image}")
@@ -182,6 +194,27 @@ def deploy_app(
             f"No deployment source specified for '{app_name}'. "
             "Provide --git, --image, or a compose file."
         )
+
+    # Health check gating for rolling deploys
+    if deploy_strategy == "rolling" and health_check_url:
+        import time
+
+        _log("Waiting for health check to pass...")
+        max_retries = 10
+        for attempt in range(max_retries):
+            time.sleep(5)
+            status = reconcile_app_status(ssh, app_name)
+            if status == "running":
+                _log(f"Health check passed (attempt {attempt + 1})")
+                break
+            _log(f"Health check pending... (attempt {attempt + 1}/{max_retries})")
+        else:
+            _log("Health check failed after all retries — rolling back")
+            q_path = shlex.quote(app_path)
+            ssh.run(f"cd {q_path} && docker compose down", timeout=60)
+            raise DeploymentError(
+                f"Rolling deploy of '{app_name}' failed health check after {max_retries} attempts"
+            )
 
     _log("Deployment complete")
     result.log = "\n".join(log_lines)
@@ -258,6 +291,10 @@ def _generate_compose(
     build_context: str | None = None,
     cpu_limit: str | None = None,
     memory_limit: str | None = None,
+    replicas: int = 1,
+    deploy_strategy: str = "restart",
+    health_check_url: str | None = None,
+    health_check_interval: int | None = None,
 ) -> str:
     """Generate a minimal docker-compose.yml for an app."""
     _validate_name(app_name, "app name")
@@ -270,6 +307,10 @@ def _generate_compose(
         build_context=build_context,
         cpu_limit=cpu_limit,
         memory_limit=memory_limit,
+        replicas=replicas,
+        deploy_strategy=deploy_strategy,
+        health_check_url=health_check_url,
+        health_check_interval=health_check_interval,
     )
 
 

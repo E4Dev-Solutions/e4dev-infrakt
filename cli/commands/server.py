@@ -5,6 +5,7 @@ from cli.core.database import get_session, init_db
 from cli.core.exceptions import ServerNotFoundError
 from cli.core.ssh import SSHClient
 from cli.models.server import Server
+from cli.models.server_tag import ServerTag
 
 
 def _get_server(name: str) -> Server:
@@ -75,16 +76,33 @@ def add(
 
 
 @server.command("list")
-def list_servers() -> None:
+@click.option("--tag", "filter_tag", default=None, help="Filter by tag")
+def list_servers(filter_tag: str | None) -> None:
     """List all registered servers."""
     init_db()
     with get_session() as session:
-        servers = session.query(Server).order_by(Server.name).all()
+        q = session.query(Server).order_by(Server.name)
+        if filter_tag:
+            q = q.join(ServerTag).filter(ServerTag.tag == filter_tag)
+        servers = q.all()
         if not servers:
-            info("No servers registered. Use 'infrakt server add' to add one.")
+            info("No servers found.")
             return
-        rows = [(s.name, s.host, s.user, s.port, s.status, s.provider or "—") for s in servers]
-    print_table("Servers", ["Name", "Host", "User", "Port", "Status", "Provider"], rows)
+        rows = [
+            (
+                s.name,
+                s.host,
+                s.user,
+                s.port,
+                s.status,
+                s.provider or "—",
+                ", ".join(t.tag for t in s.tags) or "—",
+            )
+            for s in servers
+        ]
+    print_table(
+        "Servers", ["Name", "Host", "User", "Port", "Status", "Provider", "Tags"], rows
+    )
 
 
 @server.command()
@@ -200,3 +218,53 @@ def ssh(name: str) -> None:
         cmd.extend(["-i", srv.ssh_key_path])
     info(f"Connecting to {srv.user}@{srv.host}...")
     subprocess.run(cmd)
+
+
+@server.command("tag")
+@click.argument("name")
+@click.option("--add", "add_tag", default=None, help="Tag to add")
+@click.option("--remove", "remove_tag", default=None, help="Tag to remove")
+def tag(name: str, add_tag: str | None, remove_tag: str | None) -> None:
+    """Manage tags on a server."""
+    init_db()
+    if not add_tag and not remove_tag:
+        # List tags
+        with get_session() as session:
+            srv = session.query(Server).filter(Server.name == name).first()
+            if not srv:
+                error(f"Server '{name}' not found")
+                raise SystemExit(1)
+            tags = [t.tag for t in srv.tags]
+        if tags:
+            info(f"Tags for '{name}': {', '.join(tags)}")
+        else:
+            info(f"No tags for '{name}'")
+        return
+
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == name).first()
+        if not srv:
+            error(f"Server '{name}' not found")
+            raise SystemExit(1)
+        if add_tag:
+            existing = (
+                session.query(ServerTag)
+                .filter(ServerTag.server_id == srv.id, ServerTag.tag == add_tag)
+                .first()
+            )
+            if existing:
+                info(f"Tag '{add_tag}' already exists on '{name}'")
+                return
+            session.add(ServerTag(server_id=srv.id, tag=add_tag))
+            success(f"Tag '{add_tag}' added to '{name}'")
+        if remove_tag:
+            existing = (
+                session.query(ServerTag)
+                .filter(ServerTag.server_id == srv.id, ServerTag.tag == remove_tag)
+                .first()
+            )
+            if not existing:
+                error(f"Tag '{remove_tag}' not found on '{name}'")
+                raise SystemExit(1)
+            session.delete(existing)
+            success(f"Tag '{remove_tag}' removed from '{name}'")

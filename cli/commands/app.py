@@ -18,6 +18,7 @@ from cli.core.exceptions import AppNotFoundError, ServerNotFoundError
 from cli.core.proxy_manager import add_domain, remove_domain
 from cli.core.ssh import SSHClient
 from cli.models.app import App
+from cli.models.app_dependency import AppDependency
 from cli.models.deployment import Deployment
 from cli.models.server import Server
 
@@ -66,6 +67,7 @@ def app() -> None:
 @click.option("--git", "git_repo", default=None, help="Git repository URL")
 @click.option("--branch", default="main", help="Git branch")
 @click.option("--image", default=None, help="Docker image (e.g. nginx:latest)")
+@click.option("--replicas", default=1, type=int, help="Number of replicas")
 def create(
     server_name: str,
     name: str,
@@ -74,6 +76,7 @@ def create(
     git_repo: str | None,
     branch: str,
     image: str | None,
+    replicas: int,
 ) -> None:
     """Create a new app on a server."""
     init_db()
@@ -99,6 +102,7 @@ def create(
             image=image,
             app_type=app_type,
             status="stopped",
+            replicas=replicas,
         )
         session.add(new_app)
 
@@ -136,6 +140,19 @@ def deploy(name: str, server_name: str | None) -> None:
         app_domain = app_obj.domain
         app_cpu_limit = app_obj.cpu_limit
         app_memory_limit = app_obj.memory_limit
+        app_replicas = app_obj.replicas
+        app_deploy_strategy = app_obj.deploy_strategy
+        app_health_check_url = app_obj.health_check_url
+        app_health_check_interval = app_obj.health_check_interval
+
+        # Check dependencies are running
+        dep_names = []
+        for d in app_obj.dependencies:
+            dep_app = session.query(App).filter(App.id == d.depends_on_app_id).first()
+            if dep_app and dep_app.status != "running":
+                dep_names.append(dep_app.name)
+        if dep_names:
+            info(f"Warning: dependencies not running: {', '.join(dep_names)}")
 
         # Get env content
         env_content = env_content_for_app(app_id)
@@ -158,6 +175,10 @@ def deploy(name: str, server_name: str | None) -> None:
                 env_content=env_content,
                 cpu_limit=app_cpu_limit,
                 memory_limit=app_memory_limit,
+                replicas=app_replicas,
+                deploy_strategy=app_deploy_strategy,
+                health_check_url=app_health_check_url,
+                health_check_interval=app_health_check_interval,
             )
 
             # Set up reverse proxy if domain is configured
@@ -209,18 +230,34 @@ def list_apps(server_name: str | None) -> None:
             info("No apps found.")
             return
         rows = [
-            (a.name, a.server.name, a.domain or "—", a.port, a.status, a.app_type) for a in apps
+            (a.name, a.server.name, a.domain or "—", a.port, a.status, a.app_type, a.replicas)
+            for a in apps
         ]
-    print_table("Apps", ["Name", "Server", "Domain", "Port", "Status", "Type"], rows)
+    print_table("Apps", ["Name", "Server", "Domain", "Port", "Status", "Type", "Replicas"], rows)
 
 
 @app.command()
 @click.argument("name")
 @click.option("--server", "server_name", default=None)
 @click.option("--lines", default=100, help="Number of log lines")
-def logs(name: str, server_name: str | None, lines: int) -> None:
-    """View app container logs."""
+@click.option("--deployment", "dep_id", type=int, default=None, help="View historical deployment log")
+def logs(name: str, server_name: str | None, lines: int, dep_id: int | None) -> None:
+    """View app container logs or historical deployment logs."""
     init_db()
+    if dep_id is not None:
+        with get_session() as session:
+            app_obj = _get_app(session, name, server_name)
+            dep = (
+                session.query(Deployment)
+                .filter(Deployment.id == dep_id, Deployment.app_id == app_obj.id)
+                .first()
+            )
+            if not dep or not dep.log:
+                error(f"No log found for deployment #{dep_id}")
+                raise SystemExit(1)
+            console.print(dep.log)
+        return
+
     with get_session() as session:
         app_obj = _get_app(session, name, server_name)
         srv = app_obj.server
@@ -529,3 +566,169 @@ def set_limits(
     if memory_limit:
         parts.append(f"Memory: {memory_limit}")
     success(f"Resource limits for '{name}' updated: {', '.join(parts)}")
+
+
+@app.command("scale")
+@click.argument("name")
+@click.option("--replicas", required=True, type=int, help="Number of replicas")
+@click.option("--server", "server_name", default=None)
+def scale(name: str, replicas: int, server_name: str | None) -> None:
+    """Scale an app to N replicas."""
+    init_db()
+    if replicas < 1:
+        error("Replicas must be at least 1")
+        raise SystemExit(1)
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        app_obj.replicas = replicas
+    success(f"App '{name}' scaled to {replicas} replica(s). Redeploy to apply.")
+
+
+@app.command("set-strategy")
+@click.argument("name")
+@click.option(
+    "--strategy",
+    type=click.Choice(["restart", "rolling"]),
+    required=True,
+    help="Deploy strategy",
+)
+@click.option("--server", "server_name", default=None)
+def set_strategy(name: str, strategy: str, server_name: str | None) -> None:
+    """Set deployment strategy for an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        app_obj.deploy_strategy = strategy
+    success(f"Deploy strategy for '{name}' set to '{strategy}'")
+
+
+@app.command("deployments")
+@click.argument("name")
+@click.option("--server", "server_name", default=None)
+@click.option("--limit", default=10, type=int, help="Number of deployments to show")
+def list_deployments(name: str, server_name: str | None, limit: int) -> None:
+    """List deployment history for an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        deps = (
+            session.query(Deployment)
+            .filter(Deployment.app_id == app_obj.id)
+            .order_by(Deployment.started_at.desc())
+            .limit(limit)
+            .all()
+        )
+        if not deps:
+            info(f"No deployments found for '{name}'")
+            return
+        rows = [
+            (
+                d.id,
+                d.status,
+                d.commit_hash[:8] if d.commit_hash else "—",
+                d.image_used or "—",
+                str(d.started_at)[:19] if d.started_at else "—",
+            )
+            for d in deps
+        ]
+    print_table(
+        f"Deployments: {name}",
+        ["ID", "Status", "Commit", "Image", "Started"],
+        rows,
+    )
+
+
+@app.command("depends")
+@click.argument("name")
+@click.option("--on", "depends_on", required=True, help="App this depends on")
+@click.option("--remove", is_flag=True, help="Remove the dependency")
+@click.option("--server", "server_name", default=None)
+def depends(name: str, depends_on: str, remove: bool, server_name: str | None) -> None:
+    """Manage app dependencies."""
+    init_db()
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        dep_app = session.query(App).filter(App.name == depends_on).first()
+        if not dep_app:
+            error(f"App '{depends_on}' not found")
+            raise SystemExit(1)
+
+        if remove:
+            existing = (
+                session.query(AppDependency)
+                .filter(
+                    AppDependency.app_id == app_obj.id,
+                    AppDependency.depends_on_app_id == dep_app.id,
+                )
+                .first()
+            )
+            if not existing:
+                error(f"'{name}' does not depend on '{depends_on}'")
+                raise SystemExit(1)
+            session.delete(existing)
+            success(f"Removed dependency: '{name}' no longer depends on '{depends_on}'")
+        else:
+            if app_obj.id == dep_app.id:
+                error("An app cannot depend on itself")
+                raise SystemExit(1)
+            # Cycle detection
+            if _would_create_cycle(session, app_obj.id, dep_app.id):
+                error("Adding this dependency would create a cycle")
+                raise SystemExit(1)
+            existing = (
+                session.query(AppDependency)
+                .filter(
+                    AppDependency.app_id == app_obj.id,
+                    AppDependency.depends_on_app_id == dep_app.id,
+                )
+                .first()
+            )
+            if existing:
+                info(f"'{name}' already depends on '{depends_on}'")
+                return
+            session.add(AppDependency(app_id=app_obj.id, depends_on_app_id=dep_app.id))
+            success(f"Added dependency: '{name}' depends on '{depends_on}'")
+
+
+@app.command("deps")
+@click.argument("name")
+@click.option("--server", "server_name", default=None)
+def list_deps(name: str, server_name: str | None) -> None:
+    """List dependencies of an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = _get_app(session, name, server_name)
+        deps = (
+            session.query(AppDependency)
+            .filter(AppDependency.app_id == app_obj.id)
+            .all()
+        )
+        if not deps:
+            info(f"'{name}' has no dependencies")
+            return
+        rows = []
+        for d in deps:
+            dep_app = session.query(App).filter(App.id == d.depends_on_app_id).first()
+            if dep_app:
+                rows.append((dep_app.name, dep_app.status, dep_app.server.name))
+    print_table(f"Dependencies: {name}", ["App", "Status", "Server"], rows)
+
+
+def _would_create_cycle(session: object, app_id: int, depends_on_id: int) -> bool:
+    """Return True if adding app_id -> depends_on_id creates a cycle."""
+    visited: set[int] = set()
+    stack = [depends_on_id]
+    while stack:
+        current = stack.pop()
+        if current == app_id:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        deps = (
+            session.query(AppDependency)  # type: ignore[attr-defined]
+            .filter(AppDependency.app_id == current)
+            .all()
+        )
+        stack.extend(d.depends_on_app_id for d in deps)
+    return False

@@ -147,7 +147,7 @@ export default function Servers() {
           <table className="w-full text-sm" role="table">
             <thead>
               <tr className="border-b border-slate-700 bg-slate-800/60">
-                {["Name", "Host", "Status", "Provider", "Apps", "Actions"].map(
+                {["Name", "Host", "Status", "Provider", "Tags", "Apps", "Actions"].map(
                   (h) => (
                     <th
                       key={h}
@@ -183,6 +183,22 @@ export default function Servers() {
                   </td>
                   <td className="px-4 py-3 text-slate-400">
                     {server.provider ?? "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(server.tags ?? []).length > 0 ? (
+                        server.tags!.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center rounded-md bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-300"
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-slate-500">—</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-slate-300">
                     {server.app_count}

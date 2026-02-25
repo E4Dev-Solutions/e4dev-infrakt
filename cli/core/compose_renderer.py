@@ -24,6 +24,10 @@ def render_app_compose(
     build_context: str | None = None,
     cpu_limit: str | None = None,
     memory_limit: str | None = None,
+    replicas: int = 1,
+    deploy_strategy: str = "restart",
+    health_check_url: str | None = None,
+    health_check_interval: int | None = None,
 ) -> str:
     """Render app-compose.yml.j2 with the given parameters."""
     port_var = app_name.upper().replace("-", "_") + "_PORT"
@@ -36,6 +40,10 @@ def render_app_compose(
         build_context=build_context,
         cpu_limit=cpu_limit,
         memory_limit=memory_limit,
+        replicas=replicas,
+        deploy_strategy=deploy_strategy,
+        health_check_url=health_check_url,
+        health_check_interval=health_check_interval,
     )
 
 

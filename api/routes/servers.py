@@ -20,6 +20,7 @@ from api.schemas import (
     ServerMetricOut,
     ServerOut,
     ServerStatus,
+    ServerTagCreate,
     ServerUpdate,
 )
 from cli.core.database import get_session, init_db
@@ -28,6 +29,7 @@ from cli.core.provisioner import provision_server
 from cli.core.ssh import SSHClient
 from cli.models.server import Server
 from cli.models.server_metric import ServerMetric
+from cli.models.server_tag import ServerTag
 
 router = APIRouter(prefix="/servers", tags=["servers"])
 logger = logging.getLogger(__name__)
@@ -38,13 +40,16 @@ def _ssh_for(srv: Server) -> SSHClient:
 
 
 @router.get("", response_model=list[ServerOut])
-def list_servers() -> list[ServerOut]:
-    """List all registered servers."""
+def list_servers(tag: str | None = None) -> list[ServerOut]:
+    """List all registered servers, optionally filtered by tag."""
     init_db()
     with get_session() as session:
-        servers = (
-            session.query(Server).options(selectinload(Server.apps)).order_by(Server.name).all()
-        )
+        q = session.query(Server).options(
+            selectinload(Server.apps), selectinload(Server.tags)
+        ).order_by(Server.name)
+        if tag:
+            q = q.join(ServerTag).filter(ServerTag.tag == tag)
+        servers = q.all()
         return [
             ServerOut(
                 id=s.id,
@@ -58,6 +63,7 @@ def list_servers() -> list[ServerOut]:
                 created_at=s.created_at,
                 updated_at=s.updated_at,
                 app_count=len(s.apps),
+                tags=[t.tag for t in s.tags],
             )
             for s in servers
         ]
@@ -96,6 +102,7 @@ def add_server(body: ServerCreate) -> ServerOut:
             created_at=srv.created_at,
             updated_at=srv.updated_at,
             app_count=0,
+            tags=[],
         )
 
 
@@ -106,7 +113,7 @@ def update_server(name: str, body: ServerUpdate) -> ServerOut:
     with get_session() as session:
         srv = (
             session.query(Server)
-            .options(selectinload(Server.apps))
+            .options(selectinload(Server.apps), selectinload(Server.tags))
             .filter(Server.name == name)
             .first()
         )
@@ -138,6 +145,7 @@ def update_server(name: str, body: ServerUpdate) -> ServerOut:
             created_at=srv.created_at,
             updated_at=srv.updated_at,
             app_count=len(srv.apps),
+            tags=[t.tag for t in srv.tags],
         )
 
 
@@ -422,3 +430,56 @@ def test_connection(name: str) -> dict[str, bool]:
 
     ok = ssh.test_connection()
     return {"reachable": ok}
+
+
+# ── Tags ──────────────────────────────────────────────────────────────────────
+
+
+@router.get("/{name}/tags")
+def list_tags(name: str) -> list[str]:
+    """List tags for a server."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == name).first()
+        if not srv:
+            raise HTTPException(404, f"Server '{name}' not found")
+        tags = session.query(ServerTag).filter(ServerTag.server_id == srv.id).all()
+        return [t.tag for t in tags]
+
+
+@router.post("/{name}/tags")
+def add_tag(name: str, body: ServerTagCreate) -> dict[str, str]:
+    """Add a tag to a server."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == name).first()
+        if not srv:
+            raise HTTPException(404, f"Server '{name}' not found")
+        existing = (
+            session.query(ServerTag)
+            .filter(ServerTag.server_id == srv.id, ServerTag.tag == body.tag)
+            .first()
+        )
+        if existing:
+            raise HTTPException(400, f"Tag '{body.tag}' already exists on '{name}'")
+        session.add(ServerTag(server_id=srv.id, tag=body.tag))
+    return {"message": f"Tag '{body.tag}' added to '{name}'"}
+
+
+@router.delete("/{name}/tags/{tag}")
+def remove_tag(name: str, tag: str) -> dict[str, str]:
+    """Remove a tag from a server."""
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == name).first()
+        if not srv:
+            raise HTTPException(404, f"Server '{name}' not found")
+        existing = (
+            session.query(ServerTag)
+            .filter(ServerTag.server_id == srv.id, ServerTag.tag == tag)
+            .first()
+        )
+        if not existing:
+            raise HTTPException(404, f"Tag '{tag}' not found on '{name}'")
+        session.delete(existing)
+    return {"message": f"Tag '{tag}' removed from '{name}'"}

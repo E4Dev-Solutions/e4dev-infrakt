@@ -41,6 +41,8 @@ def _apply_migrations(engine: Engine) -> None:
         "ALTER TABLE apps ADD COLUMN memory_limit VARCHAR(20)",
         "ALTER TABLE apps ADD COLUMN health_check_url VARCHAR(500)",
         "ALTER TABLE apps ADD COLUMN health_check_interval INTEGER",
+        "ALTER TABLE apps ADD COLUMN replicas INTEGER DEFAULT 1",
+        "ALTER TABLE apps ADD COLUMN deploy_strategy VARCHAR(20) DEFAULT 'restart'",
     ]
     with engine.connect() as conn:
         for sql in migrations:

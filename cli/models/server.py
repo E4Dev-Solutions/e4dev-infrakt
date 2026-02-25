@@ -10,6 +10,7 @@ from cli.core.database import Base
 
 if TYPE_CHECKING:
     from cli.models.app import App
+    from cli.models.server_tag import ServerTag
 
 
 class Server(Base):
@@ -27,6 +28,7 @@ class Server(Base):
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     apps: Mapped[list[App]] = relationship(back_populates="server", cascade="all, delete-orphan")
+    tags: Mapped[list[ServerTag]] = relationship(cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Server {self.name} ({self.host})>"

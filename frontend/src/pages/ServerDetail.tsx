@@ -14,6 +14,9 @@ import {
   RefreshCw,
   CheckCircle2,
   XCircle,
+  Tag,
+  Plus,
+  X,
 } from "lucide-react";
 import {
   useServers,
@@ -23,6 +26,8 @@ import {
   useTestServer,
   useUpdateServer,
   useServerMetrics,
+  useAddServerTag,
+  useRemoveServerTag,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { useProvisionStream } from "@/hooks/useProvisionStream";
@@ -163,8 +168,11 @@ export default function ServerDetail() {
   const provisionServer = useProvisionServer();
   const testServer = useTestServer();
   const updateServer = useUpdateServer();
+  const addServerTag = useAddServerTag();
+  const removeServerTag = useRemoveServerTag();
   const toast = useToast();
 
+  const [newTag, setNewTag] = useState("");
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<UpdateServerInput>({
     host: "",
@@ -247,6 +255,28 @@ export default function ServerDetail() {
       setShowEditModal(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update server.");
+    }
+  }
+
+  async function handleAddTag(e: React.FormEvent) {
+    e.preventDefault();
+    const tag = newTag.trim();
+    if (!tag) return;
+    try {
+      await addServerTag.mutateAsync({ name: decodedName, tag });
+      setNewTag("");
+      toast.success(`Tag "${tag}" added.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add tag.");
+    }
+  }
+
+  async function handleRemoveTag(tag: string) {
+    try {
+      await removeServerTag.mutateAsync({ name: decodedName, tag });
+      toast.success(`Tag "${tag}" removed.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove tag.");
     }
   }
 
@@ -375,6 +405,55 @@ export default function ServerDetail() {
                   Server not found
                 </p>
               )}
+            </div>
+          </div>
+
+          {/* Tags card */}
+          <div className="rounded-xl border border-slate-700 bg-slate-800">
+            <div className="border-b border-slate-700 px-5 py-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                <Tag size={14} className="text-indigo-400" aria-hidden="true" />
+                Tags
+              </h2>
+            </div>
+            <div className="px-5 py-4">
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {(server?.tags ?? []).length > 0 ? (
+                  server!.tags!.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-md bg-indigo-500/15 px-2 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30"
+                    >
+                      {tag}
+                      <button
+                        onClick={() => void handleRemoveTag(tag)}
+                        className="ml-0.5 rounded hover:text-red-400"
+                        aria-label={`Remove tag ${tag}`}
+                      >
+                        <X size={11} aria-hidden="true" />
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-500">No tags</span>
+                )}
+              </div>
+              <form onSubmit={(e) => void handleAddTag(e)} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="Add tag…"
+                  className="flex-1 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!newTag.trim() || addServerTag.isPending}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  <Plus size={12} aria-hidden="true" />
+                </button>
+              </form>
             </div>
           </div>
 

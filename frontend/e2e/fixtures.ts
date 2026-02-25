@@ -657,24 +657,23 @@ export async function mockApi(page: Page): Promise<void> {
     return route.fulfill({ json: { running: true, version: "2.7.6" } });
   });
 
-  // SSH Keys - deploy (must be before generic /keys/*)
-  await page.route(/\/api\/keys\/\d+\/deploy/, (route) => {
+  // SSH Keys - deploy (name-based: POST /api/keys/<name>/deploy)
+  await page.route(/\/api\/keys\/[^/]+\/deploy/, (route) => {
     if (route.request().method() === "POST") {
       return route.fulfill({ json: { message: "Key deployed to server." } });
     }
     return route.continue();
   });
 
-  // SSH Keys - delete (must be before generic /keys)
-  await page.route(/\/api\/keys\/\d+$/, (route) => {
+  // SSH Keys - list + generate + delete
+  // POST /api/keys = generate, GET /api/keys = list, DELETE /api/keys/<name> = delete
+  await page.route(/\/api\/keys(\/[^/]+)?$/, (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: MOCK_SSH_KEYS });
+    }
     if (route.request().method() === "DELETE") {
       return route.fulfill({ json: { message: "Key deleted" } });
     }
-    return route.continue();
-  });
-
-  // SSH Keys - generate
-  await page.route("**/api/keys/generate", (route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON();
       return route.fulfill({
@@ -688,14 +687,6 @@ export async function mockApi(page: Page): Promise<void> {
           created_at: new Date().toISOString(),
         },
       });
-    }
-    return route.continue();
-  });
-
-  // SSH Keys - list
-  await page.route("**/api/keys", (route) => {
-    if (route.request().method() === "GET") {
-      return route.fulfill({ json: MOCK_SSH_KEYS });
     }
     return route.continue();
   });

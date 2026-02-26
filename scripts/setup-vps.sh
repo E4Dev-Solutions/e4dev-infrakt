@@ -206,7 +206,7 @@ http:
     svc-${SANITIZED_DOMAIN}:
       loadBalancer:
         servers:
-          - url: "http://host.docker.internal:8000"
+          - url: "http://infrakt-app:8000"
         passHostHeader: true
 ROUTEEOF
     echo "    Domain route config written for ${DOMAIN}"

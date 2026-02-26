@@ -3,7 +3,8 @@
 #
 # Single service — the FastAPI application exposed on port 8000.
 # Traefik (deployed separately at /opt/infrakt/traefik/) handles HTTPS on
-# ports 80/443 and reverse-proxies to host.docker.internal:8000.
+# ports 80/443 and reverse-proxies to infrakt-app:8000 via the shared
+# "infrakt" Docker network.
 #
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d
@@ -20,9 +21,13 @@
 services:
   infrakt:
     image: ghcr.io/e4dev-solutions/e4dev-infrakt:latest
+    container_name: infrakt-app
 
     ports:
       - "127.0.0.1:8000:8000"
+
+    networks:
+      - infrakt
 
     volumes:
       # Named volume for persistent state: SQLite DB, encrypted env files,
@@ -53,6 +58,10 @@ services:
       timeout: 10s
       start_period: 15s
       retries: 3
+
+networks:
+  infrakt:
+    external: true
 
 volumes:
   infrakt-data:

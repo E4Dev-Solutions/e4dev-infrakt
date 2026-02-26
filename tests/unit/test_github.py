@@ -6,7 +6,6 @@ import pytest
 
 from cli.core.database import init_db
 
-
 # ── inject_token_in_url ──────────────────────────────────────────
 
 
@@ -28,9 +27,7 @@ def test_inject_token_in_url_non_github():
 def test_inject_token_replaces_existing():
     from cli.core.github import inject_token_in_url
 
-    result = inject_token_in_url(
-        "https://old_token@github.com/org/repo.git", "ghp_new"
-    )
+    result = inject_token_in_url("https://old_token@github.com/org/repo.git", "ghp_new")
     assert result == "https://ghp_new@github.com/org/repo.git"
 
 

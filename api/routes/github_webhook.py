@@ -17,9 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/github-webhook")
-async def github_webhook(
-    request: Request, background_tasks: BackgroundTasks
-) -> dict[str, str]:
+async def github_webhook(request: Request, background_tasks: BackgroundTasks) -> dict[str, str]:
     """Receive GitHub push webhooks and trigger auto-deploys.
 
     This endpoint uses GitHub HMAC signature verification (per-app
@@ -47,11 +45,7 @@ async def github_webhook(
 
     init_db()
     with get_session() as session:
-        apps = (
-            session.query(App)
-            .filter(App.git_repo == clone_url, App.branch == branch)
-            .all()
-        )
+        apps = session.query(App).filter(App.git_repo == clone_url, App.branch == branch).all()
         if not apps:
             return {"message": "No matching app for this repo/branch"}
 
@@ -59,9 +53,10 @@ async def github_webhook(
             if not app_obj.webhook_secret:
                 continue
 
-            expected_sig = "sha256=" + hmac.new(
-                app_obj.webhook_secret.encode(), body, hashlib.sha256
-            ).hexdigest()
+            expected_sig = (
+                "sha256="
+                + hmac.new(app_obj.webhook_secret.encode(), body, hashlib.sha256).hexdigest()
+            )
             if not hmac.compare_digest(sig_header, expected_sig):
                 continue
 

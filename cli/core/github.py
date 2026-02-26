@@ -66,8 +66,7 @@ def list_repos(token: str, per_page: int = 100) -> list[dict]:
     """Return all repos accessible to the token, paginated."""
     repos: list[dict] = []
     url: str | None = (
-        f"{GITHUB_API}/user/repos?sort=updated&direction=desc&type=all"
-        f"&per_page={per_page}"
+        f"{GITHUB_API}/user/repos?sort=updated&direction=desc&type=all&per_page={per_page}"
     )
 
     while url:

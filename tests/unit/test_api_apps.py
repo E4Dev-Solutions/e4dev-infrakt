@@ -490,7 +490,13 @@ def _seed_github_app(server_name="srv-1", app_name="gh-app"):
 class TestDeployCreatesGitHubWebhook:
     @patch("api.routes.apps.create_repo_webhook")
     @patch("api.routes.apps.get_github_token")
-    def test_deploy_creates_github_webhook(self, mock_get_token, mock_create_hook, client, isolated_config):
+    def test_deploy_creates_github_webhook(
+        self,
+        mock_get_token,
+        mock_create_hook,
+        client,
+        isolated_config,
+    ):
         """When deploying a GitHub app with PAT connected, a webhook is auto-created."""
         from cli.core.deployer import DeployResult
 
@@ -537,7 +543,13 @@ class TestDeployCreatesGitHubWebhook:
 
     @patch("api.routes.apps.create_repo_webhook")
     @patch("api.routes.apps.get_github_token")
-    def test_deploy_skips_webhook_if_no_github_token(self, mock_get_token, mock_create_hook, client, isolated_config):
+    def test_deploy_skips_webhook_if_no_github_token(
+        self,
+        mock_get_token,
+        mock_create_hook,
+        client,
+        isolated_config,
+    ):
         """When no GitHub PAT is connected, webhook creation is skipped."""
         from cli.core.deployer import DeployResult
 
@@ -568,7 +580,13 @@ class TestDeployCreatesGitHubWebhook:
 
     @patch("api.routes.apps.create_repo_webhook")
     @patch("api.routes.apps.get_github_token")
-    def test_deploy_skips_webhook_if_already_set(self, mock_get_token, mock_create_hook, client, isolated_config):
+    def test_deploy_skips_webhook_if_already_set(
+        self,
+        mock_get_token,
+        mock_create_hook,
+        client,
+        isolated_config,
+    ):
         """When webhook_secret is already set, webhook creation is skipped."""
         from cli.core.deployer import DeployResult
 

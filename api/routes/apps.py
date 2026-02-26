@@ -29,7 +29,6 @@ from api.schemas import (
     ScaleInput,
 )
 from cli.core.crypto import env_content_for_app
-from cli.core.github import create_repo_webhook, get_github_token
 from cli.core.database import get_session, init_db
 from cli.core.deployer import (
     deploy_app,
@@ -42,6 +41,7 @@ from cli.core.deployer import (
     stream_logs,
 )
 from cli.core.exceptions import SSHConnectionError
+from cli.core.github import create_repo_webhook, get_github_token
 from cli.core.proxy_manager import add_domain, remove_domain
 from cli.core.ssh import SSHClient
 from cli.core.webhook_sender import fire_webhooks
@@ -344,9 +344,7 @@ async def deploy(
                                 )
                                 if hook_id:
                                     a.webhook_secret = webhook_secret
-                                    _on_log(
-                                        f"Auto-created GitHub webhook for {owner}/{repo_name}"
-                                    )
+                                    _on_log(f"Auto-created GitHub webhook for {owner}/{repo_name}")
 
             fire_webhooks(
                 "deploy.success",

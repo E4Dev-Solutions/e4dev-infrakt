@@ -1,6 +1,6 @@
 from cli.core.database import get_session, init_db
-from cli.models.github_integration import GitHubIntegration
 from cli.models.app import App
+from cli.models.github_integration import GitHubIntegration
 from cli.models.server import Server
 
 
@@ -28,8 +28,13 @@ def test_app_has_webhook_fields():
         session.add(srv)
         session.flush()
         app = App(
-            name="test-app", server_id=srv.id, port=3000, status="stopped",
-            app_type="git", webhook_secret="secret123", auto_deploy=True,
+            name="test-app",
+            server_id=srv.id,
+            port=3000,
+            status="stopped",
+            app_type="git",
+            webhook_secret="secret123",
+            auto_deploy=True,
         )
         session.add(app)
         session.flush()

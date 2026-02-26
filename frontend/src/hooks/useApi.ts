@@ -12,6 +12,7 @@ import {
   proxyApi,
   webhooksApi,
   keysApi,
+  configApi,
   type CreateServerInput,
   type UpdateServerInput,
   type CreateAppInput,
@@ -34,6 +35,7 @@ import {
   type ServerMetric,
   type SSHKey,
   type DatabaseStats,
+  type SelfUpdateConfig,
 } from "@/api/client";
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -56,6 +58,7 @@ export const queryKeys = {
     ["servers", name, "metrics", hours ?? 24] as const,
   keys: ["keys"] as const,
   databaseStats: (name: string) => ["databases", name, "stats"] as const,
+  selfUpdateConfig: ["config", "self-update"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -636,5 +639,18 @@ export function useRemoveAppDependency() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.apps() });
     },
+  });
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+export function useSelfUpdateConfig(
+  options?: Partial<UseQueryOptions<SelfUpdateConfig>>
+) {
+  return useQuery({
+    queryKey: queryKeys.selfUpdateConfig,
+    queryFn: configApi.selfUpdate,
+    staleTime: Infinity,
+    ...options,
   });
 }

@@ -581,4 +581,16 @@ export const keysApi = {
     post(`/keys/${name}/deploy`, { server_name: serverName }),
 };
 
+// ─── Config API ───────────────────────────────────────────────────────────────
+
+export interface SelfUpdateConfig {
+  webhook_url: string;
+  webhook_secret: string;
+  configured: boolean;
+}
+
+export const configApi = {
+  selfUpdate: (): Promise<SelfUpdateConfig> => get("/config/self-update"),
+};
+
 export { ApiError };

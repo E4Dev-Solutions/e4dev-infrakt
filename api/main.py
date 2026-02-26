@@ -53,6 +53,19 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+# Self-update webhook config — shows the webhook URL and whether a secret is
+# configured. Requires API key so it's only visible in the dashboard.
+@app.get("/api/config/self-update", tags=["config"], dependencies=[Depends(require_api_key)])
+def self_update_config(request: Request) -> dict[str, str | bool]:
+    secret = os.environ.get("GITHUB_WEBHOOK_SECRET", "")
+    base = str(request.base_url).rstrip("/")
+    return {
+        "webhook_url": f"{base}/api/self-update",
+        "webhook_secret": secret,
+        "configured": bool(secret),
+    }
+
+
 # Register API routes — all require API key authentication
 api_deps = [Depends(require_api_key)]
 app.include_router(dashboard.router, prefix="/api", dependencies=api_deps)

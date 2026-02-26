@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon } from "lucide-react";
+import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff } from "lucide-react";
 import {
   useWebhooks,
   useCreateWebhook,
@@ -10,6 +10,7 @@ import {
   useDeleteSSHKey,
   useDeploySSHKey,
   useServers,
+  useSelfUpdateConfig,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -94,6 +95,11 @@ export default function Settings() {
   const [deployKeyName, setDeployKeyName] = useState<string | null>(null);
   const [deployServerName, setDeployServerName] = useState("");
 
+  // Self-update config
+  const { data: selfUpdateConfig } = useSelfUpdateConfig();
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [testingId, setTestingId] = useState<number | null>(null);
@@ -144,6 +150,15 @@ export default function Settings() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to deploy key.");
     }
+  }
+
+  // ─── Copy to clipboard ─────────────────────────────────────────────────────
+
+  function copyToClipboard(text: string, field: string) {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    });
   }
 
   // ─── Form handlers ──────────────────────────────────────────────────────────
@@ -364,6 +379,84 @@ export default function Settings() {
           </div>
         )}
       </section>
+
+      {/* Self-Update Webhook section */}
+      {selfUpdateConfig && (
+        <section aria-labelledby="self-update-heading" className="mb-10">
+          <div className="mb-4">
+            <h2 id="self-update-heading" className="text-base font-semibold text-slate-100">
+              Auto-Deploy Webhook
+            </h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Configure a GitHub webhook to automatically update infrakt when you push to main.
+            </p>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/30">
+            <div className="divide-y divide-slate-700/40">
+              {/* Webhook URL */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Payload URL</p>
+                  <p className="mt-1 truncate font-mono text-sm text-slate-200">{selfUpdateConfig.webhook_url}</p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(selfUpdateConfig.webhook_url, "url")}
+                  title="Copy URL"
+                  className="ml-3 shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                >
+                  {copiedField === "url" ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
+                </button>
+              </div>
+
+              {/* Webhook Secret */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Secret</p>
+                  <p className="mt-1 truncate font-mono text-sm text-slate-200">
+                    {showSecret ? selfUpdateConfig.webhook_secret : "••••••••••••••••••••••••••••••••"}
+                  </p>
+                </div>
+                <div className="ml-3 flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => setShowSecret(!showSecret)}
+                    title={showSecret ? "Hide secret" : "Show secret"}
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                  >
+                    {showSecret ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(selfUpdateConfig.webhook_secret, "secret")}
+                    title="Copy secret"
+                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                  >
+                    {copiedField === "secret" ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Content Type & Events */}
+              <div className="flex items-center gap-8 px-4 py-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Content Type</p>
+                  <p className="mt-1 font-mono text-sm text-slate-200">application/json</p>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Events</p>
+                  <span className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-indigo-500/15 px-2 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30">
+                    <GitBranch size={12} />
+                    push
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-slate-500">
+            Add these values in your GitHub repo: Settings &rarr; Webhooks &rarr; Add webhook
+          </p>
+        </section>
+      )}
 
       {/* Webhooks section */}
       <section aria-labelledby="webhooks-heading">

@@ -23,9 +23,25 @@ ssh root@<your-vps-ip>
 
 ## Step 3: Run the setup script
 
+Since the repo is private, copy the files from your local machine first:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/E4Dev-Solutions/e4dev-infrakt/main/scripts/setup-vps.sh | bash
+# From your local machine (not the VPS):
+scp scripts/setup-vps.sh docker-compose.prod.yml root@<your-vps-ip>:/tmp/
 ```
+
+Then on the VPS:
+
+```bash
+bash /tmp/setup-vps.sh
+```
+
+> **Alternative (with GitHub PAT):** If you prefer a one-liner, create a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope, then:
+> ```bash
+> curl -fsSL -H "Authorization: token <YOUR_PAT>" \
+>   https://raw.githubusercontent.com/E4Dev-Solutions/e4dev-infrakt/main/scripts/setup-vps.sh \
+>   | bash -s -- --token <YOUR_PAT>
+> ```
 
 This will:
 - Install Docker (if not already installed)

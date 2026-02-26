@@ -5,33 +5,12 @@
 # Run this once on a fresh VPS to install Docker, create the directory
 # structure, and start the infrakt dashboard.
 #
-# Usage (private repo — recommended):
-#   scp scripts/setup-vps.sh docker-compose.prod.yml root@<vps-ip>:/tmp/
-#   ssh root@<vps-ip> bash /tmp/setup-vps.sh
-#
-# Usage (private repo — with GitHub PAT):
-#   curl -fsSL -H "Authorization: token <PAT>" \
-#     https://raw.githubusercontent.com/E4Dev-Solutions/e4dev-infrakt/main/scripts/setup-vps.sh \
-#     | bash -s -- --token <PAT>
-#
-# Usage (public repo):
+# Usage:
 #   curl -fsSL https://raw.githubusercontent.com/E4Dev-Solutions/e4dev-infrakt/main/scripts/setup-vps.sh | bash
+#   # or
+#   scp scripts/setup-vps.sh root@<vps-ip>:/tmp/ && ssh root@<vps-ip> bash /tmp/setup-vps.sh
 # =============================================================================
 set -euo pipefail
-
-GITHUB_TOKEN=""
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --token) GITHUB_TOKEN="$2"; shift 2 ;;
-        *) echo "Unknown option: $1"; exit 1 ;;
-    esac
-done
-
-REPO_RAW="https://raw.githubusercontent.com/E4Dev-Solutions/e4dev-infrakt/main"
-CURL_OPTS=(-fsSL)
-if [[ -n "$GITHUB_TOKEN" ]]; then
-    CURL_OPTS+=(-H "Authorization: token ${GITHUB_TOKEN}")
-fi
 
 echo "==> Setting up infrakt on $(hostname)"
 
@@ -49,14 +28,10 @@ echo "==> Creating /opt/infrakt/"
 mkdir -p /opt/infrakt/ssh
 cd /opt/infrakt
 
-# --- Get production compose file ---------------------------------------------
-if [[ -f /tmp/docker-compose.prod.yml ]]; then
-    echo "==> Using docker-compose.prod.yml from /tmp/"
-    cp /tmp/docker-compose.prod.yml docker-compose.prod.yml
-else
-    echo "==> Downloading docker-compose.prod.yml"
-    curl "${CURL_OPTS[@]}" "${REPO_RAW}/docker-compose.prod.yml" -o docker-compose.prod.yml
-fi
+# --- Download production compose file ----------------------------------------
+echo "==> Downloading docker-compose.prod.yml"
+curl -fsSL https://raw.githubusercontent.com/E4Dev-Solutions/e4dev-infrakt/main/docker-compose.prod.yml \
+    -o docker-compose.prod.yml
 
 # --- Generate a random webhook secret ----------------------------------------
 WEBHOOK_SECRET=$(openssl rand -hex 32)

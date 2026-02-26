@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import PurePosixPath
 
 from cli.core.exceptions import DeploymentError
+from cli.core.github import get_github_token, inject_token_in_url
 from cli.core.ssh import SSHClient
 
 APP_BASE = PurePosixPath("/opt/infrakt/apps")
@@ -97,6 +98,11 @@ def deploy_app(
 
     # Handle git-based deployment
     if git_repo:
+        # Inject GitHub PAT if available for private repo support
+        _token = get_github_token()
+        if _token:
+            git_repo = inject_token_in_url(git_repo, _token)
+
         repo_path = f"{app_path}/repo"
         q_repo = shlex.quote(repo_path)
         q_branch = shlex.quote(branch)

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -163,7 +163,8 @@ def test_deploy_app_returns_deploy_result():
     assert "Deployment complete" in result.log
 
 
-def test_deploy_app_captures_commit_hash_for_git():
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_app_captures_commit_hash_for_git(_mock_token):
     """deploy_app captures git commit hash after clone/pull."""
     ssh = MagicMock()
     ssh.__enter__ = MagicMock(return_value=ssh)
@@ -186,7 +187,8 @@ def test_deploy_app_captures_commit_hash_for_git():
     assert result.image_used is None
 
 
-def test_deploy_app_pinned_commit_uses_reset():
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_app_pinned_commit_uses_reset(_mock_token):
     """pinned_commit triggers git reset --hard <commit> instead of origin/branch."""
     ssh = MagicMock()
     ssh.__enter__ = MagicMock(return_value=ssh)
@@ -283,3 +285,45 @@ def test_stream_logs_handles_partial_lines():
     lines = list(stream_logs(ssh, "myapp"))
     assert lines == ["partial-complete"]
     channel.close.assert_called_once()
+
+
+# ── GitHub token injection tests ──────────────────────────────────────────────
+
+
+@patch("cli.core.deployer.get_github_token")
+def test_deploy_git_injects_token_for_github(mock_get_token):
+    """When a GitHub PAT is stored, clone URL should include the token."""
+    mock_get_token.return_value = "ghp_secret"
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.run_checked = MagicMock(return_value="abc1234567890")
+    ssh.run = MagicMock(return_value=("", "", 1))  # no existing repo
+    ssh.upload_string = MagicMock()
+
+    deploy_app(ssh, "test-app", git_repo="https://github.com/org/repo.git", branch="main")
+
+    clone_calls = [c for c in ssh.run_checked.call_args_list if "git clone" in str(c)]
+    assert len(clone_calls) == 1
+    clone_cmd = str(clone_calls[0])
+    assert "ghp_secret@github.com" in clone_cmd
+
+
+@patch("cli.core.deployer.get_github_token")
+def test_deploy_git_no_token_uses_plain_url(mock_get_token):
+    """When no PAT is stored, clone URL should be used as-is."""
+    mock_get_token.return_value = None
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.run_checked = MagicMock(return_value="abc1234567890")
+    ssh.run = MagicMock(return_value=("", "", 1))  # no existing repo
+    ssh.upload_string = MagicMock()
+
+    deploy_app(ssh, "test-app", git_repo="https://github.com/org/repo.git", branch="main")
+
+    clone_calls = [c for c in ssh.run_checked.call_args_list if "git clone" in str(c)]
+    assert len(clone_calls) == 1
+    clone_cmd = str(clone_calls[0])
+    assert "github.com/org/repo.git" in clone_cmd
+    assert "@github.com" not in clone_cmd

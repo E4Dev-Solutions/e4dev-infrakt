@@ -14,6 +14,7 @@ from api.routes import (
     databases,
     deploy,
     env,
+    github,
     keys,
     proxy,
     self_update,
@@ -76,6 +77,7 @@ app.include_router(databases.router, prefix="/api", dependencies=api_deps)
 app.include_router(proxy.router, prefix="/api", dependencies=api_deps)
 app.include_router(webhooks.router, prefix="/api", dependencies=api_deps)
 app.include_router(keys.router, prefix="/api", dependencies=api_deps)
+app.include_router(github.router, prefix="/api", dependencies=api_deps)
 app.include_router(deploy.router, prefix="/api")  # uses own auth dependency
 app.include_router(self_update.router, prefix="/api")  # uses GitHub HMAC auth
 

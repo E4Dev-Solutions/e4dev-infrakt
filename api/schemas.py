@@ -485,7 +485,7 @@ class GitHubRepo(BaseModel):
     name: str
     private: bool
     default_branch: str
-    description: str = ""
+    description: str | None = None
     html_url: str
     clone_url: str
     owner: dict[str, str]

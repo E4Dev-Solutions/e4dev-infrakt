@@ -399,7 +399,12 @@ class TestRollback:
         dep_id = _seed_deployment("my-app", status="success", image_used="nginx:1.24")
         _seed_deployment("my-app", status="success", image_used="nginx:1.25")
 
-        with patch("api.routes.apps.broadcaster"), patch("api.routes.apps.asyncio"):
+        with (
+            patch("api.routes.apps.broadcaster"),
+            patch("api.routes.apps.asyncio"),
+            patch("api.routes.apps.SSHClient"),
+            patch("api.routes.apps.deploy_app"),
+        ):
             response = client.post(f"/api/apps/my-app/rollback?deployment_id={dep_id}")
         assert response.status_code == 200
         data = response.json()
@@ -411,7 +416,12 @@ class TestRollback:
         _seed_deployment("my-app", status="success", image_used="nginx:1.24")
         _seed_deployment("my-app", status="success", image_used="nginx:1.25")
 
-        with patch("api.routes.apps.broadcaster"), patch("api.routes.apps.asyncio"):
+        with (
+            patch("api.routes.apps.broadcaster"),
+            patch("api.routes.apps.asyncio"),
+            patch("api.routes.apps.SSHClient"),
+            patch("api.routes.apps.deploy_app"),
+        ):
             response = client.post("/api/apps/my-app/rollback")
         assert response.status_code == 200
         assert "deployment_id" in response.json()

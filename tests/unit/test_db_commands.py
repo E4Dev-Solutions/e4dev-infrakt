@@ -412,7 +412,8 @@ class TestInfoCommand:
     def test_shows_database_info(self, runner, isolated_config):
         """Happy path: info command prints database details."""
         _seed_db("mydb", "srv-1")
-        result = runner.invoke(db, ["info", "mydb", "--server", "srv-1"])
+        with patch("cli.commands.db.SSHClient"):
+            result = runner.invoke(db, ["info", "mydb", "--server", "srv-1"])
         assert result.exit_code == 0
         assert "mydb" in result.output
         assert "postgres" in result.output

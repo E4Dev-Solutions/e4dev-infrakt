@@ -246,11 +246,11 @@ class TestServerStatus:
 class TestProvision:
     def test_returns_provision_key_in_response(self, client, isolated_config):
         _seed_server("prov-srv", status="inactive")
-        mock_loop = MagicMock()
         with (
             patch("api.routes.servers.provision_server"),
-            patch("api.routes.servers.asyncio.get_event_loop", return_value=mock_loop),
+            patch("api.routes.servers.asyncio"),
             patch("api.routes.servers.broadcaster"),
+            patch("api.routes.servers.SSHClient"),
         ):
             response = client.post("/api/servers/prov-srv/provision")
 

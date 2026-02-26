@@ -14,6 +14,8 @@ import {
   Github,
   Search,
   Lock,
+  ChevronDown,
+  Container,
 } from "lucide-react";
 import {
   useApps,
@@ -59,6 +61,8 @@ export default function Apps() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<CreateAppInput>(defaultForm);
   const [actionPending, setActionPending] = useState<string | null>(null);
+  const [sourceType, setSourceType] = useState<"github" | "image">("github");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // GitHub repo picker
   const { data: githubStatus } = useGitHubStatus();
@@ -89,6 +93,8 @@ export default function Apps() {
 
   function handleOpenModal() {
     setShowModal(true);
+    setSourceType("github");
+    setShowAdvanced(false);
     if (githubConnected && githubRepos.length === 0) {
       void refetchRepos();
     }
@@ -368,58 +374,176 @@ export default function Apps() {
       {showModal && (
         <Modal title="Create App" onClose={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); }}>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {/* Name */}
-            <div>
-              <label
-                htmlFor="app-name"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
-              >
-                App Name <span className="text-red-400">*</span>
-              </label>
-              <input
-                id="app-name"
-                name="name"
-                type="text"
-                required
-                value={form.name}
-                onChange={handleChange}
-                placeholder="my-app"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-              />
+            {/* Name + Server row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="app-name" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  App Name <span className="text-red-400">*</span>
+                </label>
+                <input
+                  id="app-name"
+                  name="name"
+                  type="text"
+                  required
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="my-app"
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="app-server" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Server <span className="text-red-400">*</span>
+                </label>
+                <select
+                  id="app-server"
+                  name="server_name"
+                  required
+                  value={form.server_name}
+                  onChange={handleChange}
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                >
+                  <option value="">Select…</option>
+                  {servers.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name} ({s.host})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            {/* Server */}
+            {/* Source type toggle */}
             <div>
-              <label
-                htmlFor="app-server"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
-              >
-                Server <span className="text-red-400">*</span>
-              </label>
-              <select
-                id="app-server"
-                name="server_name"
-                required
-                value={form.server_name}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-              >
-                <option value="">Select a server</option>
-                {servers.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.name} ({s.host})
-                  </option>
-                ))}
-              </select>
+              <label className="mb-1.5 block text-xs font-medium text-slate-300">Source</label>
+              <div className="flex rounded-lg border border-slate-600 bg-slate-800/60 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => { setSourceType("github"); setForm((prev) => ({ ...prev, image: "" })); }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "github" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                >
+                  <Github size={13} aria-hidden="true" />
+                  GitHub Repo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSourceType("image"); setForm((prev) => ({ ...prev, git_repo: "", branch: "main" })); }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "image" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                >
+                  <Container size={13} aria-hidden="true" />
+                  Docker Image
+                </button>
+              </div>
             </div>
+
+            {/* GitHub source */}
+            {sourceType === "github" && (
+              <>
+                {githubConnected ? (
+                  <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+                    <div className="relative">
+                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                      <input
+                        type="text"
+                        value={repoSearch}
+                        onChange={(e) => setRepoSearch(e.target.value)}
+                        placeholder="Search repositories…"
+                        aria-label="Filter GitHub repositories"
+                        className="w-full rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-3 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                      />
+                    </div>
+                    <div className="relative">
+                      {reposFetching && (
+                        <div className="absolute inset-y-0 right-8 flex items-center">
+                          <Loader2 size={12} className="animate-spin text-indigo-400" aria-hidden="true" />
+                        </div>
+                      )}
+                      <select
+                        aria-label="Select a GitHub repository"
+                        onChange={handleRepoSelect}
+                        defaultValue=""
+                        className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                      >
+                        <option value="">Select a repository…</option>
+                        {filteredRepos.map((repo) => (
+                          <option key={repo.full_name} value={repo.full_name}>
+                            {repo.full_name}{repo.private ? " 🔒" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {filteredRepos.length === 0 && !reposFetching && (
+                      <p className="text-xs text-slate-500">
+                        {repoSearch ? "No match." : "No repositories found."}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+                    <p className="text-xs text-slate-500">
+                      <Lock size={11} className="mr-1 inline-block" aria-hidden="true" />
+                      Connect GitHub in{" "}
+                      <a href="/settings" className="text-indigo-400 hover:text-indigo-300">Settings</a>{" "}
+                      to browse repos, or enter a URL manually.
+                    </p>
+                  </div>
+                )}
+                {/* Manual URL + Branch (collapsed if repo was selected) */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label htmlFor="app-git-repo" className="mb-1.5 block text-xs font-medium text-slate-300">
+                      Git URL
+                    </label>
+                    <input
+                      id="app-git-repo"
+                      name="git_repo"
+                      type="url"
+                      value={form.git_repo ?? ""}
+                      onChange={handleChange}
+                      placeholder="https://github.com/org/repo"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="app-branch" className="mb-1.5 block text-xs font-medium text-slate-300">
+                      Branch
+                    </label>
+                    <input
+                      id="app-branch"
+                      name="branch"
+                      type="text"
+                      value={form.branch ?? ""}
+                      onChange={handleChange}
+                      placeholder="main"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Docker image source */}
+            {sourceType === "image" && (
+              <div>
+                <label htmlFor="app-image" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Image
+                </label>
+                <input
+                  id="app-image"
+                  name="image"
+                  type="text"
+                  value={form.image ?? ""}
+                  onChange={handleChange}
+                  placeholder="nginx:alpine"
+                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                />
+              </div>
+            )}
 
             {/* Domain + Port */}
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
-                <label
-                  htmlFor="app-domain"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
-                >
+                <label htmlFor="app-domain" className="mb-1.5 block text-xs font-medium text-slate-300">
                   Domain
                 </label>
                 <input
@@ -433,10 +557,7 @@ export default function Apps() {
                 />
               </div>
               <div>
-                <label
-                  htmlFor="app-port"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
-                >
+                <label htmlFor="app-port" className="mb-1.5 block text-xs font-medium text-slate-300">
                   Port
                 </label>
                 <input
@@ -453,140 +574,32 @@ export default function Apps() {
               </div>
             </div>
 
-            {/* GitHub Repo Picker */}
-            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <Github size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
-                <span className="text-xs font-medium text-slate-300">GitHub Repository</span>
-              </div>
-              {githubConnected ? (
-                <div className="space-y-2">
-                  {/* Search filter */}
-                  <div className="relative">
-                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
-                    <input
-                      type="text"
-                      value={repoSearch}
-                      onChange={(e) => setRepoSearch(e.target.value)}
-                      placeholder="Filter repositories…"
-                      aria-label="Filter GitHub repositories"
-                      className="w-full rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-3 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-                    />
-                  </div>
-                  {/* Repo select */}
-                  <div className="relative">
-                    {reposFetching && (
-                      <div className="absolute inset-y-0 right-8 flex items-center">
-                        <Loader2 size={12} className="animate-spin text-indigo-400" aria-hidden="true" />
-                      </div>
-                    )}
-                    <select
-                      aria-label="Select a GitHub repository"
-                      onChange={handleRepoSelect}
-                      defaultValue=""
-                      className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-                    >
-                      <option value="">Select a repository…</option>
-                      {filteredRepos.map((repo) => (
-                        <option key={repo.full_name} value={repo.full_name}>
-                          {repo.full_name}{repo.private ? " (private)" : " (public)"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {filteredRepos.length === 0 && !reposFetching && (
-                    <p className="text-xs text-slate-500">
-                      {repoSearch ? "No repositories match your filter." : "No repositories found."}
-                    </p>
-                  )}
-                  <p className="text-xs text-slate-500">
-                    Selecting a repo auto-fills the URL, branch, and name below.
-                  </p>
+            {/* Advanced toggle */}
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-200"
+            >
+              <ChevronDown size={13} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} aria-hidden="true" />
+              Advanced options
+            </button>
+
+            {showAdvanced && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="app-cpu-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    CPU Limit
+                  </label>
+                  <input id="app-cpu-limit" name="cpu_limit" type="text" value={form.cpu_limit ?? ""} onChange={handleChange} placeholder="0.5" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
                 </div>
-              ) : (
-                <p className="text-xs text-slate-500">
-                  <Lock size={11} className="mr-1 inline-block" aria-hidden="true" />
-                  Connect GitHub in{" "}
-                  <a href="/settings" className="text-indigo-400 hover:text-indigo-300">
-                    Settings
-                  </a>{" "}
-                  to browse your repos.
-                </p>
-              )}
-            </div>
-
-            {/* Git Repo + Branch */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <label
-                  htmlFor="app-git-repo"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
-                >
-                  Git Repo URL
-                </label>
-                <input
-                  id="app-git-repo"
-                  name="git_repo"
-                  type="url"
-                  value={form.git_repo ?? ""}
-                  onChange={handleChange}
-                  placeholder="https://github.com/org/repo"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-                />
+                <div>
+                  <label htmlFor="app-memory-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    Memory Limit
+                  </label>
+                  <input id="app-memory-limit" name="memory_limit" type="text" value={form.memory_limit ?? ""} onChange={handleChange} placeholder="512M" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
+                </div>
               </div>
-              <div>
-                <label
-                  htmlFor="app-branch"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
-                >
-                  Branch
-                </label>
-                <input
-                  id="app-branch"
-                  name="branch"
-                  type="text"
-                  value={form.branch ?? ""}
-                  onChange={handleChange}
-                  placeholder="main"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Docker Image */}
-            <div>
-              <label
-                htmlFor="app-image"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
-              >
-                Docker Image
-              </label>
-              <input
-                id="app-image"
-                name="image"
-                type="text"
-                value={form.image ?? ""}
-                onChange={handleChange}
-                placeholder="nginx:latest"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-              />
-            </div>
-
-            {/* Resource Limits */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="app-cpu-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
-                  CPU Limit
-                </label>
-                <input id="app-cpu-limit" name="cpu_limit" type="text" value={form.cpu_limit ?? ""} onChange={handleChange} placeholder="0.5" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
-              </div>
-              <div>
-                <label htmlFor="app-memory-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
-                  Memory Limit
-                </label>
-                <input id="app-memory-limit" name="memory_limit" type="text" value={form.memory_limit ?? ""} onChange={handleChange} placeholder="512M" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
-              </div>
-            </div>
+            )}
 
             {/* Actions */}
             <div className="flex justify-end gap-3 pt-2">

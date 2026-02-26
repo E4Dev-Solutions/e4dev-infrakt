@@ -3,9 +3,9 @@
 import os
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from api.auth import require_api_key
 from api.routes import (
@@ -66,10 +66,20 @@ app.include_router(keys.router, prefix="/api", dependencies=api_deps)
 app.include_router(deploy.router, prefix="/api")  # uses own auth dependency
 app.include_router(self_update.router, prefix="/api")  # uses GitHub HMAC auth
 
-# Serve built frontend in production
+# Serve built frontend in production.
+# The SPA catch-all must come before the StaticFiles mount so that
+# client-side routes like /settings or /servers/:name return index.html
+# instead of a 404. API routes are registered above and take priority.
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(request: Request, full_path: str) -> FileResponse:
+        """Serve index.html for any path not matched by API routes."""
+        file_path = FRONTEND_DIST / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(FRONTEND_DIST / "index.html")
 
 
 @app.on_event("startup")

@@ -51,7 +51,8 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           PAYLOAD="{\"ref\":\"refs/heads/main\",\"after\":\"${COMMIT_SHA}\"}"
-          SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$DEPLOY_SECRET" | awk '{print $2}')"
+          HMAC=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$DEPLOY_SECRET" | sed 's/^.*= //')
+          SIGNATURE="sha256=${HMAC}"
           curl -sf --max-time 30 \
             -X POST "$DEPLOY_URL" \
             -H "Content-Type: application/json" \

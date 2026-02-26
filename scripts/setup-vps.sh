@@ -224,6 +224,9 @@ SSH_KEY_FILE="${INSTALL_DIR}/ssh/id_ed25519"
 if [ ! -f "$SSH_KEY_FILE" ]; then
     echo "==> Generating SSH key for server management..."
     ssh-keygen -t ed25519 -f "$SSH_KEY_FILE" -N "" -C "infrakt@$(hostname)" -q
+    # The container runs as UID 1000 (infrakt user). Set ownership so the
+    # container can read the key through the read-only volume mount.
+    chown 1000:1000 "$SSH_KEY_FILE" "${SSH_KEY_FILE}.pub"
     chmod 600 "$SSH_KEY_FILE"
 
     mkdir -p /root/.ssh
@@ -259,7 +262,7 @@ if [[ -n "$API_KEY" ]]; then
         -X POST "https://${DOMAIN}/api/servers" \
         -H "Content-Type: application/json" \
         -H "X-API-Key: ${API_KEY}" \
-        -d "{\"name\": \"${SERVER_NAME}\", \"host\": \"${DOCKER_BRIDGE_IP}\", \"user\": \"root\", \"port\": 22, \"ssh_key_path\": \"id_ed25519\"}" \
+        -d "{\"name\": \"${SERVER_NAME}\", \"host\": \"${DOCKER_BRIDGE_IP}\", \"user\": \"root\", \"port\": 22, \"ssh_key_path\": \"/home/infrakt/.ssh/id_ed25519\"}" \
         2>/dev/null || echo -e "\n000")
     REG_CODE=$(echo "$REG_RESPONSE" | tail -1)
 

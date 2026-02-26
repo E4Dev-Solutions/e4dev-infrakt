@@ -78,6 +78,13 @@ COPY --from=frontend-build /build/frontend/dist ./frontend/dist/
 # application can create the .infrakt state directory inside the mounted volume.
 RUN chown -R infrakt:infrakt /app
 
+# Pre-create the .infrakt state directory with correct ownership.
+# When a Docker volume is first mounted here, Docker copies this structure
+# (including ownership) into the volume. This prevents PermissionError
+# when the app tries to create subdirectories at runtime.
+RUN mkdir -p /home/infrakt/.infrakt/keys /home/infrakt/.infrakt/envs /home/infrakt/.infrakt/backups \
+    && chown -R infrakt:infrakt /home/infrakt/.infrakt
+
 USER infrakt
 
 # Document the port the server listens on. This does not publish the port —

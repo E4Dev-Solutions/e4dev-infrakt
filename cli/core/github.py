@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 import httpx
@@ -56,15 +57,15 @@ def validate_token(token: str) -> str:
     if missing:
         raise ValueError(f"Missing required scope(s): {', '.join(sorted(missing))}")
 
-    return username
+    return str(username)
 
 
 # ── Repository listing ───────────────────────────────────────────
 
 
-def list_repos(token: str, per_page: int = 100) -> list[dict]:
+def list_repos(token: str, per_page: int = 100) -> list[dict[str, Any]]:
     """Return all repos accessible to the token, paginated."""
-    repos: list[dict] = []
+    repos: list[dict[str, Any]] = []
     url: str | None = (
         f"{GITHUB_API}/user/repos?sort=updated&direction=desc&type=all&per_page={per_page}"
     )
@@ -87,15 +88,14 @@ def list_repos(token: str, per_page: int = 100) -> list[dict]:
     return repos
 
 
-def _next_page_url(headers: httpx.Headers | dict) -> str | None:
+def _next_page_url(headers: httpx.Headers | dict[str, str]) -> str | None:
     """Parse the GitHub Link header for the next page URL."""
     link = headers.get("link") or headers.get("Link")
     if not link:
         return None
     for part in link.split(","):
         if 'rel="next"' in part:
-            url = part.split(";")[0].strip().strip("<>")
-            return url
+            return part.split(";")[0].strip().strip("<>")
     return None
 
 
@@ -123,7 +123,8 @@ def create_repo_webhook(
         timeout=15,
     )
     if resp.status_code == 201:
-        return resp.json().get("id")
+        hook_id = resp.json().get("id")
+        return int(hook_id) if hook_id is not None else None
     return None
 
 
@@ -186,7 +187,7 @@ def get_github_token() -> str | None:
         return decrypt(row.token_encrypted)
 
 
-def get_github_status() -> dict:
+def get_github_status() -> dict[str, Any]:
     """Return the current GitHub connection status."""
     with get_session() as session:
         row = session.query(GitHubIntegration).first()

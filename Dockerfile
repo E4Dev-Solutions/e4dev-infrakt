@@ -45,6 +45,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         gnupg \
+        gosu \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc \
     && chmod a+r /etc/apt/keyrings/docker.asc \
@@ -97,7 +98,9 @@ RUN chown -R infrakt:infrakt /app
 RUN mkdir -p /home/infrakt/.infrakt/keys /home/infrakt/.infrakt/envs /home/infrakt/.infrakt/backups \
     && chown -R infrakt:infrakt /home/infrakt/.infrakt
 
-USER infrakt
+# Copy the entrypoint script that fixes docker socket permissions at startup.
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Document the port the server listens on. This does not publish the port —
 # that happens in docker-compose or `docker run -p`.
@@ -108,6 +111,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" || exit 1
 
-# Use exec form (JSON array) so the process is PID 1 and receives SIGTERM
-# directly, enabling graceful shutdown.
+# Entrypoint adjusts docker group GID to match the host socket, then drops
+# to the infrakt user via gosu before exec'ing the CMD.
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

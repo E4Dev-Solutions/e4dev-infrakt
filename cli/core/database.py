@@ -43,6 +43,8 @@ def _apply_migrations(engine: Engine) -> None:
         "ALTER TABLE apps ADD COLUMN health_check_interval INTEGER",
         "ALTER TABLE apps ADD COLUMN replicas INTEGER DEFAULT 1",
         "ALTER TABLE apps ADD COLUMN deploy_strategy VARCHAR(20) DEFAULT 'restart'",
+        "ALTER TABLE apps ADD COLUMN webhook_secret VARCHAR(100)",
+        "ALTER TABLE apps ADD COLUMN auto_deploy BOOLEAN DEFAULT 1",
     ]
     with engine.connect() as conn:
         for sql in migrations:

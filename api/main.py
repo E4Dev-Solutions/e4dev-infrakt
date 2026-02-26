@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from api.auth import require_api_key
+from api.auth import get_or_create_api_key, require_api_key
 from api.routes import (
     apps,
     dashboard,
@@ -85,3 +85,4 @@ if FRONTEND_DIST.exists():
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    get_or_create_api_key()

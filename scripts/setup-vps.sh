@@ -2,8 +2,10 @@
 # =============================================================================
 # First-time VPS setup for infrakt
 #
-# Installs Docker, authenticates to GHCR, downloads the production compose
-# file, generates a Caddyfile for automatic HTTPS, and starts the stack.
+# Provisions the host (Docker, Caddy, UFW, fail2ban), authenticates to GHCR,
+# downloads the production compose file, starts the stack, registers the host
+# as a managed server, and triggers provisioning via the API so the server
+# shows as "active" in the dashboard.
 #
 # Usage:
 #   bash setup-vps.sh --domain infrakt.example.com --token ghp_xxx
@@ -57,6 +59,10 @@ echo "==> Setting up infrakt on $(hostname)"
 echo "    Domain: ${DOMAIN}"
 echo "    Repo:   ${REPO} (${BRANCH})"
 
+# =============================================================================
+# Phase 1: Provision the host
+# =============================================================================
+
 # --- Install Docker if not present -------------------------------------------
 if ! command -v docker &>/dev/null; then
     echo "==> Installing Docker..."
@@ -66,11 +72,9 @@ else
     echo "==> Docker already installed ($(docker --version))"
 fi
 
-# --- Free ports 80/443 -------------------------------------------------------
-# The Caddy sidecar needs ports 80 and 443. Stop any services that might
-# be holding them (common on previously-provisioned or pre-configured VPSes).
-echo "==> Freeing ports 80/443..."
-for svc in caddy nginx apache2 httpd; do
+# --- Stop conflicting services -----------------------------------------------
+echo "==> Stopping conflicting services on ports 80/443..."
+for svc in nginx apache2 httpd; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         echo "    Stopping $svc..."
         systemctl stop "$svc"
@@ -78,13 +82,76 @@ for svc in caddy nginx apache2 httpd; do
     fi
 done
 
+# --- Install Caddy if not present --------------------------------------------
+if ! command -v caddy &>/dev/null; then
+    echo "==> Installing Caddy..."
+    apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+        | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+        | tee /etc/apt/sources.list.d/caddy-stable.list
+    apt-get update -qq && apt-get install -y -qq caddy
+else
+    echo "==> Caddy already installed ($(caddy version))"
+fi
+
+# --- Install fail2ban --------------------------------------------------------
+echo "==> Installing fail2ban..."
+apt-get install -y -qq fail2ban
+systemctl enable fail2ban && systemctl start fail2ban
+
+# --- Configure UFW firewall --------------------------------------------------
+echo "==> Configuring UFW firewall..."
+apt-get install -y -qq ufw
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw default deny incoming
+ufw default allow outgoing
+echo 'y' | ufw enable || true
+
+# --- Create directory structure -----------------------------------------------
+echo "==> Creating ${INSTALL_DIR}/"
+mkdir -p "${INSTALL_DIR}/apps" "${INSTALL_DIR}/caddy" "${INSTALL_DIR}/backups" "${INSTALL_DIR}/ssh"
+
+# --- Create Docker network ---------------------------------------------------
+docker network create infrakt 2>/dev/null || true
+
+# --- Configure Caddy for infrakt domain --------------------------------------
+# Set up the infrakt Caddyfile and configure host Caddy to use it.
+echo "==> Configuring Caddy for ${DOMAIN}..."
+
+# Create the infrakt-managed Caddyfile with the dashboard domain
+if [ ! -f "${INSTALL_DIR}/caddy/Caddyfile" ]; then
+    echo "# Managed by infrakt — do not edit manually" > "${INSTALL_DIR}/caddy/Caddyfile"
+fi
+
+# Ensure the domain block exists in the Caddyfile
+if ! grep -q "${DOMAIN}" "${INSTALL_DIR}/caddy/Caddyfile" 2>/dev/null; then
+    cat >> "${INSTALL_DIR}/caddy/Caddyfile" <<CADDYEOF
+
+${DOMAIN} {
+    reverse_proxy localhost:8000
+}
+CADDYEOF
+fi
+
+# Point host Caddy at the infrakt-managed Caddyfile
+mkdir -p /etc/caddy
+echo "import ${INSTALL_DIR}/caddy/Caddyfile" > /etc/caddy/Caddyfile
+systemctl enable caddy
+systemctl restart caddy
+
+echo "==> Host provisioning complete"
+
+# =============================================================================
+# Phase 2: Deploy infrakt
+# =============================================================================
+
 # --- Authenticate to GHCR ----------------------------------------------------
 echo "==> Logging in to GitHub Container Registry..."
 echo "${TOKEN}" | docker login ghcr.io -u _token --password-stdin
 
-# --- Create directory structure -----------------------------------------------
-echo "==> Creating ${INSTALL_DIR}/"
-mkdir -p "${INSTALL_DIR}/ssh"
 cd "${INSTALL_DIR}"
 
 # --- Download docker-compose.prod.yml from private repo -----------------------
@@ -94,14 +161,6 @@ curl -fsSL \
     -H "Accept: application/vnd.github.v3.raw" \
     "https://api.github.com/repos/${REPO}/contents/docker-compose.prod.yml?ref=${BRANCH}" \
     -o docker-compose.prod.yml
-
-# --- Generate Caddyfile -------------------------------------------------------
-echo "==> Generating Caddyfile for ${DOMAIN}..."
-cat > Caddyfile <<CADDYEOF
-${DOMAIN} {
-    reverse_proxy infrakt:8000
-}
-CADDYEOF
 
 # --- Generate .env ------------------------------------------------------------
 WEBHOOK_SECRET=$(openssl rand -hex 32)
@@ -129,8 +188,6 @@ echo "==> Starting infrakt..."
 docker compose -f docker-compose.prod.yml up -d
 
 # --- Wait for healthy container -----------------------------------------------
-# Poll Docker's own health status rather than exec-ing into the container.
-# This is more reliable and doesn't depend on the container being ready for exec.
 echo "==> Waiting for infrakt container to be healthy..."
 ATTEMPTS=0
 MAX_ATTEMPTS=40
@@ -151,8 +208,6 @@ while true; do
 done
 
 # --- Retrieve API key ---------------------------------------------------------
-# The API key is generated at app startup and written to the volume.
-# Wait for the file to appear (may take a moment after container reports healthy).
 echo "==> Retrieving API key..."
 API_KEY=""
 for _ in $(seq 1 20); do
@@ -165,16 +220,12 @@ for _ in $(seq 1 20); do
 done
 
 # --- Generate SSH key for server self-management ------------------------------
-# infrakt runs inside a container and needs SSH access to the host to manage it.
-# Generate a dedicated key pair, place the private key where the container can
-# read it, and add the public key to root's authorized_keys on the host.
 SSH_KEY_FILE="${INSTALL_DIR}/ssh/id_ed25519"
 if [ ! -f "$SSH_KEY_FILE" ]; then
     echo "==> Generating SSH key for server management..."
     ssh-keygen -t ed25519 -f "$SSH_KEY_FILE" -N "" -C "infrakt@$(hostname)" -q
     chmod 600 "$SSH_KEY_FILE"
 
-    # Authorize the key on the host so the container can SSH to 172.17.0.1
     mkdir -p /root/.ssh
     chmod 700 /root/.ssh
     cat "${SSH_KEY_FILE}.pub" >> /root/.ssh/authorized_keys
@@ -196,15 +247,14 @@ for _ in $(seq 1 10); do
     sleep 3
 done
 
-# --- Register host as managed server -----------------------------------------
-# The container reaches the host via Docker's bridge gateway IP (172.17.0.1).
-# The SSH key mounted at /home/infrakt/.ssh/id_ed25519 authenticates the connection.
+# =============================================================================
+# Phase 3: Register and provision the host server
+# =============================================================================
 DOCKER_BRIDGE_IP="172.17.0.1"
 SERVER_NAME="$(hostname)"
 
 if [[ -n "$API_KEY" ]]; then
     echo "==> Registering host as managed server '${SERVER_NAME}'..."
-    # Use the HTTPS endpoint via Caddy (port 8000 is not exposed to the host)
     REG_RESPONSE=$(curl -s -w '\n%{http_code}' \
         -X POST "https://${DOMAIN}/api/servers" \
         -H "Content-Type: application/json" \
@@ -221,8 +271,58 @@ if [[ -n "$API_KEY" ]]; then
         echo "    WARNING: Server registration returned HTTP ${REG_CODE}"
         echo "    You can add it manually via the dashboard"
     fi
+
+    # --- Provision via API (sets status to "active") ----------------------------
+    # The host is already provisioned (Phase 1), so the provisioner steps will
+    # mostly be no-ops. This call ensures the server status is set to "active"
+    # in the database once provisioning completes successfully.
+    echo "==> Provisioning server '${SERVER_NAME}' via API..."
+    PROV_RESPONSE=$(curl -s -w '\n%{http_code}' \
+        -X POST "https://${DOMAIN}/api/servers/${SERVER_NAME}/provision" \
+        -H "Content-Type: application/json" \
+        -H "X-API-Key: ${API_KEY}" \
+        2>/dev/null || echo -e "\n000")
+    PROV_CODE=$(echo "$PROV_RESPONSE" | tail -1)
+
+    if [ "$PROV_CODE" = "200" ]; then
+        echo "    Provisioning started, waiting for completion..."
+        PROV_ATTEMPTS=0
+        PROV_MAX=60
+        while true; do
+            SRV_STATUS=$(curl -s \
+                "https://${DOMAIN}/api/servers" \
+                -H "X-API-Key: ${API_KEY}" \
+                2>/dev/null | python3 -c "
+import sys, json
+servers = json.load(sys.stdin)
+for s in servers:
+    if s['name'] == '${SERVER_NAME}':
+        print(s['status'])
+        break
+" 2>/dev/null || echo "unknown")
+
+            if [ "$SRV_STATUS" = "active" ]; then
+                echo "    Server '${SERVER_NAME}' is now active!"
+                break
+            elif [ "$SRV_STATUS" = "inactive" ] && [ "$PROV_ATTEMPTS" -gt 10 ]; then
+                echo "    WARNING: Provisioning may have failed (status: ${SRV_STATUS})"
+                echo "    Check logs: docker compose -f docker-compose.prod.yml logs infrakt"
+                break
+            fi
+            PROV_ATTEMPTS=$((PROV_ATTEMPTS + 1))
+            if [ "$PROV_ATTEMPTS" -ge "$PROV_MAX" ]; then
+                echo "    WARNING: Provisioning did not complete within $((PROV_MAX * 5))s"
+                echo "    Current status: ${SRV_STATUS}"
+                break
+            fi
+            sleep 5
+        done
+    else
+        echo "    WARNING: Provision request returned HTTP ${PROV_CODE}"
+        echo "    You can provision manually via the dashboard"
+    fi
 else
-    echo "==> Skipping server registration (no API key available)"
+    echo "==> Skipping server registration and provisioning (no API key available)"
 fi
 
 # --- Print summary ------------------------------------------------------------
@@ -247,7 +347,7 @@ else
     echo "    cd ${INSTALL_DIR} && docker compose -f docker-compose.prod.yml exec infrakt cat /home/infrakt/.infrakt/api_key.txt"
 fi
 echo ""
-echo "  Server: '${SERVER_NAME}' registered at ${DOCKER_BRIDGE_IP}"
+echo "  Server: '${SERVER_NAME}' registered and provisioned at ${DOCKER_BRIDGE_IP}"
 echo ""
 echo "  GitHub Webhook (auto-deploy):"
 echo "    URL:     https://${DOMAIN}/api/self-update"

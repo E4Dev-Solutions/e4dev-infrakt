@@ -177,7 +177,8 @@ ENVEOF
     echo "==> Created .env with webhook secret"
 else
     echo "==> .env already exists, skipping"
-    WEBHOOK_SECRET="(check your existing .env file)"
+    # Read the existing secret so we can use it for the GitHub webhook
+    WEBHOOK_SECRET=$(grep '^GITHUB_WEBHOOK_SECRET=' .env | cut -d= -f2)
 fi
 
 # --- Pull and start -----------------------------------------------------------
@@ -326,6 +327,44 @@ for s in servers:
     fi
 else
     echo "==> Skipping server registration and provisioning (no API key available)"
+fi
+
+# --- Create GitHub webhook for auto-deploy ------------------------------------
+# Uses the GitHub API to create a push webhook on the repo so that pushes to
+# main trigger the self-update endpoint automatically.
+WEBHOOK_URL="https://${DOMAIN}/api/self-update"
+if [[ -n "$WEBHOOK_SECRET" ]]; then
+    echo "==> Creating GitHub webhook for auto-deploy..."
+    GH_HOOK_RESPONSE=$(curl -s -w '\n%{http_code}' \
+        -X POST "https://api.github.com/repos/${REPO}/hooks" \
+        -H "Authorization: token ${TOKEN}" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -d "{
+            \"name\": \"web\",
+            \"active\": true,
+            \"events\": [\"push\"],
+            \"config\": {
+                \"url\": \"${WEBHOOK_URL}\",
+                \"content_type\": \"json\",
+                \"secret\": \"${WEBHOOK_SECRET}\",
+                \"insecure_ssl\": \"0\"
+            }
+        }" 2>/dev/null || echo -e "\n000")
+    GH_HOOK_CODE=$(echo "$GH_HOOK_RESPONSE" | tail -1)
+
+    if [ "$GH_HOOK_CODE" = "201" ]; then
+        echo "    GitHub webhook created successfully"
+    elif [ "$GH_HOOK_CODE" = "422" ]; then
+        echo "    GitHub webhook already exists for this URL"
+    elif [ "$GH_HOOK_CODE" = "404" ]; then
+        echo "    WARNING: Could not create webhook (PAT may need admin:repo_hook scope)"
+        echo "    Add it manually: Settings > Webhooks > Add webhook"
+    else
+        echo "    WARNING: GitHub webhook creation returned HTTP ${GH_HOOK_CODE}"
+        echo "    Add it manually: Settings > Webhooks > Add webhook"
+    fi
+else
+    echo "==> Skipping GitHub webhook creation (no webhook secret available)"
 fi
 
 # --- Print summary ------------------------------------------------------------

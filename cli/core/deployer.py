@@ -91,9 +91,9 @@ def deploy_app(
     # Create app directory
     ssh.run_checked(f"mkdir -p {shlex.quote(app_path)}")
 
-    # Write .env file
+    # Write .env file (create empty one if no env vars so --env-file doesn't fail)
+    ssh.upload_string(env_content or "", f"{app_path}/.env")
     if env_content:
-        ssh.upload_string(env_content, f"{app_path}/.env")
         _log("Uploaded .env")
 
     # Handle git-based deployment

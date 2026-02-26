@@ -3,7 +3,14 @@ import click
 from cli.core.console import console, info, print_table, status_spinner, success
 from cli.core.database import get_session, init_db
 from cli.core.exceptions import ServerNotFoundError
-from cli.core.proxy_manager import add_domain, get_status, list_domains, reload_proxy, remove_domain
+from cli.core.proxy_manager import (
+    add_domain,
+    get_status,
+    list_domains,
+    reload_proxy,
+    remove_domain,
+    validate_domain_config,
+)
 from cli.core.ssh import SSHClient
 from cli.models.server import Server
 
@@ -19,27 +26,22 @@ def _get_ssh(server_name: str) -> SSHClient:
 
 @click.group()
 def proxy() -> None:
-    """Manage reverse proxy (Caddy) configuration."""
+    """Manage reverse proxy (Traefik) configuration."""
 
 
 @proxy.command()
 @click.argument("server_name")
 def setup(server_name: str) -> None:
-    """Initialize Caddy on a server (done automatically during provisioning)."""
+    """Initialize Traefik on a server (done automatically during provisioning)."""
     ssh = _get_ssh(server_name)
-    with status_spinner("Setting up Caddy"):
+    with status_spinner("Setting up Traefik"):
         with ssh:
-            ssh.run_checked("mkdir -p /opt/infrakt/caddy")
-            ssh.run(
-                "test -f /opt/infrakt/caddy/Caddyfile || "
-                "echo '# Managed by infrakt' > /opt/infrakt/caddy/Caddyfile"
-            )
+            ssh.run_checked("mkdir -p /opt/infrakt/traefik/conf.d /opt/infrakt/traefik/letsencrypt")
             ssh.run_checked(
-                "mkdir -p /etc/caddy && "
-                "echo 'import /opt/infrakt/caddy/Caddyfile' > /etc/caddy/Caddyfile && "
-                "systemctl restart caddy"
+                "cd /opt/infrakt/traefik && docker compose up -d",
+                timeout=120,
             )
-    success(f"Caddy configured on '{server_name}'")
+    success(f"Traefik configured on '{server_name}'")
 
 
 @proxy.command("add")
@@ -82,7 +84,7 @@ def domains(server_name: str) -> None:
 @proxy.command("status")
 @click.argument("server_name")
 def proxy_status(server_name: str) -> None:
-    """Show Caddy service status."""
+    """Show Traefik container status."""
     ssh = _get_ssh(server_name)
     with ssh:
         output = get_status(ssh)
@@ -92,8 +94,21 @@ def proxy_status(server_name: str) -> None:
 @proxy.command("reload")
 @click.argument("server_name")
 def reload(server_name: str) -> None:
-    """Reload Caddy configuration."""
+    """Send HUP signal to Traefik. Usually not needed — file provider auto-reloads."""
     ssh = _get_ssh(server_name)
     with ssh:
         reload_proxy(ssh)
-    success("Caddy configuration reloaded")
+    success("Traefik reload signal sent")
+
+
+@proxy.command("validate")
+@click.argument("domain")
+@click.option("--server", "server_name", required=True)
+def validate(domain: str, server_name: str) -> None:
+    """Check if Traefik has picked up a domain config."""
+    ssh = _get_ssh(server_name)
+    with ssh:
+        if validate_domain_config(ssh, domain):
+            success(f"Traefik has loaded config for {domain}")
+        else:
+            info(f"Traefik has not yet loaded config for {domain}")

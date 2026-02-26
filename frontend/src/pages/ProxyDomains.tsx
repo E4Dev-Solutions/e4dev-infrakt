@@ -74,9 +74,9 @@ export default function ProxyDomains() {
   async function handleReload() {
     try {
       await reloadProxy.mutateAsync(selectedServer);
-      toast.success("Caddy reloaded.");
+      toast.success("Traefik reloaded.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reload Caddy.");
+      toast.error(err instanceof Error ? err.message : "Failed to reload Traefik.");
     }
   }
 
@@ -89,7 +89,7 @@ export default function ProxyDomains() {
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Proxy Domains</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Manage Caddy reverse proxy routes
+            Manage Traefik reverse proxy routes
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -105,7 +105,7 @@ export default function ProxyDomains() {
                 ) : (
                   <RefreshCw size={14} aria-hidden="true" />
                 )}
-                Reload Caddy
+                Reload Traefik
               </button>
               <button
                 onClick={() => setShowModal(true)}

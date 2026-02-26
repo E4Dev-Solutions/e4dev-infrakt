@@ -1,14 +1,17 @@
-"""Caddy reverse proxy configuration manager."""
+"""Traefik reverse proxy configuration manager using file provider."""
 
 from __future__ import annotations
 
 import re
+import socket
 
+import yaml
+
+from cli.core.console import warning
 from cli.core.exceptions import InfraktError
 from cli.core.ssh import SSHClient
 
-CADDYFILE_PATH = "/opt/infrakt/caddy/Caddyfile"
-CADDYFILE_HEADER = "# Managed by infrakt — do not edit manually\n"
+CONF_DIR = "/opt/infrakt/traefik/conf.d"
 
 # Validates domain names: alphanumeric, dots, hyphens, optional wildcard prefix
 _DOMAIN_RE = re.compile(
@@ -27,90 +30,144 @@ def _validate_port(port: int) -> None:
         raise InfraktError(f"Invalid port: {port}. Must be 1-65535.")
 
 
-def _build_caddyfile(entries: list[tuple[str, int]]) -> str:
-    """Build a complete Caddyfile from a list of (domain, port) tuples."""
-    lines = [CADDYFILE_HEADER]
-    for domain, port in sorted(entries):
-        lines.extend(
-            [
-                f"{domain} {{",
-                f"    reverse_proxy localhost:{port}",
-                "}",
-                "",
-            ]
-        )
-    return "\n".join(lines)
+def _sanitize_domain(domain: str) -> str:
+    """Convert a domain to a safe filename/identifier."""
+    return re.sub(r"[^a-zA-Z0-9-]", "-", domain).strip("-")
 
 
-def _parse_caddyfile(content: str) -> list[tuple[str, int]]:
-    """Parse existing Caddyfile into (domain, port) tuples."""
-    entries: list[tuple[str, int]] = []
-    lines = content.strip().splitlines()
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        # Look for "domain.com {"
-        if line.endswith("{") and not line.startswith("#"):
-            domain = line.rstrip(" {").strip()
-            # Look for reverse_proxy in the block
-            i += 1
-            while i < len(lines) and not lines[i].strip().startswith("}"):
-                inner = lines[i].strip()
-                if inner.startswith("reverse_proxy"):
-                    parts = inner.split()
-                    if len(parts) >= 2:
-                        target = parts[1]
-                        # Extract port from "localhost:PORT"
-                        if ":" in target:
-                            port_str = target.split(":")[-1]
-                            try:
-                                entries.append((domain, int(port_str)))
-                            except ValueError:
-                                pass
-                i += 1
-        i += 1
-    return entries
+def _check_dns(domain: str) -> str | None:
+    """Resolve domain and return IP, or None if unresolvable."""
+    if domain.startswith("*."):
+        return None
+    try:
+        return socket.gethostbyname(domain)
+    except socket.gaierror:
+        return None
+
+
+def _build_domain_config(domain: str, port: int) -> str:
+    """Build Traefik dynamic config YAML for a single domain."""
+    sanitized = _sanitize_domain(domain)
+    router_name = sanitized
+    service_name = f"svc-{sanitized}"
+
+    config: dict[str, object] = {
+        "http": {
+            "routers": {
+                router_name: {
+                    "rule": f"Host(`{domain}`)",
+                    "entryPoints": ["websecure"],
+                    "service": service_name,
+                    "tls": {"certResolver": "letsencrypt"},
+                },
+                f"{router_name}-http": {
+                    "rule": f"Host(`{domain}`)",
+                    "entryPoints": ["web"],
+                    "service": service_name,
+                },
+            },
+            "services": {
+                service_name: {
+                    "loadBalancer": {
+                        "servers": [{"url": f"http://host.docker.internal:{port}"}],
+                        "passHostHeader": True,
+                    }
+                }
+            },
+        }
+    }
+    result: str = yaml.dump(config, default_flow_style=False, sort_keys=False)
+    return result
+
+
+def _conf_path(domain: str) -> str:
+    """Return the remote config file path for a domain."""
+    return f"{CONF_DIR}/{_sanitize_domain(domain)}.yml"
 
 
 def add_domain(ssh: SSHClient, domain: str, port: int) -> None:
-    """Add a reverse proxy entry for a domain pointing to a local port."""
+    """Add a reverse proxy route for a domain pointing to a local port.
+
+    Writes a Traefik file provider config to conf.d/. No reload needed —
+    Traefik watches the directory automatically.
+    """
     _validate_domain(domain)
     _validate_port(port)
-    content = ssh.read_remote_file(CADDYFILE_PATH)
-    entries = _parse_caddyfile(content)
 
-    # Replace existing or add new
-    entries = [(d, p) for d, p in entries if d != domain]
-    entries.append((domain, port))
+    ip = _check_dns(domain)
+    if ip is None:
+        warning(f"DNS for '{domain}' does not resolve yet — proxy will work once DNS propagates")
 
-    new_content = _build_caddyfile(entries)
-    ssh.upload_string(new_content, CADDYFILE_PATH)
-    ssh.run_checked("systemctl reload caddy")
+    content = _build_domain_config(domain, port)
+    ssh.upload_string(content, _conf_path(domain))
 
 
 def remove_domain(ssh: SSHClient, domain: str) -> None:
-    """Remove a reverse proxy entry for a domain."""
-    content = ssh.read_remote_file(CADDYFILE_PATH)
-    entries = _parse_caddyfile(content)
-    entries = [(d, p) for d, p in entries if d != domain]
-
-    new_content = _build_caddyfile(entries)
-    ssh.upload_string(new_content, CADDYFILE_PATH)
-    ssh.run_checked("systemctl reload caddy")
+    """Remove a reverse proxy route for a domain."""
+    path = _conf_path(domain)
+    ssh.run_checked(f"rm -f {path}")
 
 
 def list_domains(ssh: SSHClient) -> list[tuple[str, int]]:
-    """List all configured proxy entries."""
-    content = ssh.read_remote_file(CADDYFILE_PATH)
-    return _parse_caddyfile(content)
+    """List all configured proxy entries by reading conf.d/*.yml files."""
+    stdout, _, exit_code = ssh.run(f"ls {CONF_DIR}/*.yml 2>/dev/null")
+    if exit_code != 0 or not stdout.strip():
+        return []
+
+    entries: list[tuple[str, int]] = []
+    for filepath in stdout.strip().splitlines():
+        filepath = filepath.strip()
+        if not filepath:
+            continue
+        content = ssh.read_remote_file(filepath)
+        try:
+            data = yaml.safe_load(content)
+            services = data.get("http", {}).get("services", {})
+            for _svc_name, svc_conf in services.items():
+                servers = svc_conf.get("loadBalancer", {}).get("servers", [])
+                if servers:
+                    url = servers[0].get("url", "")
+                    # Extract port from "http://host.docker.internal:PORT"
+                    if ":" in url:
+                        port_str = url.rsplit(":", 1)[-1].rstrip("/")
+                        port = int(port_str)
+                        # Extract domain from router rule
+                        routers = data.get("http", {}).get("routers", {})
+                        for _r_name, r_conf in routers.items():
+                            rule = r_conf.get("rule", "")
+                            if rule.startswith("Host(`") and rule.endswith("`)"):
+                                domain = rule[6:-2]
+                                entries.append((domain, port))
+                                break
+                        break
+        except (yaml.YAMLError, ValueError, KeyError, IndexError):
+            continue
+    return entries
 
 
 def reload_proxy(ssh: SSHClient) -> None:
-    """Reload Caddy configuration."""
-    ssh.run_checked("systemctl reload caddy")
+    """Nudge Traefik to reload config. Usually not needed — file provider auto-reloads."""
+    ssh.run("docker kill --signal HUP infrakt-traefik 2>/dev/null || true")
 
 
 def get_status(ssh: SSHClient) -> str:
-    """Get Caddy service status."""
-    stdout, _, _ = ssh.run("systemctl status caddy --no-pager -l")
-    return stdout
+    """Get Traefik container status."""
+    stdout, _, exit_code = ssh.run(
+        'docker inspect infrakt-traefik --format "{{.State.Status}}" 2>/dev/null'
+    )
+    status = stdout.strip() if exit_code == 0 else "not running"
+
+    # Try to get overview from Traefik API
+    api_out, _, api_code = ssh.run("curl -sf http://localhost:8080/api/overview 2>/dev/null")
+    if api_code == 0 and api_out.strip():
+        return f"Container: {status}\nAPI: {api_out.strip()}"
+    return f"Container: {status}"
+
+
+def validate_domain_config(ssh: SSHClient, domain: str) -> bool:
+    """Check if Traefik has picked up a domain config via its API."""
+    router_name = f"{_sanitize_domain(domain)}@file"
+    stdout, _, exit_code = ssh.run(
+        f"curl -sf http://localhost:8080/api/http/routers/{router_name} 2>/dev/null"
+    )
+    return exit_code == 0 and domain in stdout

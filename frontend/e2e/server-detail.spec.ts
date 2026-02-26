@@ -209,7 +209,7 @@ test.describe("Server Detail", () => {
     await page.getByRole("button", { name: "Provision" }).click();
     await expect(page.getByText("[1/9] Installing Docker")).toBeVisible();
     await expect(page.getByText("[2/9] Configuring firewall")).toBeVisible();
-    await expect(page.getByText("[3/9] Installing Caddy")).toBeVisible();
+    await expect(page.getByText("[3/9] Setting up Traefik")).toBeVisible();
   });
 
   test("panel shows completion heading after provisioning finishes", async ({

@@ -25,12 +25,12 @@ test.describe("Proxy Domains", () => {
   test("Add Route and Reload buttons appear after server selection", async ({ page }) => {
     // Buttons should not be visible before selecting server
     await expect(page.getByRole("button", { name: "Add Route" })).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "Reload Caddy" })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Reload Traefik" })).not.toBeVisible();
 
     await page.getByLabel("Server").selectOption("prod-1");
 
     await expect(page.getByRole("button", { name: "Add Route" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Reload Caddy" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reload Traefik" })).toBeVisible();
   });
 
   test("Add Route modal opens and submits", async ({ page }) => {
@@ -54,9 +54,9 @@ test.describe("Proxy Domains", () => {
     await expect(page.getByText(/removed/)).toBeVisible();
   });
 
-  test("Reload Caddy calls API and shows toast", async ({ page }) => {
+  test("Reload Traefik calls API and shows toast", async ({ page }) => {
     await page.getByLabel("Server").selectOption("prod-1");
-    await page.getByRole("button", { name: "Reload Caddy" }).click();
+    await page.getByRole("button", { name: "Reload Traefik" }).click();
     await expect(page.getByText(/reloaded/i)).toBeVisible();
   });
 

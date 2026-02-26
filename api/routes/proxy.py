@@ -77,4 +77,4 @@ def reload(server_name: str) -> dict[str, str]:
             reload_proxy(ssh)
     except SSHConnectionError as exc:
         raise HTTPException(502, str(exc))
-    return {"message": "Caddy reloaded"}
+    return {"message": "Traefik reload signal sent"}

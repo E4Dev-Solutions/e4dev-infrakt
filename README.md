@@ -1,6 +1,6 @@
 # infrakt
 
-A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app deployments over SSH. infrakt provisions bare Linux VMs into Docker + Caddy hosts, deploys apps via Docker Compose, manages encrypted environment variables, and provisions databases — all from the developer's machine with no remote agent.
+A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app deployments over SSH. infrakt provisions bare Linux VMs into Docker + Traefik hosts, deploys apps via Docker Compose, manages encrypted environment variables, and provisions databases — all from the developer's machine with no remote agent.
 
 ## Table of Contents
 
@@ -21,7 +21,7 @@ A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app de
 ## Features
 
 - **No remote agent.** All operations run over SSH from the local machine using Paramiko. There is no persistent process on the server that could be compromised.
-- **Automatic TLS.** Caddy manages HTTPS certificates via Let's Encrypt ACME with zero configuration.
+- **Automatic TLS.** Traefik manages HTTPS certificates via Let's Encrypt ACME with zero configuration.
 - **Encrypted env vars.** Environment variables are stored locally with Fernet (AES-128-CBC + HMAC-SHA256) encryption and decrypted in memory immediately before being sent to the server over SSH.
 - **Multiple deployment modes.** Deploy from a Docker image, a Git repository (with or without a `docker-compose.yml`), or a custom Compose file.
 - **Database provisioning.** Create and manage Postgres, MySQL, Redis, and MongoDB services as Docker Compose services, bound to `127.0.0.1` only.
@@ -72,11 +72,13 @@ A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app de
 │    apps/<app-name>/                                              │
 │      docker-compose.yml    (generated or from repo)             │
 │      .env                  (decrypted at deploy time)           │
-│    caddy/                                                        │
-│      Caddyfile             (managed by proxy_manager)           │
+│    traefik/                                                      │
+│      traefik.yml           (static config)                      │
+│      conf.d/               (per-domain dynamic configs)         │
+│      docker-compose.yml    (Traefik container)                  │
 │    backups/                                                      │
 │                                                                  │
-│  Services: Docker, Caddy (auto-HTTPS), UFW, fail2ban            │
+│  Services: Docker, Traefik (auto-HTTPS), UFW, fail2ban            │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -143,7 +145,7 @@ infrakt immediately tests the SSH connection and reports whether it succeeded. T
 
 ### 3. Provision the server
 
-Installs Docker Engine, Caddy, UFW (ports 22/80/443), and fail2ban. Takes 2–5 minutes on a fresh VM:
+Installs Docker Engine, Traefik, UFW (ports 22/80/443), and fail2ban. Takes 2–5 minutes on a fresh VM:
 
 ```bash
 infrakt server provision prod-1
@@ -174,7 +176,7 @@ infrakt env set myapp \
 infrakt app deploy myapp
 ```
 
-The DNS `A` record for `myapp.example.com` must point to the server's IP. Caddy automatically obtains and renews the TLS certificate.
+The DNS `A` record for `myapp.example.com` must point to the server's IP. Traefik automatically obtains and renews the TLS certificate.
 
 ---
 
@@ -186,7 +188,7 @@ The CLI provides five command groups. Every subcommand accepts `--help` for opti
 infrakt init                      Initialize config and database
 infrakt server add                Register a server
 infrakt server list               List all servers
-infrakt server provision <name>   Install Docker, Caddy, UFW, fail2ban
+infrakt server provision <name>   Install Docker, Traefik, UFW, fail2ban
 infrakt server status <name>      Show live CPU/memory/disk/containers
 infrakt server ssh <name>         Open an interactive SSH session
 infrakt server remove <name>      Remove a server record
@@ -209,11 +211,11 @@ infrakt db create                 Create a database service
 infrakt db list                   List database services
 infrakt db destroy <name>         Stop and delete a database service
 
-infrakt proxy add <domain>        Add a Caddy reverse proxy route
+infrakt proxy add <domain>        Add a Traefik reverse proxy route
 infrakt proxy remove <domain>     Remove a proxy route
 infrakt proxy domains <server>    List all proxy routes
-infrakt proxy status <server>     Show Caddy systemd status
-infrakt proxy reload <server>     Graceful Caddy config reload
+infrakt proxy status <server>     Show Traefik container status
+infrakt proxy reload <server>     Send reload signal to Traefik
 ```
 
 See [`docs/COMMANDS.md`](docs/COMMANDS.md) for the complete reference with all options and examples.
@@ -411,7 +413,7 @@ cli/
     ssh.py             # SSHClient wrapper (Paramiko)
     provisioner.py     # Server provisioning steps
     deployer.py        # Docker Compose deployment engine
-    proxy_manager.py   # Caddy Caddyfile management via SSH
+    proxy_manager.py   # Traefik file provider config management via SSH
     crypto.py          # Fernet encrypt/decrypt for env vars
     console.py         # Rich-based output helpers
     exceptions.py      # Custom exception hierarchy

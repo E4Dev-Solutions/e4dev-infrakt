@@ -1,8 +1,10 @@
-"""Server provisioning — installs Docker, Caddy, UFW, fail2ban, and creates directory structure."""
+"""Server provisioning — installs Docker, Traefik, UFW, fail2ban."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+
+import yaml
 
 from cli.core.ssh import SSHClient
 
@@ -17,21 +19,6 @@ PROVISION_STEPS = [
             "if ! command -v docker &>/dev/null; then "
             "curl -fsSL https://get.docker.com | sh; "
             "systemctl enable docker && systemctl start docker; "
-            "fi"
-        ),
-    ),
-    (
-        "Installing Caddy",
-        (
-            "if ! command -v caddy &>/dev/null; then "
-            "apt-get install -y -qq debian-keyring debian-archive-keyring "
-            "apt-transport-https curl && "
-            "curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' "
-            "| gpg --dearmor -o "
-            "/usr/share/keyrings/caddy-stable-archive-keyring.gpg && "
-            "curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' "
-            "| tee /etc/apt/sources.list.d/caddy-stable.list && "
-            "apt-get update -qq && apt-get install -y -qq caddy; "
             "fi"
         ),
     ),
@@ -54,47 +41,155 @@ PROVISION_STEPS = [
     ),
     (
         "Creating infrakt directories",
-        "mkdir -p /opt/infrakt/apps /opt/infrakt/caddy /opt/infrakt/backups",
+        "mkdir -p /opt/infrakt/apps /opt/infrakt/traefik/conf.d "
+        "/opt/infrakt/traefik/letsencrypt /opt/infrakt/backups",
     ),
     (
         "Creating Docker network",
         "docker network create infrakt 2>/dev/null || true",
     ),
-    (
-        "Setting up initial Caddyfile",
-        (
-            "if [ ! -f /opt/infrakt/caddy/Caddyfile ]; then "
-            "echo '# Managed by infrakt — do not edit manually' > /opt/infrakt/caddy/Caddyfile; "
-            "if [ -f /etc/caddy/Caddyfile ]; then "
-            "grep -v '^import ' /etc/caddy/Caddyfile | grep -v '^#' | grep -v '^$' "
-            ">> /opt/infrakt/caddy/Caddyfile || true; "
-            "fi; "
-            "fi"
-        ),
-    ),
-    (
-        "Configuring Caddy to use infrakt Caddyfile",
-        (
-            "mkdir -p /etc/caddy && "
-            "echo 'import /opt/infrakt/caddy/Caddyfile' > /etc/caddy/Caddyfile && "
-            "systemctl restart caddy"
-        ),
-    ),
 ]
+
+
+def _build_traefik_static_config(acme_email: str = "") -> str:
+    """Build the Traefik static configuration YAML."""
+    config: dict[str, object] = {
+        "api": {
+            "dashboard": True,
+            "insecure": True,
+        },
+        "entryPoints": {
+            "web": {
+                "address": ":80",
+                "http": {
+                    "redirections": {
+                        "entryPoint": {
+                            "to": "websecure",
+                            "scheme": "https",
+                            "permanent": True,
+                        }
+                    }
+                },
+            },
+            "websecure": {
+                "address": ":443",
+            },
+        },
+        "certificatesResolvers": {
+            "letsencrypt": {
+                "acme": {
+                    "email": acme_email,
+                    "storage": "/letsencrypt/acme.json",
+                    "httpChallenge": {
+                        "entryPoint": "web",
+                    },
+                }
+            }
+        },
+        "providers": {
+            "file": {
+                "directory": "/opt/infrakt/traefik/conf.d",
+                "watch": True,
+            }
+        },
+        "log": {
+            "level": "INFO",
+        },
+    }
+    result: str = yaml.dump(config, default_flow_style=False, sort_keys=False)
+    return result
+
+
+def _build_traefik_compose() -> str:
+    """Build the Traefik docker-compose.yml."""
+    config: dict[str, object] = {
+        "services": {
+            "traefik": {
+                "image": "traefik:v3.2",
+                "container_name": "infrakt-traefik",
+                "restart": "unless-stopped",
+                "ports": [
+                    "80:80",
+                    "443:443",
+                    "127.0.0.1:8080:8080",
+                ],
+                "volumes": [
+                    "/opt/infrakt/traefik/traefik.yml:/etc/traefik/traefik.yml:ro",
+                    "/opt/infrakt/traefik/conf.d:/opt/infrakt/traefik/conf.d:ro",
+                    "/opt/infrakt/traefik/letsencrypt:/letsencrypt",
+                ],
+                "extra_hosts": [
+                    "host.docker.internal:host-gateway",
+                ],
+                "networks": ["infrakt"],
+            }
+        },
+        "networks": {
+            "infrakt": {
+                "external": True,
+            }
+        },
+    }
+    result: str = yaml.dump(config, default_flow_style=False, sort_keys=False)
+    return result
 
 
 def provision_server(
     ssh: SSHClient,
     on_step: Callable[[str, int, int], None] | None = None,
+    acme_email: str = "",
 ) -> None:
     """Run all provisioning steps on a remote server via SSH.
 
     Args:
         ssh: Connected SSHClient instance.
         on_step: Optional callback(step_name, index, total) for progress reporting.
+        acme_email: Email for ACME (Let's Encrypt) certificate registration.
     """
-    total = len(PROVISION_STEPS)
-    for i, (step_name, command) in enumerate(PROVISION_STEPS):
+    # Count total: base steps + Traefik config steps
+    traefik_steps = [
+        "Setting up Traefik static config",
+        "Writing Traefik docker-compose.yml",
+        "Initializing ACME storage",
+        "Starting Traefik",
+    ]
+    total = len(PROVISION_STEPS) + len(traefik_steps)
+    step_idx = 0
+
+    # Run base provisioning steps
+    for step_name, command in PROVISION_STEPS:
         if on_step:
-            on_step(step_name, i, total)
+            on_step(step_name, step_idx, total)
         ssh.run_checked(command, timeout=300)
+        step_idx += 1
+
+    # Write Traefik static config
+    if on_step:
+        on_step("Setting up Traefik static config", step_idx, total)
+    traefik_yml = _build_traefik_static_config(acme_email)
+    ssh.upload_string(traefik_yml, "/opt/infrakt/traefik/traefik.yml")
+    step_idx += 1
+
+    # Write Traefik docker-compose.yml
+    if on_step:
+        on_step("Writing Traefik docker-compose.yml", step_idx, total)
+    compose_yml = _build_traefik_compose()
+    ssh.upload_string(compose_yml, "/opt/infrakt/traefik/docker-compose.yml")
+    step_idx += 1
+
+    # Initialize ACME storage
+    if on_step:
+        on_step("Initializing ACME storage", step_idx, total)
+    ssh.run_checked(
+        "touch /opt/infrakt/traefik/letsencrypt/acme.json && "
+        "chmod 600 /opt/infrakt/traefik/letsencrypt/acme.json"
+    )
+    step_idx += 1
+
+    # Start Traefik
+    if on_step:
+        on_step("Starting Traefik", step_idx, total)
+    ssh.run_checked(
+        "cd /opt/infrakt/traefik && docker compose up -d",
+        timeout=120,
+    )

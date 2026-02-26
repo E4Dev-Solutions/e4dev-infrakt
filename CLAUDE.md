@@ -1,6 +1,6 @@
 # infrakt
 
-A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app deployments over SSH. infrakt provisions bare VMs into Docker + Caddy hosts, deploys apps via Docker Compose, manages encrypted environment variables, and provisions databases — all without any remote agent.
+A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app deployments over SSH. infrakt provisions bare VMs into Docker + Traefik hosts, deploys apps via Docker Compose, manages encrypted environment variables, and provisions databases — all without any remote agent.
 
 ## Table of Contents
 
@@ -56,11 +56,13 @@ A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app de
 │    apps/<app-name>/                                              │
 │      docker-compose.yml    (generated or from repo)             │
 │      .env                  (decrypted at deploy time)           │
-│    caddy/                                                        │
-│      Caddyfile             (managed by proxy_manager)           │
+│    traefik/                                                      │
+│      traefik.yml           (static config)                      │
+│      conf.d/               (per-domain dynamic configs)         │
+│      docker-compose.yml    (Traefik container)                  │
 │    backups/                                                      │
 │                                                                  │
-│  Services: Docker, Caddy (auto-HTTPS), UFW, fail2ban            │
+│  Services: Docker, Traefik (auto-HTTPS), UFW, fail2ban          │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -79,9 +81,9 @@ cli/
     config.py          # Paths: INFRAKT_HOME, DB_PATH, ENVS_DIR, etc.
     database.py        # SQLAlchemy engine, session factory, init_db()
     ssh.py             # SSHClient wrapper (Paramiko)
-    provisioner.py     # Server provisioning steps (Docker, Caddy, UFW, fail2ban)
+    provisioner.py     # Server provisioning steps (Docker, Traefik, UFW, fail2ban)
     deployer.py        # Docker Compose deployment engine
-    proxy_manager.py   # Caddy Caddyfile read/write/reload via SSH
+    proxy_manager.py   # Traefik file provider config management via SSH
     crypto.py          # Fernet encrypt/decrypt for env vars
     console.py         # Rich-based output helpers
     exceptions.py      # Custom exception hierarchy
@@ -102,6 +104,10 @@ api/
     env.py             # /api/apps/{name}/env/*
     databases.py       # /api/databases/*
     proxy.py           # /api/proxy/*
+    keys.py            # /api/keys/* (SSH key management)
+    webhooks.py        # /api/webhooks/* (notification webhooks)
+    deploy.py          # /api/deploy (CI/CD deploy trigger, own auth)
+    self_update.py     # /api/self-update (GitHub webhook receiver, HMAC auth)
 
 frontend/
   src/
@@ -109,6 +115,13 @@ frontend/
     hooks/useApi.ts    # TanStack Query hooks (useServers, useApps, etc.)
     pages/             # Login, Dashboard, Servers, ServerDetail, Apps, AppDetail, Databases
     components/        # Layout (with logout), StatusBadge, DataTable, Modal, Toast, EmptyState
+
+scripts/
+  setup-vps.sh         # One-command VPS deployment (provision, deploy, register, webhook)
+
+docker-compose.prod.yml  # Production compose (infrakt on localhost:8000, Traefik handles HTTPS)
+Dockerfile               # Multi-stage build (Python backend + Node frontend)
+DEPLOYMENT.md            # VPS deployment guide
 
 tests/
   conftest.py          # isolated_config fixture (temp dir), mock_ssh fixture
@@ -156,7 +169,7 @@ infrakt immediately tests the SSH connection and reports whether it succeeded.
 
 ### Provision the Server
 
-Installs Docker, Caddy, UFW (ports 22/80/443), and fail2ban. This takes 2–5 minutes:
+Installs Docker, Traefik, UFW (ports 22/80/443), and fail2ban. This takes 2–5 minutes:
 
 ```bash
 infrakt server provision prod-1
@@ -278,7 +291,7 @@ infrakt server remove prod-1 --force   # skip confirmation
 
 #### `infrakt server provision <name>`
 
-Provision a server via SSH. Installs: Docker Engine, Caddy (with auto-HTTPS), UFW (deny inbound except 22/80/443), fail2ban, and creates `/opt/infrakt/{apps,caddy,backups}/`.
+Provision a server via SSH. Installs: Docker Engine, Traefik (Docker container with auto-HTTPS via Let's Encrypt), UFW (deny inbound except 22/80/443), fail2ban, and creates `/opt/infrakt/{apps,traefik,backups}/`.
 
 ```bash
 infrakt server provision prod-1
@@ -338,7 +351,7 @@ infrakt app create --server prod-1 --name api --git https://github.com/you/api -
 
 #### `infrakt app deploy <name>`
 
-Deploy or redeploy an app. Pulls/clones source, uploads environment variables, runs `docker compose up -d`, and configures the Caddy reverse proxy if a domain is set.
+Deploy or redeploy an app. Pulls/clones source, uploads environment variables, runs `docker compose up -d`, and configures the Traefik reverse proxy if a domain is set.
 
 ```bash
 infrakt app deploy myapp
@@ -390,7 +403,7 @@ infrakt app stop myapp
 
 #### `infrakt app destroy <name>`
 
-Stop containers, remove all volumes, and delete `/opt/infrakt/apps/<name>/` from the server. Also removes the Caddy proxy route if a domain was configured. Removes the app record from the local database.
+Stop containers, remove all volumes, and delete `/opt/infrakt/apps/<name>/` from the server. Also removes the Traefik proxy route if a domain was configured. Removes the app record from the local database.
 
 ```bash
 infrakt app destroy myapp
@@ -501,11 +514,11 @@ infrakt db list --server prod-1
 
 ### `infrakt proxy`
 
-Manage the Caddy reverse proxy configuration. Caddy is configured automatically during `infrakt server provision`. The Caddyfile is stored at `/opt/infrakt/caddy/Caddyfile` on the server and managed entirely via SSH — Caddy handles TLS certificates automatically via ACME.
+Manage the Traefik reverse proxy configuration. Traefik runs as a Docker container and is configured automatically during `infrakt server provision`. Each domain gets its own YAML config file in `/opt/infrakt/traefik/conf.d/` — Traefik's file provider watches this directory and auto-reloads on changes. TLS certificates are obtained automatically via Let's Encrypt.
 
 #### `infrakt proxy setup <server_name>`
 
-Initialize Caddy on a server. This runs automatically during provisioning; only use manually if re-configuring.
+Initialize Traefik on a server. This runs automatically during provisioning; only use manually if re-configuring.
 
 ```bash
 infrakt proxy setup prod-1
@@ -513,7 +526,7 @@ infrakt proxy setup prod-1
 
 #### `infrakt proxy add <domain>`
 
-Add a reverse proxy route from a domain to a local port.
+Add a reverse proxy route from a domain to a local port. Traefik picks up the new config automatically — no reload needed.
 
 ```bash
 infrakt proxy add api.example.com --server prod-1 --port 3000
@@ -526,7 +539,7 @@ infrakt proxy add api.example.com --server prod-1 --port 3000
 
 #### `infrakt proxy remove <domain>`
 
-Remove a proxy route and reload Caddy.
+Remove a proxy route. Traefik auto-detects the file removal.
 
 ```bash
 infrakt proxy remove api.example.com --server prod-1
@@ -542,7 +555,7 @@ infrakt proxy domains prod-1
 
 #### `infrakt proxy status <server_name>`
 
-Show the systemd status of the Caddy service.
+Show the Traefik container status and API overview.
 
 ```bash
 infrakt proxy status prod-1
@@ -550,10 +563,18 @@ infrakt proxy status prod-1
 
 #### `infrakt proxy reload <server_name>`
 
-Reload the Caddy configuration without restarting (graceful reload).
+Send HUP signal to Traefik. Usually not needed — file provider auto-reloads.
 
 ```bash
 infrakt proxy reload prod-1
+```
+
+#### `infrakt proxy validate <domain>`
+
+Check if Traefik has picked up a domain config via its API.
+
+```bash
+infrakt proxy validate api.example.com --server prod-1
 ```
 
 ---
@@ -617,6 +638,7 @@ The full dashboard is now available at `http://localhost:8000`.
 | Apps | `/apps` | List all apps, create, deploy, stop, destroy |
 | App Detail | `/apps/:name` | Logs, deployment history, environment variables |
 | Databases | `/databases` | List database services, create, destroy |
+| Settings | `/settings` | SSH keys, auto-deploy webhook config, notification webhooks |
 
 ---
 
@@ -695,7 +717,7 @@ npm run build        # production build to frontend/dist/
 - fail2ban: blocks brute-force SSH attempts
 - All database ports are bound to `127.0.0.1` only — never exposed publicly
 
-**Automatic TLS.** Caddy obtains and renews TLS certificates automatically via ACME (Let's Encrypt). Apps served over a custom domain always get HTTPS with zero configuration.
+**Automatic TLS.** Traefik obtains and renews TLS certificates automatically via ACME (Let's Encrypt). Apps served over a custom domain always get HTTPS with zero configuration.
 
 **Database passwords.** When `infrakt db create` generates a database, it uses `secrets.token_urlsafe(24)` for the password, which provides 144 bits of entropy. The password is not stored by infrakt — it is printed once and must be saved externally (e.g. in an app's env vars via `infrakt env set`).
 
@@ -716,6 +738,7 @@ npm run build        # production build to frontend/dist/
 | Encryption | cryptography (Fernet) | >=42.0 |
 | API framework | FastAPI | >=0.115 |
 | ASGI server | Uvicorn | >=0.34 |
+| YAML generation | PyYAML | >=6.0 |
 
 ### Frontend (TypeScript)
 
@@ -731,7 +754,7 @@ npm run build        # production build to frontend/dist/
 ### Key Design Decisions
 
 - **No remote agent** — everything is SSH-based, eliminating a persistent attack surface on the server
-- **Caddy for auto-HTTPS** — zero TLS configuration, automatic certificate renewal
+- **Traefik for auto-HTTPS** — runs as a Docker container, file provider for dynamic config, automatic certificate renewal via Let's Encrypt
 - **Docker Compose for app orchestration** — portable, no Kubernetes complexity
 - **SQLite for local state** — portable, zero-dependency, single-file backup
 - **Env vars encrypted at rest** — Fernet encryption with a local master key (never stored remotely)

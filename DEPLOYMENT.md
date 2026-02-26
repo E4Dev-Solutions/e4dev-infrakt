@@ -10,7 +10,7 @@ One-command deployment of the infrakt dashboard to a fresh VPS with automatic HT
   - `read:packages` — pull the Docker image from GHCR
   - `repo` — set GitHub Actions secrets for CD auto-deploy (optional; script handles gracefully if missing)
 
-> **Cloudflare users:** Set the DNS proxy to **DNS only** (gray cloud) so Caddy can obtain the TLS certificate directly.
+> **Cloudflare users:** Set the DNS proxy to **DNS only** (gray cloud) so Traefik can obtain the TLS certificate directly via HTTP challenge.
 
 ## Deploy
 
@@ -26,9 +26,10 @@ ssh root@<your-vps-ip> bash /tmp/setup-vps.sh \
 That's it. The script handles everything:
 
 **Phase 1 — Provision host:**
-- Installs Docker, Caddy, fail2ban, UFW (ports 22/80/443)
+- Installs Docker, fail2ban, UFW (ports 22/80/443)
 - Creates `/opt/infrakt/` directory structure and Docker network
-- Configures host Caddy with your domain → `localhost:8000`
+- Deploys Traefik as a Docker container with auto-HTTPS (Let's Encrypt)
+- Configures Traefik to reverse proxy your domain to `localhost:8000`
 
 **Phase 2 — Deploy infrakt:**
 - Authenticates to GHCR and pulls the Docker image
@@ -81,14 +82,15 @@ The CD workflow uses two GitHub Actions secrets (`DEPLOY_URL` and `DEPLOY_SECRET
 ## Architecture
 
 ```
-Internet → Caddy (host, ports 80/443, auto-HTTPS)
-             → localhost:8000
+Internet → Traefik (Docker container, ports 80/443, auto-HTTPS via Let's Encrypt)
+             → host.docker.internal:8000
                 → infrakt container (Docker)
                     → manages servers via SSH (Docker bridge 172.17.0.1)
 ```
 
-- Caddy runs on the host (not as a sidecar container) to avoid port conflicts when provisioning
-- The container exposes port 8000 on localhost only
+- Traefik runs as a Docker container in the `infrakt` network
+- The infrakt container exposes port 8000 on localhost only
+- Traefik uses the file provider to watch `/opt/infrakt/traefik/conf.d/` for dynamic route configs
 - Server self-management uses an SSH key at `/opt/infrakt/ssh/id_ed25519` mounted read-only into the container
 
 ## Teardown
@@ -99,7 +101,7 @@ To completely remove infrakt from the server:
 ssh root@<your-vps-ip> "\
   cd /opt/infrakt && \
   docker compose -f docker-compose.prod.yml down -v && \
-  systemctl stop caddy && \
+  cd /opt/infrakt/traefik && docker compose down -v && \
   rm -rf /opt/infrakt/*"
 ```
 
@@ -115,10 +117,15 @@ docker compose -f /opt/infrakt/docker-compose.prod.yml ps
 docker compose -f /opt/infrakt/docker-compose.prod.yml logs -f
 ```
 
-**Check Caddy status:**
+**Check Traefik status:**
 ```bash
-systemctl status caddy
-journalctl -u caddy --no-pager -n 50
+docker inspect infrakt-traefik --format '{{.State.Status}}'
+curl -s http://localhost:8080/api/overview | python3 -m json.tool
+```
+
+**View Traefik logs:**
+```bash
+docker logs infrakt-traefik --tail 50
 ```
 
 **Restart infrakt:**

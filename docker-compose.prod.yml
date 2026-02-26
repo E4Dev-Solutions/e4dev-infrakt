@@ -2,8 +2,8 @@
 # Production Docker Compose for infrakt
 #
 # Single service — the FastAPI application exposed on port 8000.
-# Host-level Caddy (installed during provisioning) handles HTTPS on ports
-# 80/443 and reverse-proxies to localhost:8000.
+# Traefik (deployed separately at /opt/infrakt/traefik/) handles HTTPS on
+# ports 80/443 and reverse-proxies to host.docker.internal:8000.
 #
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d

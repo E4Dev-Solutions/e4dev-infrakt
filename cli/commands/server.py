@@ -124,7 +124,7 @@ def remove(name: str, force: bool) -> None:
 @server.command()
 @click.argument("name")
 def provision(name: str) -> None:
-    """Provision a server with Docker, Caddy, and security hardening."""
+    """Provision a server with Docker, Traefik, and security hardening."""
     init_db()
     srv = _get_server(name)
 

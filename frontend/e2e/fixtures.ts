@@ -324,7 +324,7 @@ export async function mockApi(page: Page): Promise<void> {
     const sseBody = [
       'data: {"line":"[1/9] Installing Docker"}\n\n',
       'data: {"line":"[2/9] Configuring firewall"}\n\n',
-      'data: {"line":"[3/9] Installing Caddy"}\n\n',
+      'data: {"line":"[3/9] Setting up Traefik"}\n\n',
       'data: {"done":true,"status":"active"}\n\n',
     ].join("");
     return route.fulfill({
@@ -650,7 +650,7 @@ export async function mockApi(page: Page): Promise<void> {
   });
 
   await page.route("**/api/proxy/*/reload", (route) => {
-    return route.fulfill({ json: { message: "Caddy reloaded" } });
+    return route.fulfill({ json: { message: "Traefik reload signal sent" } });
   });
 
   await page.route("**/api/proxy/*/status", (route) => {

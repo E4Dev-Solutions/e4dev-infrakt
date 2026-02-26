@@ -2,7 +2,7 @@
 # =============================================================================
 # First-time VPS setup for infrakt
 #
-# Provisions the host (Docker, Caddy, UFW, fail2ban), authenticates to GHCR,
+# Provisions the host (Docker, Traefik, UFW, fail2ban), authenticates to GHCR,
 # downloads the production compose file, starts the stack, registers the host
 # as a managed server, triggers provisioning via the API, and configures
 # GitHub Actions secrets for CD auto-deploy.
@@ -74,26 +74,13 @@ fi
 
 # --- Stop conflicting services -----------------------------------------------
 echo "==> Stopping conflicting services on ports 80/443..."
-for svc in nginx apache2 httpd; do
+for svc in nginx apache2 httpd caddy; do
     if systemctl is-active --quiet "$svc" 2>/dev/null; then
         echo "    Stopping $svc..."
         systemctl stop "$svc"
         systemctl disable "$svc"
     fi
 done
-
-# --- Install Caddy if not present --------------------------------------------
-if ! command -v caddy &>/dev/null; then
-    echo "==> Installing Caddy..."
-    apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-        | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-        | tee /etc/apt/sources.list.d/caddy-stable.list
-    apt-get update -qq && apt-get install -y -qq caddy
-else
-    echo "==> Caddy already installed ($(caddy version))"
-fi
 
 # --- Install fail2ban --------------------------------------------------------
 echo "==> Installing fail2ban..."
@@ -112,35 +99,125 @@ echo 'y' | ufw enable || true
 
 # --- Create directory structure -----------------------------------------------
 echo "==> Creating ${INSTALL_DIR}/"
-mkdir -p "${INSTALL_DIR}/apps" "${INSTALL_DIR}/caddy" "${INSTALL_DIR}/backups" "${INSTALL_DIR}/ssh"
+mkdir -p "${INSTALL_DIR}/apps" "${INSTALL_DIR}/traefik/conf.d" "${INSTALL_DIR}/traefik/letsencrypt" "${INSTALL_DIR}/backups" "${INSTALL_DIR}/ssh"
 
 # --- Create Docker network ---------------------------------------------------
 docker network create infrakt 2>/dev/null || true
 
-# --- Configure Caddy for infrakt domain --------------------------------------
-# Set up the infrakt Caddyfile and configure host Caddy to use it.
-echo "==> Configuring Caddy for ${DOMAIN}..."
+# --- Configure Traefik -------------------------------------------------------
+echo "==> Configuring Traefik for ${DOMAIN}..."
 
-# Create the infrakt-managed Caddyfile with the dashboard domain
-if [ ! -f "${INSTALL_DIR}/caddy/Caddyfile" ]; then
-    echo "# Managed by infrakt — do not edit manually" > "${INSTALL_DIR}/caddy/Caddyfile"
+# Sanitize domain for use as identifier
+SANITIZED_DOMAIN=$(echo "${DOMAIN}" | sed 's/[^a-zA-Z0-9-]/-/g' | sed 's/^-//;s/-$//')
+
+# Write Traefik static config
+if [ ! -f "${INSTALL_DIR}/traefik/traefik.yml" ]; then
+    cat > "${INSTALL_DIR}/traefik/traefik.yml" <<TRAEFIKEOF
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ':80'
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ':443'
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ''
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  file:
+    directory: /opt/infrakt/traefik/conf.d
+    watch: true
+
+log:
+  level: INFO
+TRAEFIKEOF
+    echo "    Traefik static config written"
+else
+    echo "    Traefik static config already exists, skipping"
 fi
 
-# Ensure the domain block exists in the Caddyfile
-if ! grep -q "${DOMAIN}" "${INSTALL_DIR}/caddy/Caddyfile" 2>/dev/null; then
-    cat >> "${INSTALL_DIR}/caddy/Caddyfile" <<CADDYEOF
+# Write Traefik docker-compose.yml
+if [ ! -f "${INSTALL_DIR}/traefik/docker-compose.yml" ]; then
+    cat > "${INSTALL_DIR}/traefik/docker-compose.yml" <<COMPOSEEOF
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: infrakt-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /opt/infrakt/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - /opt/infrakt/traefik/conf.d:/opt/infrakt/traefik/conf.d:ro
+      - /opt/infrakt/traefik/letsencrypt:/letsencrypt
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - infrakt
 
-${DOMAIN} {
-    reverse_proxy localhost:8000
-}
-CADDYEOF
+networks:
+  infrakt:
+    external: true
+COMPOSEEOF
+    echo "    Traefik docker-compose.yml written"
+else
+    echo "    Traefik docker-compose.yml already exists, skipping"
 fi
 
-# Point host Caddy at the infrakt-managed Caddyfile
-mkdir -p /etc/caddy
-echo "import ${INSTALL_DIR}/caddy/Caddyfile" > /etc/caddy/Caddyfile
-systemctl enable caddy
-systemctl restart caddy
+# Initialize ACME storage
+touch "${INSTALL_DIR}/traefik/letsencrypt/acme.json"
+chmod 600 "${INSTALL_DIR}/traefik/letsencrypt/acme.json"
+
+# Write domain config for the infrakt dashboard
+if [ ! -f "${INSTALL_DIR}/traefik/conf.d/${SANITIZED_DOMAIN}.yml" ]; then
+    cat > "${INSTALL_DIR}/traefik/conf.d/${SANITIZED_DOMAIN}.yml" <<ROUTEEOF
+http:
+  routers:
+    ${SANITIZED_DOMAIN}:
+      rule: "Host(\`${DOMAIN}\`)"
+      entryPoints:
+        - websecure
+      service: svc-${SANITIZED_DOMAIN}
+      tls:
+        certResolver: letsencrypt
+    ${SANITIZED_DOMAIN}-http:
+      rule: "Host(\`${DOMAIN}\`)"
+      entryPoints:
+        - web
+      service: svc-${SANITIZED_DOMAIN}
+
+  services:
+    svc-${SANITIZED_DOMAIN}:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:8000"
+        passHostHeader: true
+ROUTEEOF
+    echo "    Domain route config written for ${DOMAIN}"
+else
+    echo "    Domain route config already exists for ${DOMAIN}, skipping"
+fi
+
+# Start Traefik
+echo "==> Starting Traefik..."
+cd "${INSTALL_DIR}/traefik" && docker compose up -d
+cd "${INSTALL_DIR}"
 
 echo "==> Host provisioning complete"
 

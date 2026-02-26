@@ -593,4 +593,30 @@ export const configApi = {
   selfUpdate: (): Promise<SelfUpdateConfig> => get("/config/self-update"),
 };
 
+// ─── GitHub ──────────────────────────────────────────────────────────────────
+
+export interface GitHubStatus {
+  connected: boolean;
+  username: string | null;
+}
+
+export interface GitHubRepo {
+  full_name: string;
+  name: string;
+  private: boolean;
+  default_branch: string;
+  description: string;
+  html_url: string;
+  clone_url: string;
+  owner: { login: string; avatar_url: string };
+}
+
+export const githubApi = {
+  status: (): Promise<GitHubStatus> => get("/github/status"),
+  connect: (token: string): Promise<GitHubStatus> =>
+    post("/github/connect", { token }),
+  disconnect: (): Promise<void> => del("/github/disconnect"),
+  repos: (): Promise<GitHubRepo[]> => get("/github/repos"),
+};
+
 export { ApiError };

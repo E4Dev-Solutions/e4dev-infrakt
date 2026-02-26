@@ -466,3 +466,26 @@ class SSHKeyOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# ── GitHub ─────────────────────────────────────────────
+
+
+class GitHubConnect(BaseModel):
+    token: str = Field(..., min_length=1)
+
+
+class GitHubStatus(BaseModel):
+    connected: bool
+    username: str | None = None
+
+
+class GitHubRepo(BaseModel):
+    full_name: str
+    name: str
+    private: bool
+    default_branch: str
+    description: str = ""
+    html_url: str
+    clone_url: str
+    owner: dict[str, str]

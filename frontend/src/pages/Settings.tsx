@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff } from "lucide-react";
+import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff, Github, Link as LinkIcon } from "lucide-react";
 import {
   useWebhooks,
   useCreateWebhook,
@@ -11,6 +11,9 @@ import {
   useDeploySSHKey,
   useServers,
   useSelfUpdateConfig,
+  useGitHubStatus,
+  useConnectGitHub,
+  useDisconnectGitHub,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -100,6 +103,13 @@ export default function Settings() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
 
+  // GitHub connection
+  const { data: githubStatus, isLoading: githubLoading } = useGitHubStatus();
+  const connectGitHub = useConnectGitHub();
+  const disconnectGitHub = useDisconnectGitHub();
+  const [githubToken, setGithubToken] = useState("");
+  const [showGithubToken, setShowGithubToken] = useState(false);
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [testingId, setTestingId] = useState<number | null>(null);
@@ -159,6 +169,31 @@ export default function Settings() {
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 2000);
     });
+  }
+
+  // ─── GitHub handlers ────────────────────────────────────────────────────────
+
+  async function handleConnectGitHub(e: React.FormEvent) {
+    e.preventDefault();
+    if (!githubToken.trim()) return;
+    try {
+      await connectGitHub.mutateAsync(githubToken.trim());
+      toast.success("GitHub account connected.");
+      setGithubToken("");
+      setShowGithubToken(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to connect GitHub account.");
+    }
+  }
+
+  async function handleDisconnectGitHub() {
+    if (!window.confirm("Disconnect your GitHub account? Your token will be removed.")) return;
+    try {
+      await disconnectGitHub.mutateAsync();
+      toast.success("GitHub account disconnected.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to disconnect GitHub account.");
+    }
   }
 
   // ─── Form handlers ──────────────────────────────────────────────────────────
@@ -377,6 +412,121 @@ export default function Settings() {
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      {/* GitHub section */}
+      <section aria-labelledby="github-heading" className="mb-10">
+        <div className="mb-4">
+          <h2 id="github-heading" className="text-base font-semibold text-slate-100">
+            GitHub
+          </h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Connect your GitHub account to deploy private repositories.
+          </p>
+        </div>
+
+        {githubLoading && (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 size={24} className="animate-spin text-indigo-400" aria-label="Loading GitHub status" />
+          </div>
+        )}
+
+        {!githubLoading && githubStatus && (
+          githubStatus.connected ? (
+            /* Connected state */
+            <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/30">
+              <div className="flex items-center justify-between px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <Github size={20} className="shrink-0 text-slate-300" aria-hidden="true" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-200">
+                        Connected as{" "}
+                        <span className="text-indigo-300">{githubStatus.username}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/30">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                        Connected
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500">Your token is encrypted at rest.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => void handleDisconnectGitHub()}
+                  disabled={disconnectGitHub.isPending}
+                  className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                >
+                  {disconnectGitHub.isPending && (
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                  )}
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Disconnected state */
+            <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/30">
+              <form onSubmit={(e) => void handleConnectGitHub(e)} className="p-4 space-y-4" noValidate>
+                <div className="flex items-start gap-3">
+                  <Github size={20} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
+                  <p className="text-sm text-slate-400">
+                    Connect your GitHub account to browse and deploy private repositories directly from the Create App dialog.
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="github-token" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    Personal Access Token <span className="text-red-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="github-token"
+                      type={showGithubToken ? "text" : "password"}
+                      required
+                      value={githubToken}
+                      onChange={(e) => setGithubToken(e.target.value)}
+                      placeholder="ghp_••••••••••••••••••••••••••••••••••••••"
+                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 pr-10 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGithubToken((v) => !v)}
+                      title={showGithubToken ? "Hide token" : "Show token"}
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-200"
+                    >
+                      {showGithubToken ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Required scopes: <code className="font-mono text-slate-400">repo</code>,{" "}
+                    <code className="font-mono text-slate-400">admin:repo_hook</code>
+                  </p>
+                  <a
+                    href="https://github.com/settings/tokens/new?scopes=repo,admin:repo_hook&description=infrakt"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                  >
+                    <LinkIcon size={11} aria-hidden="true" />
+                    Generate a token
+                  </a>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={connectGitHub.isPending || !githubToken.trim()}
+                    className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                  >
+                    {connectGitHub.isPending && (
+                      <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                    )}
+                    Connect
+                  </button>
+                </div>
+              </form>
+            </div>
+          )
         )}
       </section>
 

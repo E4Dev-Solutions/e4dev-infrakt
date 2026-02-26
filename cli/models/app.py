@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cli.core.database import Base
@@ -34,6 +34,8 @@ class App(Base):
     health_check_interval: Mapped[int | None] = mapped_column(Integer, default=None)
     replicas: Mapped[int] = mapped_column(Integer, default=1)
     deploy_strategy: Mapped[str] = mapped_column(String(20), default="restart")
+    webhook_secret: Mapped[str | None] = mapped_column(String(100), default=None)
+    auto_deploy: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Plus,
@@ -11,6 +11,9 @@ import {
   Loader2,
   Globe,
   GitBranch,
+  Github,
+  Search,
+  Lock,
 } from "lucide-react";
 import {
   useApps,
@@ -20,6 +23,8 @@ import {
   useStopApp,
   useRestartApp,
   useDestroyApp,
+  useGitHubStatus,
+  useGitHubRepos,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -54,6 +59,40 @@ export default function Apps() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<CreateAppInput>(defaultForm);
   const [actionPending, setActionPending] = useState<string | null>(null);
+
+  // GitHub repo picker
+  const { data: githubStatus } = useGitHubStatus();
+  const githubConnected = githubStatus?.connected === true;
+  const { data: githubRepos = [], isFetching: reposFetching, refetch: refetchRepos } = useGitHubRepos({
+    enabled: githubConnected,
+  });
+  const [repoSearch, setRepoSearch] = useState("");
+
+  const filteredRepos = useMemo(() => {
+    const q = repoSearch.toLowerCase().trim();
+    if (!q) return githubRepos;
+    return githubRepos.filter((r) => r.full_name.toLowerCase().includes(q));
+  }, [githubRepos, repoSearch]);
+
+  function handleRepoSelect(e: React.ChangeEvent<HTMLSelectElement>) {
+    const fullName = e.target.value;
+    if (!fullName) return;
+    const repo = githubRepos.find((r) => r.full_name === fullName);
+    if (!repo) return;
+    setForm((prev) => ({
+      ...prev,
+      git_repo: repo.clone_url,
+      branch: repo.default_branch,
+      name: prev.name || repo.name,
+    }));
+  }
+
+  function handleOpenModal() {
+    setShowModal(true);
+    if (githubConnected && githubRepos.length === 0) {
+      void refetchRepos();
+    }
+  }
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -152,7 +191,7 @@ export default function Apps() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={handleOpenModal}
           className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
         >
           <Plus size={16} aria-hidden="true" />
@@ -183,7 +222,7 @@ export default function Apps() {
           icon={<Box size={28} />}
           title="No apps yet"
           description="Create your first app to start deploying."
-          action={{ label: "Create App", onClick: () => setShowModal(true) }}
+          action={{ label: "Create App", onClick: handleOpenModal }}
         />
       )}
 
@@ -327,7 +366,7 @@ export default function Apps() {
 
       {/* Create App Modal */}
       {showModal && (
-        <Modal title="Create App" onClose={() => setShowModal(false)}>
+        <Modal title="Create App" onClose={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); }}>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Name */}
             <div>
@@ -414,6 +453,68 @@ export default function Apps() {
               </div>
             </div>
 
+            {/* GitHub Repo Picker */}
+            <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <Github size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
+                <span className="text-xs font-medium text-slate-300">GitHub Repository</span>
+              </div>
+              {githubConnected ? (
+                <div className="space-y-2">
+                  {/* Search filter */}
+                  <div className="relative">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                    <input
+                      type="text"
+                      value={repoSearch}
+                      onChange={(e) => setRepoSearch(e.target.value)}
+                      placeholder="Filter repositories…"
+                      aria-label="Filter GitHub repositories"
+                      className="w-full rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-3 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    />
+                  </div>
+                  {/* Repo select */}
+                  <div className="relative">
+                    {reposFetching && (
+                      <div className="absolute inset-y-0 right-8 flex items-center">
+                        <Loader2 size={12} className="animate-spin text-indigo-400" aria-hidden="true" />
+                      </div>
+                    )}
+                    <select
+                      aria-label="Select a GitHub repository"
+                      onChange={handleRepoSelect}
+                      defaultValue=""
+                      className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    >
+                      <option value="">Select a repository…</option>
+                      {filteredRepos.map((repo) => (
+                        <option key={repo.full_name} value={repo.full_name}>
+                          {repo.full_name}{repo.private ? " (private)" : " (public)"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {filteredRepos.length === 0 && !reposFetching && (
+                    <p className="text-xs text-slate-500">
+                      {repoSearch ? "No repositories match your filter." : "No repositories found."}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    Selecting a repo auto-fills the URL, branch, and name below.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  <Lock size={11} className="mr-1 inline-block" aria-hidden="true" />
+                  Connect GitHub in{" "}
+                  <a href="/settings" className="text-indigo-400 hover:text-indigo-300">
+                    Settings
+                  </a>{" "}
+                  to browse your repos.
+                </p>
+              )}
+            </div>
+
             {/* Git Repo + Branch */}
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
@@ -491,7 +592,7 @@ export default function Apps() {
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); }}
                 className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
               >
                 Cancel

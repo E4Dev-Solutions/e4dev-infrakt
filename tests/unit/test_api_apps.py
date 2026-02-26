@@ -461,3 +461,161 @@ class TestStreamAppLogs:
         body = response.text
         assert '"log line 1"' in body
         assert '"log line 2"' in body
+
+
+# ---------------------------------------------------------------------------
+# POST /api/apps/{name}/deploy — GitHub webhook auto-creation
+# ---------------------------------------------------------------------------
+
+
+def _seed_github_app(server_name="srv-1", app_name="gh-app"):
+    """Insert a server + GitHub app (with git_repo) into the isolated DB."""
+    _seed_server(server_name)
+    init_db()
+    with get_session() as session:
+        srv = session.query(Server).filter(Server.name == server_name).first()
+        a = App(
+            name=app_name,
+            server_id=srv.id,
+            port=3000,
+            app_type="git",
+            status="stopped",
+            git_repo="https://github.com/myorg/myrepo.git",
+            branch="main",
+        )
+        session.add(a)
+    return app_name
+
+
+class TestDeployCreatesGitHubWebhook:
+    @patch("api.routes.apps.create_repo_webhook")
+    @patch("api.routes.apps.get_github_token")
+    def test_deploy_creates_github_webhook(
+        self,
+        mock_get_token,
+        mock_create_hook,
+        client,
+        isolated_config,
+    ):
+        """When deploying a GitHub app with PAT connected, a webhook is auto-created."""
+        from cli.core.deployer import DeployResult
+
+        mock_get_token.return_value = "ghp_test"
+        mock_create_hook.return_value = 12345
+
+        _seed_github_app("srv-1", "gh-app")
+
+        with (
+            patch("api.routes.apps.broadcaster"),
+            patch("api.routes.apps.asyncio") as mock_asyncio,
+            patch("api.routes.apps.SSHClient") as mock_ssh_cls,
+            patch("api.routes.apps.deploy_app") as mock_deploy,
+            patch("api.routes.apps.env_content_for_app", return_value=""),
+            patch("api.routes.apps.add_domain"),
+            patch("api.routes.apps.fire_webhooks"),
+        ):
+            mock_asyncio.get_running_loop.return_value = MagicMock()
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_ssh_cls.return_value = mock_ssh
+            mock_deploy.return_value = DeployResult(log="ok", commit_hash="abc123", image_used=None)
+
+            response = client.post("/api/apps/gh-app/deploy")
+
+        assert response.status_code == 200
+
+        # Verify webhook was created
+        mock_create_hook.assert_called_once()
+        call_args = mock_create_hook.call_args
+        assert call_args[0][0] == "ghp_test"  # token
+        assert call_args[0][1] == "myorg"  # owner
+        assert call_args[0][2] == "myrepo"  # repo
+        assert "/api/deploy/github-webhook" in call_args[0][3]  # webhook_url
+        assert call_args[0][4]  # secret is non-empty
+
+        # Verify webhook_secret was set on the app in DB
+        init_db()
+        with get_session() as session:
+            a = session.query(App).filter(App.name == "gh-app").first()
+            assert a.webhook_secret is not None
+            assert len(a.webhook_secret) > 0
+
+    @patch("api.routes.apps.create_repo_webhook")
+    @patch("api.routes.apps.get_github_token")
+    def test_deploy_skips_webhook_if_no_github_token(
+        self,
+        mock_get_token,
+        mock_create_hook,
+        client,
+        isolated_config,
+    ):
+        """When no GitHub PAT is connected, webhook creation is skipped."""
+        from cli.core.deployer import DeployResult
+
+        mock_get_token.return_value = None
+
+        _seed_github_app("srv-1", "gh-app")
+
+        with (
+            patch("api.routes.apps.broadcaster"),
+            patch("api.routes.apps.asyncio") as mock_asyncio,
+            patch("api.routes.apps.SSHClient") as mock_ssh_cls,
+            patch("api.routes.apps.deploy_app") as mock_deploy,
+            patch("api.routes.apps.env_content_for_app", return_value=""),
+            patch("api.routes.apps.add_domain"),
+            patch("api.routes.apps.fire_webhooks"),
+        ):
+            mock_asyncio.get_running_loop.return_value = MagicMock()
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_ssh_cls.return_value = mock_ssh
+            mock_deploy.return_value = DeployResult(log="ok", commit_hash="abc123", image_used=None)
+
+            response = client.post("/api/apps/gh-app/deploy")
+
+        assert response.status_code == 200
+        mock_create_hook.assert_not_called()
+
+    @patch("api.routes.apps.create_repo_webhook")
+    @patch("api.routes.apps.get_github_token")
+    def test_deploy_skips_webhook_if_already_set(
+        self,
+        mock_get_token,
+        mock_create_hook,
+        client,
+        isolated_config,
+    ):
+        """When webhook_secret is already set, webhook creation is skipped."""
+        from cli.core.deployer import DeployResult
+
+        mock_get_token.return_value = "ghp_test"
+
+        _seed_github_app("srv-1", "gh-app")
+        # Pre-set webhook_secret
+        init_db()
+        with get_session() as session:
+            a = session.query(App).filter(App.name == "gh-app").first()
+            a.webhook_secret = "existing-secret"
+
+        with (
+            patch("api.routes.apps.broadcaster"),
+            patch("api.routes.apps.asyncio") as mock_asyncio,
+            patch("api.routes.apps.SSHClient") as mock_ssh_cls,
+            patch("api.routes.apps.deploy_app") as mock_deploy,
+            patch("api.routes.apps.env_content_for_app", return_value=""),
+            patch("api.routes.apps.add_domain"),
+            patch("api.routes.apps.fire_webhooks"),
+        ):
+            mock_asyncio.get_running_loop.return_value = MagicMock()
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_ssh_cls.return_value = mock_ssh
+            mock_deploy.return_value = DeployResult(log="ok", commit_hash="abc123", image_used=None)
+
+            response = client.post("/api/apps/gh-app/deploy")
+
+        assert response.status_code == 200
+        mock_create_hook.assert_not_called()

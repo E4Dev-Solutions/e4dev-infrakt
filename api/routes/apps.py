@@ -5,11 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import threading
 from collections.abc import AsyncIterator
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import joinedload
 
@@ -40,6 +41,7 @@ from cli.core.deployer import (
     stream_logs,
 )
 from cli.core.exceptions import SSHConnectionError
+from cli.core.github import create_repo_webhook, get_github_token
 from cli.core.proxy_manager import add_domain, remove_domain
 from cli.core.ssh import SSHClient
 from cli.core.webhook_sender import fire_webhooks
@@ -192,10 +194,12 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
 @router.post("/{name}/deploy")
 async def deploy(
     name: str,
+    request: Request,
     background_tasks: BackgroundTasks,
     server: str | None = None,
 ) -> dict[str, str | int]:
     init_db()
+    base_url = str(request.base_url).rstrip("/")
     with get_session() as session:
         q = session.query(App).filter(App.name == name)
         if server:
@@ -312,6 +316,36 @@ async def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "running"
+
+            # Auto-create GitHub webhook on first deploy
+            original_git_repo = app_data.get("git_repo")
+            if original_git_repo and "github.com" in (original_git_repo or ""):
+                gh_token = get_github_token()
+                if gh_token:
+                    with get_session() as session:
+                        a = session.query(App).filter(App.id == app_id).first()
+                        if a and not a.webhook_secret:
+                            webhook_secret = secrets.token_urlsafe(32)
+                            # Parse owner/repo from git URL
+                            parts = (
+                                (original_git_repo or "")
+                                .replace("https://github.com/", "")
+                                .replace(".git", "")
+                                .split("/")
+                            )
+                            if len(parts) >= 2:
+                                owner, repo_name = parts[0], parts[1]
+                                hook_id = create_repo_webhook(
+                                    gh_token,
+                                    owner,
+                                    repo_name,
+                                    f"{base_url}/api/deploy/github-webhook",
+                                    webhook_secret,
+                                )
+                                if hook_id:
+                                    a.webhook_secret = webhook_secret
+                                    _on_log(f"Auto-created GitHub webhook for {owner}/{repo_name}")
+
             fire_webhooks(
                 "deploy.success",
                 {

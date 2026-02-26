@@ -65,6 +65,10 @@ PROVISION_STEPS = [
         (
             "if [ ! -f /opt/infrakt/caddy/Caddyfile ]; then "
             "echo '# Managed by infrakt — do not edit manually' > /opt/infrakt/caddy/Caddyfile; "
+            "if [ -f /etc/caddy/Caddyfile ]; then "
+            "grep -v '^import ' /etc/caddy/Caddyfile | grep -v '^#' | grep -v '^$' "
+            ">> /opt/infrakt/caddy/Caddyfile || true; "
+            "fi; "
             "fi"
         ),
     ),

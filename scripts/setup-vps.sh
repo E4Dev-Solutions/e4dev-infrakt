@@ -66,6 +66,18 @@ else
     echo "==> Docker already installed ($(docker --version))"
 fi
 
+# --- Free ports 80/443 -------------------------------------------------------
+# The Caddy sidecar needs ports 80 and 443. Stop any services that might
+# be holding them (common on previously-provisioned or pre-configured VPSes).
+echo "==> Freeing ports 80/443..."
+for svc in caddy nginx apache2 httpd; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        echo "    Stopping $svc..."
+        systemctl stop "$svc"
+        systemctl disable "$svc"
+    fi
+done
+
 # --- Authenticate to GHCR ----------------------------------------------------
 echo "==> Logging in to GitHub Container Registry..."
 echo "${TOKEN}" | docker login ghcr.io -u _token --password-stdin
@@ -116,31 +128,52 @@ docker compose -f docker-compose.prod.yml pull
 echo "==> Starting infrakt..."
 docker compose -f docker-compose.prod.yml up -d
 
-# --- Wait for health check ----------------------------------------------------
-echo "==> Waiting for infrakt to be healthy..."
+# --- Wait for healthy container -----------------------------------------------
+# Poll Docker's own health status rather than exec-ing into the container.
+# This is more reliable and doesn't depend on the container being ready for exec.
+echo "==> Waiting for infrakt container to be healthy..."
 ATTEMPTS=0
-MAX_ATTEMPTS=30
-until docker compose -f docker-compose.prod.yml exec -T infrakt \
-    python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')" 2>/dev/null; do
+MAX_ATTEMPTS=40
+while true; do
+    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' infrakt-infrakt-1 2>/dev/null || echo "starting")
+    if [ "$HEALTH" = "healthy" ]; then
+        echo "    Container is healthy."
+        break
+    fi
     ATTEMPTS=$((ATTEMPTS + 1))
     if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
-        echo "==> WARNING: Health check did not pass within ${MAX_ATTEMPTS} attempts"
+        echo "==> WARNING: Container did not become healthy within $((MAX_ATTEMPTS * 3))s"
+        echo "    Current status: ${HEALTH}"
         echo "    Check logs: docker compose -f docker-compose.prod.yml logs"
         break
     fi
-    sleep 2
+    sleep 3
 done
 
 # --- Retrieve API key ---------------------------------------------------------
+# The API key is generated at app startup and written to the volume.
+# Wait for the file to appear (may take a moment after container reports healthy).
 echo "==> Retrieving API key..."
 API_KEY=""
-for i in $(seq 1 10); do
+for _ in $(seq 1 20); do
     API_KEY=$(docker compose -f docker-compose.prod.yml exec -T infrakt \
         cat /home/infrakt/.infrakt/api_key.txt 2>/dev/null || true)
     if [[ -n "$API_KEY" ]]; then
         break
     fi
     sleep 2
+done
+
+# --- Verify HTTPS -------------------------------------------------------------
+echo "==> Verifying HTTPS..."
+HTTPS_OK=false
+for _ in $(seq 1 10); do
+    HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "https://${DOMAIN}/api/health" 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "200" ]; then
+        HTTPS_OK=true
+        break
+    fi
+    sleep 3
 done
 
 # --- Print summary ------------------------------------------------------------
@@ -151,14 +184,18 @@ echo "=============================================="
 echo "  infrakt is running!"
 echo "=============================================="
 echo ""
-echo "  Dashboard: https://${DOMAIN}"
-echo "  (IP: ${VPS_IP})"
+if [ "$HTTPS_OK" = true ]; then
+    echo "  Dashboard: https://${DOMAIN}  [HTTPS verified]"
+else
+    echo "  Dashboard: https://${DOMAIN}  [HTTPS pending — may need DNS propagation]"
+    echo "  Fallback:  http://${VPS_IP}:8000  (direct, no TLS)"
+fi
 echo ""
 if [[ -n "$API_KEY" ]]; then
     echo "  API Key: ${API_KEY}"
 else
     echo "  API Key: (not ready yet — retrieve manually)"
-    echo "    docker compose -f docker-compose.prod.yml exec infrakt cat /home/infrakt/.infrakt/api_key.txt"
+    echo "    cd ${INSTALL_DIR} && docker compose -f docker-compose.prod.yml exec infrakt cat /home/infrakt/.infrakt/api_key.txt"
 fi
 echo ""
 echo "  SSH Keys: Copy your keys to ${INSTALL_DIR}/ssh/"

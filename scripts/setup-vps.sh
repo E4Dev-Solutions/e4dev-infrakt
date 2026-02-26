@@ -164,6 +164,26 @@ for _ in $(seq 1 20); do
     sleep 2
 done
 
+# --- Generate SSH key for server self-management ------------------------------
+# infrakt runs inside a container and needs SSH access to the host to manage it.
+# Generate a dedicated key pair, place the private key where the container can
+# read it, and add the public key to root's authorized_keys on the host.
+SSH_KEY_FILE="${INSTALL_DIR}/ssh/id_ed25519"
+if [ ! -f "$SSH_KEY_FILE" ]; then
+    echo "==> Generating SSH key for server management..."
+    ssh-keygen -t ed25519 -f "$SSH_KEY_FILE" -N "" -C "infrakt@$(hostname)" -q
+    chmod 600 "$SSH_KEY_FILE"
+
+    # Authorize the key on the host so the container can SSH to 172.17.0.1
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
+    cat "${SSH_KEY_FILE}.pub" >> /root/.ssh/authorized_keys
+    chmod 600 /root/.ssh/authorized_keys
+    echo "    Key generated and added to /root/.ssh/authorized_keys"
+else
+    echo "==> SSH key already exists at ${SSH_KEY_FILE}, skipping"
+fi
+
 # --- Verify HTTPS -------------------------------------------------------------
 echo "==> Verifying HTTPS..."
 HTTPS_OK=false
@@ -175,6 +195,35 @@ for _ in $(seq 1 10); do
     fi
     sleep 3
 done
+
+# --- Register host as managed server -----------------------------------------
+# The container reaches the host via Docker's bridge gateway IP (172.17.0.1).
+# The SSH key mounted at /home/infrakt/.ssh/id_ed25519 authenticates the connection.
+DOCKER_BRIDGE_IP="172.17.0.1"
+SERVER_NAME="$(hostname)"
+
+if [[ -n "$API_KEY" ]]; then
+    echo "==> Registering host as managed server '${SERVER_NAME}'..."
+    # Use the HTTPS endpoint via Caddy (port 8000 is not exposed to the host)
+    REG_RESPONSE=$(curl -s -w '\n%{http_code}' \
+        -X POST "https://${DOMAIN}/api/servers" \
+        -H "Content-Type: application/json" \
+        -H "X-API-Key: ${API_KEY}" \
+        -d "{\"name\": \"${SERVER_NAME}\", \"host\": \"${DOCKER_BRIDGE_IP}\", \"user\": \"root\", \"port\": 22, \"ssh_key_path\": \"id_ed25519\"}" \
+        2>/dev/null || echo -e "\n000")
+    REG_CODE=$(echo "$REG_RESPONSE" | tail -1)
+
+    if [ "$REG_CODE" = "200" ] || [ "$REG_CODE" = "201" ]; then
+        echo "    Server '${SERVER_NAME}' registered (host: ${DOCKER_BRIDGE_IP})"
+    elif [ "$REG_CODE" = "409" ]; then
+        echo "    Server '${SERVER_NAME}' already registered"
+    else
+        echo "    WARNING: Server registration returned HTTP ${REG_CODE}"
+        echo "    You can add it manually via the dashboard"
+    fi
+else
+    echo "==> Skipping server registration (no API key available)"
+fi
 
 # --- Print summary ------------------------------------------------------------
 VPS_IP=$(hostname -I | awk '{print $1}')
@@ -198,8 +247,7 @@ else
     echo "    cd ${INSTALL_DIR} && docker compose -f docker-compose.prod.yml exec infrakt cat /home/infrakt/.infrakt/api_key.txt"
 fi
 echo ""
-echo "  SSH Keys: Copy your keys to ${INSTALL_DIR}/ssh/"
-echo "    scp ~/.ssh/id_ed25519 root@${VPS_IP}:${INSTALL_DIR}/ssh/"
+echo "  Server: '${SERVER_NAME}' registered at ${DOCKER_BRIDGE_IP}"
 echo ""
 echo "  GitHub Webhook (auto-deploy):"
 echo "    URL:     https://${DOMAIN}/api/self-update"

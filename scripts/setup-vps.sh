@@ -4,8 +4,8 @@
 #
 # Provisions the host (Docker, Caddy, UFW, fail2ban), authenticates to GHCR,
 # downloads the production compose file, starts the stack, registers the host
-# as a managed server, and triggers provisioning via the API so the server
-# shows as "active" in the dashboard.
+# as a managed server, triggers provisioning via the API, and configures
+# GitHub Actions secrets for CD auto-deploy.
 #
 # Usage:
 #   bash setup-vps.sh --domain infrakt.example.com --token ghp_xxx
@@ -329,42 +329,86 @@ else
     echo "==> Skipping server registration and provisioning (no API key available)"
 fi
 
-# --- Create GitHub webhook for auto-deploy ------------------------------------
-# Uses the GitHub API to create a push webhook on the repo so that pushes to
-# main trigger the self-update endpoint automatically.
-WEBHOOK_URL="https://${DOMAIN}/api/self-update"
+# --- Set GitHub Actions secrets for CD auto-deploy ----------------------------
+# The CD workflow triggers the self-update endpoint after pushing the Docker
+# image, so the deploy always uses the freshly-built image (no race condition).
+DEPLOY_URL="https://${DOMAIN}/api/self-update"
 if [[ -n "$WEBHOOK_SECRET" ]]; then
-    echo "==> Creating GitHub webhook for auto-deploy..."
-    GH_HOOK_RESPONSE=$(curl -s -w '\n%{http_code}' \
-        -X POST "https://api.github.com/repos/${REPO}/hooks" \
-        -H "Authorization: token ${TOKEN}" \
-        -H "Accept: application/vnd.github.v3+json" \
-        -d "{
-            \"name\": \"web\",
-            \"active\": true,
-            \"events\": [\"push\"],
-            \"config\": {
-                \"url\": \"${WEBHOOK_URL}\",
-                \"content_type\": \"json\",
-                \"secret\": \"${WEBHOOK_SECRET}\",
-                \"insecure_ssl\": \"0\"
-            }
-        }" 2>/dev/null || echo -e "\n000")
-    GH_HOOK_CODE=$(echo "$GH_HOOK_RESPONSE" | tail -1)
+    echo "==> Setting GitHub Actions secrets for CD auto-deploy..."
 
-    if [ "$GH_HOOK_CODE" = "201" ]; then
-        echo "    GitHub webhook created successfully"
-    elif [ "$GH_HOOK_CODE" = "422" ]; then
-        echo "    GitHub webhook already exists for this URL"
-    elif [ "$GH_HOOK_CODE" = "404" ]; then
-        echo "    WARNING: Could not create webhook (PAT may need admin:repo_hook scope)"
-        echo "    Add it manually: Settings > Webhooks > Add webhook"
+    # Use the GitHub API to set repository secrets (encrypted with libsodium).
+    # This requires the PAT to have the 'repo' scope.
+    _set_gh_secret() {
+        local SECRET_NAME="$1"
+        local SECRET_VALUE="$2"
+
+        # Get the repo public key for encrypting secrets
+        KEY_RESPONSE=$(curl -s \
+            -H "Authorization: token ${TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${REPO}/actions/secrets/public-key" 2>/dev/null)
+
+        KEY_ID=$(echo "$KEY_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['key_id'])" 2>/dev/null || echo "")
+        PUBLIC_KEY=$(echo "$KEY_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['key'])" 2>/dev/null || echo "")
+
+        if [[ -z "$KEY_ID" ]] || [[ -z "$PUBLIC_KEY" ]]; then
+            echo "    WARNING: Could not retrieve repo public key"
+            return 1
+        fi
+
+        # Encrypt the secret using libsodium sealed box via Python
+        ENCRYPTED=$(python3 -c "
+from base64 import b64encode, b64decode
+from nacl.public import SealedBox, PublicKey
+public_key = b64decode('${PUBLIC_KEY}')
+sealed_box = SealedBox(PublicKey(public_key))
+encrypted = sealed_box.encrypt(b'${SECRET_VALUE}')
+print(b64encode(encrypted).decode())
+" 2>/dev/null || echo "")
+
+        if [[ -z "$ENCRYPTED" ]]; then
+            # Fallback: try with pip install pynacl
+            pip install -q pynacl 2>/dev/null
+            ENCRYPTED=$(python3 -c "
+from base64 import b64encode, b64decode
+from nacl.public import SealedBox, PublicKey
+public_key = b64decode('${PUBLIC_KEY}')
+sealed_box = SealedBox(PublicKey(public_key))
+encrypted = sealed_box.encrypt(b'${SECRET_VALUE}')
+print(b64encode(encrypted).decode())
+" 2>/dev/null || echo "")
+        fi
+
+        if [[ -z "$ENCRYPTED" ]]; then
+            echo "    WARNING: Could not encrypt secret (pynacl not available)"
+            return 1
+        fi
+
+        RESP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+            -X PUT "https://api.github.com/repos/${REPO}/actions/secrets/${SECRET_NAME}" \
+            -H "Authorization: token ${TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{\"encrypted_value\":\"${ENCRYPTED}\",\"key_id\":\"${KEY_ID}\"}" 2>/dev/null)
+
+        if [ "$RESP_CODE" = "201" ] || [ "$RESP_CODE" = "204" ]; then
+            echo "    ${SECRET_NAME} set successfully"
+            return 0
+        else
+            echo "    WARNING: Setting ${SECRET_NAME} returned HTTP ${RESP_CODE}"
+            return 1
+        fi
+    }
+
+    if _set_gh_secret "DEPLOY_URL" "$DEPLOY_URL" && _set_gh_secret "DEPLOY_SECRET" "$WEBHOOK_SECRET"; then
+        echo "    CD auto-deploy configured via GitHub Actions"
     else
-        echo "    WARNING: GitHub webhook creation returned HTTP ${GH_HOOK_CODE}"
-        echo "    Add it manually: Settings > Webhooks > Add webhook"
+        echo "    WARNING: Could not set GitHub Actions secrets automatically"
+        echo "    Set them manually in GitHub repo > Settings > Secrets:"
+        echo "      DEPLOY_URL    = ${DEPLOY_URL}"
+        echo "      DEPLOY_SECRET = ${WEBHOOK_SECRET}"
     fi
 else
-    echo "==> Skipping GitHub webhook creation (no webhook secret available)"
+    echo "==> Skipping CD auto-deploy setup (no webhook secret available)"
 fi
 
 # --- Print summary ------------------------------------------------------------
@@ -391,9 +435,8 @@ fi
 echo ""
 echo "  Server: '${SERVER_NAME}' registered and provisioned at ${DOCKER_BRIDGE_IP}"
 echo ""
-echo "  GitHub Webhook (auto-deploy):"
-echo "    URL:     https://${DOMAIN}/api/self-update"
-echo "    Secret:  ${WEBHOOK_SECRET}"
-echo "    Events:  Just the push event"
+echo "  Auto-deploy: CD workflow triggers self-update after image push"
+echo "    Endpoint: https://${DOMAIN}/api/self-update"
+echo "    Secrets:  DEPLOY_URL + DEPLOY_SECRET set in GitHub Actions"
 echo ""
 echo "=============================================="

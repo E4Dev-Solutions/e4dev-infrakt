@@ -43,7 +43,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Deployment is handled by the GitHub webhook → infrakt self-update
-      # endpoint. When this push event triggers the webhook, the running
-      # infrakt instance pulls the new image and restarts itself.
-      # No SSH secrets needed.
+      - name: Trigger self-update on VPS
+        if: github.ref == 'refs/heads/main'
+        env:
+          DEPLOY_URL: ${{ secrets.DEPLOY_URL }}
+          DEPLOY_SECRET: ${{ secrets.DEPLOY_SECRET }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          PAYLOAD="{\"ref\":\"refs/heads/main\",\"after\":\"${COMMIT_SHA}\"}"
+          SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$DEPLOY_SECRET" | awk '{print $2}')"
+          curl -sf --max-time 30 \
+            -X POST "$DEPLOY_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIGNATURE" \
+            -H "X-GitHub-Event: push" \
+            -d "$PAYLOAD"

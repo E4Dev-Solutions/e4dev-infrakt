@@ -1,125 +1,106 @@
 # Deploying infrakt to a VPS
 
-Step-by-step guide to deploy the infrakt dashboard to a VPS with a custom domain and automatic HTTPS.
+One-command deployment of the infrakt dashboard to a fresh VPS with automatic HTTPS, server registration, and CD pipeline.
 
 ## Prerequisites
 
-- A VPS running Ubuntu 22.04+ (or any Linux with systemd)
-- A domain name with DNS access
-- SSH access to the VPS as root
+- A fresh VPS running Ubuntu 22.04+ with root SSH access
+- A domain with a DNS A record pointing to the VPS IP
+- A GitHub PAT with these scopes:
+  - `read:packages` — pull the Docker image from GHCR
+  - `repo` — set GitHub Actions secrets for CD auto-deploy (optional; script handles gracefully if missing)
 
-## Step 1: Point your domain to the VPS
+> **Cloudflare users:** Set the DNS proxy to **DNS only** (gray cloud) so Caddy can obtain the TLS certificate directly.
 
-At your domain registrar (Cloudflare, Namecheap, etc.):
+## Deploy
 
-1. Add an **A record**: `infrakt.yourdomain.com` → `<your-vps-ip>`
-2. If using Cloudflare, set proxy to **DNS only** (gray cloud) so Caddy can obtain the TLS certificate
-
-## Step 2: SSH into your VPS
+From your local machine:
 
 ```bash
-ssh root@<your-vps-ip>
+scp scripts/setup-vps.sh root@<your-vps-ip>:/tmp/
+ssh root@<your-vps-ip> bash /tmp/setup-vps.sh \
+  --domain infrakt.yourdomain.com \
+  --token <your-github-pat>
 ```
 
-## Step 3: Run the setup script
+That's it. The script handles everything:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/E4Dev-Solutions/e4dev-infrakt/main/scripts/setup-vps.sh | bash
+**Phase 1 — Provision host:**
+- Installs Docker, Caddy, fail2ban, UFW (ports 22/80/443)
+- Creates `/opt/infrakt/` directory structure and Docker network
+- Configures host Caddy with your domain → `localhost:8000`
+
+**Phase 2 — Deploy infrakt:**
+- Authenticates to GHCR and pulls the Docker image
+- Downloads `docker-compose.prod.yml` from the private repo
+- Generates `.env` with a webhook secret
+- Starts the container and waits for it to be healthy
+- Generates an SSH key for server self-management
+- Verifies HTTPS is working
+
+**Phase 3 — Register and activate:**
+- Registers the host as a managed server via the API
+- Triggers provisioning to set server status to "active"
+- Sets GitHub Actions secrets (`DEPLOY_URL`, `DEPLOY_SECRET`) for CD auto-deploy
+
+At the end, the script prints:
+- Dashboard URL (with HTTPS status)
+- API key (paste into the dashboard login)
+- Auto-deploy configuration status
+
+## After Deployment
+
+### Log in to the dashboard
+
+Open `https://infrakt.yourdomain.com` and paste the API key from the setup output.
+
+### Auto-deploy pipeline
+
+Already configured. The flow is:
+
+1. Push to `main`
+2. GitHub Actions builds and pushes the Docker image to GHCR (CD workflow)
+3. After the image is pushed, CD workflow calls the self-update endpoint
+4. infrakt verifies the HMAC signature, pulls the new image, and restarts
+
+The CD workflow uses two GitHub Actions secrets (`DEPLOY_URL` and `DEPLOY_SECRET`) set automatically during setup. This ensures the deploy only triggers **after** the image is built, avoiding race conditions.
+
+> If the setup script couldn't set the secrets automatically, add them manually in your repo's **Settings → Secrets and variables → Actions**:
+> - `DEPLOY_URL` = `https://infrakt.yourdomain.com/api/self-update`
+> - `DEPLOY_SECRET` = the `GITHUB_WEBHOOK_SECRET` value from `/opt/infrakt/.env`
+
+## Script Options
+
+```
+--domain   Domain for HTTPS (required)
+--token    GitHub PAT (required)
+--repo     GitHub repo (default: E4Dev-Solutions/e4dev-infrakt)
+--branch   Git branch (default: main)
 ```
 
-This will:
-- Install Docker (if not already installed)
-- Create `/opt/infrakt/` directory structure
-- Download `docker-compose.prod.yml`
-- Generate a GitHub webhook secret
-- Pull the infrakt Docker image from GHCR
-- Start the infrakt container on port 8000
+## Architecture
 
-## Step 4: Install Caddy for HTTPS + domain
-
-```bash
-apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update
-apt install caddy
+```
+Internet → Caddy (host, ports 80/443, auto-HTTPS)
+             → localhost:8000
+                → infrakt container (Docker)
+                    → manages servers via SSH (Docker bridge 172.17.0.1)
 ```
 
-Configure the reverse proxy:
+- Caddy runs on the host (not as a sidecar container) to avoid port conflicts when provisioning
+- The container exposes port 8000 on localhost only
+- Server self-management uses an SSH key at `/opt/infrakt/ssh/id_ed25519` mounted read-only into the container
+
+## Teardown
+
+To completely remove infrakt from the server:
 
 ```bash
-cat > /etc/caddy/Caddyfile << 'EOF'
-infrakt.yourdomain.com {
-    reverse_proxy localhost:8000
-}
-EOF
-
-systemctl reload caddy
-```
-
-Caddy automatically obtains a Let's Encrypt TLS certificate. Your dashboard is now available at `https://infrakt.yourdomain.com`.
-
-## Step 5: Copy your SSH keys
-
-These are the keys infrakt uses to manage your remote servers:
-
-```bash
-scp ~/.ssh/id_ed25519 root@<your-vps-ip>:/opt/infrakt/ssh/
-```
-
-Alternatively, you can generate and manage SSH keys through the dashboard later (Settings → SSH Keys → Generate Key).
-
-## Step 6: Get your API key and log in
-
-```bash
-docker compose -f /opt/infrakt/docker-compose.prod.yml exec infrakt cat /home/infrakt/.infrakt/api_key.txt
-```
-
-Open `https://infrakt.yourdomain.com` in your browser and paste the API key to log in.
-
-## Step 7: Set up auto-deploy webhook
-
-Every push to `main` will automatically update infrakt on your VPS.
-
-1. Get the webhook secret from the VPS:
-   ```bash
-   grep GITHUB_WEBHOOK_SECRET /opt/infrakt/.env
-   ```
-
-2. In your GitHub repo, go to **Settings → Webhooks → Add webhook**:
-   - **Payload URL:** `https://infrakt.yourdomain.com/api/self-update`
-   - **Content type:** `application/json`
-   - **Secret:** the value from the previous step
-   - **Events:** select **Just the push event**
-   - Click **Add webhook**
-
-Now every push to `main` triggers: GitHub Actions builds and pushes the Docker image to GHCR → GitHub sends a webhook to your VPS → infrakt pulls the new image and restarts itself.
-
-## Step 8: (Optional) Configure CORS
-
-If you need CORS for a separate frontend, edit `/opt/infrakt/.env`:
-
-```bash
-CORS_ORIGINS=https://infrakt.yourdomain.com
-```
-
-Then restart:
-
-```bash
-cd /opt/infrakt && docker compose -f docker-compose.prod.yml up -d
-```
-
-> **Note:** CORS is not needed when accessing the dashboard directly at the domain since FastAPI serves the frontend as same-origin static files.
-
-## Firewall
-
-Make sure your VPS firewall allows ports 22 (SSH), 80 (HTTP), and 443 (HTTPS):
-
-```bash
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw enable
+ssh root@<your-vps-ip> "\
+  cd /opt/infrakt && \
+  docker compose -f docker-compose.prod.yml down -v && \
+  systemctl stop caddy && \
+  rm -rf /opt/infrakt/*"
 ```
 
 ## Troubleshooting
@@ -149,3 +130,6 @@ cd /opt/infrakt && docker compose -f docker-compose.prod.yml restart
 ```bash
 cd /opt/infrakt && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
 ```
+
+**Re-run setup on an existing server:**
+The script is idempotent — it skips steps that are already done (Docker installed, .env exists, SSH key exists, etc.).

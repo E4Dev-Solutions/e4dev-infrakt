@@ -2,8 +2,8 @@
 
 Note: key_manager.py imports KEYS_DIR at module level from cli.core.config.
 All tests that touch the filesystem also patch cli.core.key_manager.KEYS_DIR
-to ensure isolation. generate_key uses paramiko.Ed25519Key.generate which was
-removed in paramiko 4.x; those tests mock the paramiko module.
+to ensure isolation. generate_key uses cryptography's Ed25519PrivateKey for
+key generation; tests mock both the cryptography and paramiko layers.
 """
 
 from __future__ import annotations
@@ -46,91 +46,127 @@ def _make_mock_paramiko_key(
     return key
 
 
-def _mock_write_private_key_file(path: str, password=None) -> None:
-    """Side-effect for write_private_key_file that creates the actual file."""
-    Path(path).write_text("MOCK PRIVATE KEY")
-    Path(path).chmod(0o600)
+def _mock_private_key_bytes() -> bytes:
+    """Return fake PEM bytes for mocking Ed25519PrivateKey.private_bytes."""
+    return b"-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n-----END OPENSSH PRIVATE KEY-----\n"
 
 
 # ---------------------------------------------------------------------------
-# generate_key — mocks paramiko.Ed25519Key.generate (removed in paramiko 4.x)
+# generate_key — mocks cryptography Ed25519PrivateKey + paramiko loading
 # ---------------------------------------------------------------------------
 
 
 class TestGenerateKey:
     def test_returns_tuple_of_path_and_fingerprint(self, isolated_config, patch_keys_dir):
-        mock_key = _make_mock_paramiko_key()
-        mock_key.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             private_path, fingerprint = generate_key("test-key")
         assert isinstance(private_path, Path)
         assert isinstance(fingerprint, str)
 
     def test_private_key_file_path_is_in_keys_dir(self, isolated_config, patch_keys_dir):
-        mock_key = _make_mock_paramiko_key()
-        mock_key.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             private_path, _ = generate_key("my-key")
         assert private_path.parent == patch_keys_dir
 
     def test_public_key_file_is_created(self, isolated_config, patch_keys_dir):
-        mock_key = _make_mock_paramiko_key()
-        mock_key.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             generate_key("my-key")
         pub_path = patch_keys_dir / "my-key.pub"
         assert pub_path.exists()
 
     def test_fingerprint_starts_with_sha256_prefix(self, isolated_config, patch_keys_dir):
-        mock_key = _make_mock_paramiko_key()
-        mock_key.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             _, fingerprint = generate_key("my-key")
         assert fingerprint.startswith("SHA256:")
 
     def test_public_key_content_has_expected_format(self, isolated_config, patch_keys_dir):
-        mock_key = _make_mock_paramiko_key()
-        mock_key.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             generate_key("format-key")
         pub_content = (patch_keys_dir / "format-key.pub").read_text()
         assert pub_content.startswith("ssh-ed25519 ")
 
-    def test_write_private_key_file_is_called(self, isolated_config, patch_keys_dir):
-        mock_key = _make_mock_paramiko_key()
-        mock_key.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key
+    def test_private_key_file_is_written(self, isolated_config, patch_keys_dir):
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             generate_key("write-key")
-        mock_key.write_private_key_file.assert_called_once()
+        assert (patch_keys_dir / "write-key").exists()
 
     def test_different_names_produce_different_paths(self, isolated_config, patch_keys_dir):
-        mock_key1 = _make_mock_paramiko_key()
-        mock_key1.write_private_key_file.side_effect = _mock_write_private_key_file
-        mock_key2 = _make_mock_paramiko_key()
-        mock_key2.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key1
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             path1, _ = generate_key("key-alpha")
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key2
             path2, _ = generate_key("key-beta")
         assert path1 != path2
 
     def test_get_name_and_get_base64_are_called_for_public_key(
         self, isolated_config, patch_keys_dir
     ):
-        mock_key = _make_mock_paramiko_key()
-        mock_key.write_private_key_file.side_effect = _mock_write_private_key_file
-        with patch("cli.core.key_manager.paramiko") as mock_paramiko:
-            mock_paramiko.Ed25519Key.generate.return_value = mock_key
+        mock_crypto_key = MagicMock()
+        mock_crypto_key.private_bytes.return_value = _mock_private_key_bytes()
+        mock_paramiko_key = _make_mock_paramiko_key()
+
+        with (
+            patch("cli.core.key_manager.Ed25519PrivateKey.generate", return_value=mock_crypto_key),
+            patch("cli.core.key_manager.paramiko") as mock_paramiko,
+        ):
+            mock_paramiko.Ed25519Key.from_private_key_file.return_value = mock_paramiko_key
             generate_key("key-pub-check")
-        mock_key.get_name.assert_called()
-        mock_key.get_base64.assert_called()
+        mock_paramiko_key.get_name.assert_called()
+        mock_paramiko_key.get_base64.assert_called()
 
 
 # ---------------------------------------------------------------------------

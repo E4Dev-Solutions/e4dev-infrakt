@@ -6,6 +6,8 @@ import shlex
 from pathlib import Path
 
 import paramiko  # type: ignore[import-untyped]
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from cli.core.config import KEYS_DIR
 from cli.core.exceptions import InfraktError, SSHConnectionError
@@ -36,19 +38,25 @@ def generate_key(name: str) -> tuple[Path, str]:
         InfraktError: If key generation or filesystem operations fail
     """
     try:
-        # Generate Ed25519 key
-        key = paramiko.Ed25519Key.generate()
-
-        # Get fingerprint
-        fingerprint = _get_key_fingerprint(key)
+        # Generate Ed25519 key using cryptography library
+        private_key = Ed25519PrivateKey.generate()
 
         # Create keys directory if it doesn't exist
         KEYS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Save private key
+        # Save private key in OpenSSH format
         private_path = KEYS_DIR / name
-        key.write_private_key_file(str(private_path), password=None)
+        private_bytes = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.OpenSSH,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        private_path.write_bytes(private_bytes)
         private_path.chmod(0o600)
+
+        # Load back via paramiko to get public key string and fingerprint
+        key = paramiko.Ed25519Key.from_private_key_file(str(private_path))
+        fingerprint = _get_key_fingerprint(key)
 
         # Save public key
         public_path = KEYS_DIR / f"{name}.pub"

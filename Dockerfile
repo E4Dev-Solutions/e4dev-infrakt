@@ -58,7 +58,8 @@ RUN apt-get update \
 # Create a non-root user. Running as root inside a container is a security
 # risk — if the process is exploited, the attacker has root inside the container
 # and can potentially escape to the host.
-RUN useradd --create-home --shell /bin/bash infrakt \
+RUN groupadd -f docker \
+    && useradd --create-home --shell /bin/bash infrakt \
     && usermod -aG docker infrakt
 
 WORKDIR /app

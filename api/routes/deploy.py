@@ -62,7 +62,7 @@ def _require_api_or_deploy_key(
 
 
 @router.post("")
-def trigger_deploy(
+async def trigger_deploy(
     body: DeployTrigger,
     background_tasks: BackgroundTasks,
     _key: str = Security(_require_api_or_deploy_key),
@@ -101,7 +101,7 @@ def trigger_deploy(
         app_cpu: str | None = app_obj.cpu_limit
         app_mem: str | None = app_obj.memory_limit
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     broadcaster.register(dep_id, loop)
 
     def _do_deploy() -> None:

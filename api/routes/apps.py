@@ -190,7 +190,7 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
 
 
 @router.post("/{name}/deploy")
-def deploy(
+async def deploy(
     name: str,
     background_tasks: BackgroundTasks,
     server: str | None = None,
@@ -232,7 +232,7 @@ def deploy(
         }
 
     # Register for live log streaming before starting the background task.
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     broadcaster.register(dep_id, loop)
 
     def _do_deploy() -> None:
@@ -371,7 +371,7 @@ def deploy(
 
 
 @router.post("/{name}/rollback")
-def rollback(
+async def rollback(
     name: str,
     background_tasks: BackgroundTasks,
     deployment_id: int | None = None,
@@ -445,7 +445,7 @@ def rollback(
         session.flush()
         dep_id = dep.id
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     broadcaster.register(dep_id, loop)
 
     def _do_rollback() -> None:
@@ -574,7 +574,7 @@ async def stream_app_logs(name: str, lines: int = 100) -> StreamingResponse:
         ssh = _ssh_for(app_obj.server)
 
     ssh.connect()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     _sentinel = object()
 
     def _next_line(gen):  # noqa: ANN001, ANN202

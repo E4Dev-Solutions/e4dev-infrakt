@@ -164,7 +164,7 @@ def remove_server(name: str) -> dict[str, str]:
 
 
 @router.post("/{name}/provision")
-def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str | int]:
+async def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str | int]:
     """Start provisioning a server in the background."""
     init_db()
     with get_session() as session:
@@ -177,7 +177,7 @@ def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, str | i
 
     # Use negative server ID to avoid collision with deployment IDs
     prov_key = -srv_id
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     broadcaster.register(prov_key, loop)
 
     def _do_provision() -> None:

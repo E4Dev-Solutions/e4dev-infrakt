@@ -13,6 +13,7 @@ import {
   webhooksApi,
   keysApi,
   configApi,
+  githubApi,
   type CreateServerInput,
   type UpdateServerInput,
   type CreateAppInput,
@@ -36,6 +37,8 @@ import {
   type SSHKey,
   type DatabaseStats,
   type SelfUpdateConfig,
+  type GitHubStatus,
+  type GitHubRepo,
 } from "@/api/client";
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -59,6 +62,8 @@ export const queryKeys = {
   keys: ["keys"] as const,
   databaseStats: (name: string) => ["databases", name, "stats"] as const,
   selfUpdateConfig: ["config", "self-update"] as const,
+  githubStatus: ["github", "status"] as const,
+  githubRepos: ["github", "repos"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -652,5 +657,48 @@ export function useSelfUpdateConfig(
     queryFn: configApi.selfUpdate,
     staleTime: Infinity,
     ...options,
+  });
+}
+
+// ─── GitHub ──────────────────────────────────────────────────────────────────
+
+export function useGitHubStatus(options?: Partial<UseQueryOptions<GitHubStatus>>) {
+  return useQuery({
+    queryKey: queryKeys.githubStatus,
+    queryFn: githubApi.status,
+    staleTime: 30_000,
+    ...options,
+  });
+}
+
+export function useGitHubRepos(options?: Partial<UseQueryOptions<GitHubRepo[]>>) {
+  return useQuery({
+    queryKey: queryKeys.githubRepos,
+    queryFn: githubApi.repos,
+    enabled: false,
+    staleTime: 60_000,
+    ...options,
+  });
+}
+
+export function useConnectGitHub() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => githubApi.connect(token),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.githubStatus });
+      void qc.invalidateQueries({ queryKey: queryKeys.githubRepos });
+    },
+  });
+}
+
+export function useDisconnectGitHub() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => githubApi.disconnect(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.githubStatus });
+      void qc.invalidateQueries({ queryKey: queryKeys.githubRepos });
+    },
   });
 }

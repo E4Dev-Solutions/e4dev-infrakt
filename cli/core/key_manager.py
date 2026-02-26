@@ -1,28 +1,50 @@
-"""SSH key generation, import, and management."""
+"""SSH key generation, import, and management.
+
+Uses the ``cryptography`` library directly for all key operations
+(generation, fingerprinting, public-key extraction) to avoid
+paramiko API breakage across major versions.
+"""
 
 import base64
 import hashlib
 import shlex
 from pathlib import Path
 
-import paramiko  # type: ignore[import-untyped]
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 from cli.core.config import KEYS_DIR
 from cli.core.exceptions import InfraktError, SSHConnectionError
 from cli.core.ssh import SSHClient
 
 
-def _get_key_fingerprint(key: paramiko.PKey) -> str:
-    """Get SHA256 fingerprint of a public key."""
-    if hasattr(key, "get_base64"):
-        public_bytes = base64.b64decode(key.get_base64())
-    else:
-        public_bytes = key.get_name().encode() + key.get_base64().encode()
-    sha256_hash = hashlib.sha256(public_bytes).digest()
-    fingerprint_b64 = base64.b64encode(sha256_hash).decode().rstrip("=")
-    return f"SHA256:{fingerprint_b64}"
+def _load_private_key(path: Path) -> PrivateKeyTypes:
+    """Load any OpenSSH private key from *path*."""
+    data = path.read_bytes()
+    return serialization.load_ssh_private_key(data, password=None)
+
+
+def _public_key_string(private_key: PrivateKeyTypes) -> str:
+    """Return the SSH public-key line (e.g. ``ssh-ed25519 AAAA…``)."""
+    pub_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.OpenSSH,
+        format=serialization.PublicFormat.OpenSSH,
+    )
+    return pub_bytes.decode()
+
+
+def _fingerprint(private_key: PrivateKeyTypes) -> str:
+    """Return ``SHA256:<base64>`` fingerprint of the public key."""
+    pub_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.OpenSSH,
+        format=serialization.PublicFormat.OpenSSH,
+    )
+    # The wire format is everything after the key-type prefix + space
+    parts = pub_bytes.split(b" ", 1)
+    raw = base64.b64decode(parts[1]) if len(parts) == 2 else pub_bytes
+    digest = hashlib.sha256(raw).digest()
+    return f"SHA256:{base64.b64encode(digest).decode().rstrip('=')}"
 
 
 def generate_key(name: str) -> tuple[Path, str]:
@@ -38,13 +60,11 @@ def generate_key(name: str) -> tuple[Path, str]:
         InfraktError: If key generation or filesystem operations fail
     """
     try:
-        # Generate Ed25519 key using cryptography library
         private_key = Ed25519PrivateKey.generate()
 
-        # Create keys directory if it doesn't exist
         KEYS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Save private key in OpenSSH format
+        # Save private key in OpenSSH PEM format
         private_path = KEYS_DIR / name
         private_bytes = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
@@ -54,25 +74,18 @@ def generate_key(name: str) -> tuple[Path, str]:
         private_path.write_bytes(private_bytes)
         private_path.chmod(0o600)
 
-        # Load back via paramiko to get public key string and fingerprint
-        key = paramiko.Ed25519Key.from_private_key_file(str(private_path))
-        fingerprint = _get_key_fingerprint(key)
-
         # Save public key
         public_path = KEYS_DIR / f"{name}.pub"
-        public_key_str = f"{key.get_name()} {key.get_base64()}"
-        public_path.write_text(public_key_str)
+        public_path.write_text(_public_key_string(private_key))
         public_path.chmod(0o644)
 
-        return private_path, fingerprint
+        return private_path, _fingerprint(private_key)
     except Exception as exc:
         raise InfraktError(f"Failed to generate SSH key '{name}': {exc}") from exc
 
 
 def import_key(name: str, source_path: Path) -> tuple[Path, str]:
     """Import an existing SSH key into infrakt management.
-
-    Reads the key, validates it, and stores it in KEYS_DIR.
 
     Args:
         name: Name for the key in infrakt
@@ -89,25 +102,19 @@ def import_key(name: str, source_path: Path) -> tuple[Path, str]:
         if not source_path.exists():
             raise FileNotFoundError(f"Key file not found: {source_path}")
 
-        # Read and validate the key
-        key = paramiko.PKey.from_private_key_file(str(source_path))
-        fingerprint = _get_key_fingerprint(key)
+        private_key = _load_private_key(source_path)
 
-        # Create keys directory if it doesn't exist
         KEYS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Copy private key to KEYS_DIR
         private_path = KEYS_DIR / name
         private_path.write_bytes(source_path.read_bytes())
         private_path.chmod(0o600)
 
-        # Save public key
         public_path = KEYS_DIR / f"{name}.pub"
-        public_key_str = f"{key.get_name()} {key.get_base64()}"
-        public_path.write_text(public_key_str)
+        public_path.write_text(_public_key_string(private_key))
         public_path.chmod(0o644)
 
-        return private_path, fingerprint
+        return private_path, _fingerprint(private_key)
     except Exception as exc:
         raise InfraktError(f"Failed to import SSH key '{name}': {exc}") from exc
 
@@ -126,8 +133,8 @@ def get_fingerprint(key_path: Path) -> str:
     """
     try:
         key_path = Path(key_path).expanduser()
-        key = paramiko.PKey.from_private_key_file(str(key_path))
-        return _get_key_fingerprint(key)
+        private_key = _load_private_key(key_path)
+        return _fingerprint(private_key)
     except Exception as exc:
         raise InfraktError(f"Failed to read key fingerprint: {exc}") from exc
 
@@ -146,8 +153,8 @@ def get_public_key(key_path: Path) -> str:
     """
     try:
         key_path = Path(key_path).expanduser()
-        key = paramiko.PKey.from_private_key_file(str(key_path))
-        return f"{key.get_name()} {key.get_base64()}"
+        private_key = _load_private_key(key_path)
+        return _public_key_string(private_key)
     except Exception as exc:
         raise InfraktError(f"Failed to read public key: {exc}") from exc
 
@@ -165,23 +172,18 @@ def deploy_key_to_server(ssh: SSHClient, public_key: str) -> None:
         SSHConnectionError: If SSH operations fail
     """
     try:
-        # Ensure .ssh directory exists
         ssh.run_checked("mkdir -p ~/.ssh")
 
-        # Check if key already exists
         try:
             existing = ssh.run_checked("cat ~/.ssh/authorized_keys 2>/dev/null || true")
         except SSHConnectionError:
             existing = ""
 
         if public_key in existing:
-            return  # Already deployed
+            return
 
-        # Append the key
         quoted_key = shlex.quote(public_key)
         ssh.run_checked(f"echo {quoted_key} >> ~/.ssh/authorized_keys")
-
-        # Fix permissions
         ssh.run_checked("chmod 600 ~/.ssh/authorized_keys")
     except Exception as exc:
         raise SSHConnectionError(f"Failed to deploy key to server: {exc}") from exc

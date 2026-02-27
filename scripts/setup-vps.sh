@@ -270,7 +270,7 @@ echo "==> Waiting for infrakt container to be healthy..."
 ATTEMPTS=0
 MAX_ATTEMPTS=40
 while true; do
-    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' infrakt-infrakt-1 2>/dev/null || echo "starting")
+    HEALTH=$(docker inspect --format='{{.State.Health.Status}}' infrakt-app 2>/dev/null || echo "starting")
     if [ "$HEALTH" = "healthy" ]; then
         echo "    Container is healthy."
         break
@@ -333,11 +333,13 @@ done
 # =============================================================================
 DOCKER_BRIDGE_IP="172.17.0.1"
 SERVER_NAME="$(hostname)"
+# Use localhost for API calls — avoids depending on HTTPS cert readiness.
+API_BASE="http://localhost:8000"
 
 if [[ -n "$API_KEY" ]]; then
     echo "==> Registering host as managed server '${SERVER_NAME}'..."
-    REG_RESPONSE=$(curl -s -w '\n%{http_code}' \
-        -X POST "https://${DOMAIN}/api/servers" \
+    REG_RESPONSE=$(curl -s -w '\n%{http_code}' --max-time 15 \
+        -X POST "${API_BASE}/api/servers" \
         -H "Content-Type: application/json" \
         -H "X-API-Key: ${API_KEY}" \
         -d "{\"name\": \"${SERVER_NAME}\", \"host\": \"${DOCKER_BRIDGE_IP}\", \"user\": \"root\", \"port\": 22, \"ssh_key_path\": \"/home/infrakt/.ssh/id_ed25519\"}" \
@@ -358,8 +360,8 @@ if [[ -n "$API_KEY" ]]; then
     # mostly be no-ops. This call ensures the server status is set to "active"
     # in the database once provisioning completes successfully.
     echo "==> Provisioning server '${SERVER_NAME}' via API..."
-    PROV_RESPONSE=$(curl -s -w '\n%{http_code}' \
-        -X POST "https://${DOMAIN}/api/servers/${SERVER_NAME}/provision" \
+    PROV_RESPONSE=$(curl -s -w '\n%{http_code}' --max-time 15 \
+        -X POST "${API_BASE}/api/servers/${SERVER_NAME}/provision" \
         -H "Content-Type: application/json" \
         -H "X-API-Key: ${API_KEY}" \
         2>/dev/null || echo -e "\n000")
@@ -370,8 +372,8 @@ if [[ -n "$API_KEY" ]]; then
         PROV_ATTEMPTS=0
         PROV_MAX=60
         while true; do
-            SRV_STATUS=$(curl -s \
-                "https://${DOMAIN}/api/servers" \
+            SRV_STATUS=$(curl -s --max-time 10 \
+                "${API_BASE}/api/servers" \
                 -H "X-API-Key: ${API_KEY}" \
                 2>/dev/null | python3 -c "
 import sys, json
@@ -415,6 +417,10 @@ if [[ -n "$WEBHOOK_SECRET" ]]; then
 
     # Use the GitHub API to set repository secrets (encrypted with libsodium).
     # This requires the PAT to have the 'repo' scope.
+
+    # Install pynacl for secret encryption (libsodium sealed box)
+    pip install -q pynacl 2>/dev/null || true
+
     _set_gh_secret() {
         local SECRET_NAME="$1"
         local SECRET_VALUE="$2"
@@ -429,7 +435,7 @@ if [[ -n "$WEBHOOK_SECRET" ]]; then
         PUBLIC_KEY=$(echo "$KEY_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['key'])" 2>/dev/null || echo "")
 
         if [[ -z "$KEY_ID" ]] || [[ -z "$PUBLIC_KEY" ]]; then
-            echo "    WARNING: Could not retrieve repo public key"
+            echo "    WARNING: Could not retrieve repo public key (PAT may need 'repo' scope)"
             return 1
         fi
 
@@ -442,19 +448,6 @@ sealed_box = SealedBox(PublicKey(public_key))
 encrypted = sealed_box.encrypt(b'${SECRET_VALUE}')
 print(b64encode(encrypted).decode())
 " 2>/dev/null || echo "")
-
-        if [[ -z "$ENCRYPTED" ]]; then
-            # Fallback: try with pip install pynacl
-            pip install -q pynacl 2>/dev/null
-            ENCRYPTED=$(python3 -c "
-from base64 import b64encode, b64decode
-from nacl.public import SealedBox, PublicKey
-public_key = b64decode('${PUBLIC_KEY}')
-sealed_box = SealedBox(PublicKey(public_key))
-encrypted = sealed_box.encrypt(b'${SECRET_VALUE}')
-print(b64encode(encrypted).decode())
-" 2>/dev/null || echo "")
-        fi
 
         if [[ -z "$ENCRYPTED" ]]; then
             echo "    WARNING: Could not encrypt secret (pynacl not available)"

@@ -95,6 +95,7 @@ RUN chown -R infrakt:infrakt /app
 # When a Docker volume is first mounted here, Docker copies this structure
 # (including ownership) into the volume. This prevents PermissionError
 # when the app tries to create subdirectories at runtime.
+ENV INFRAKT_HOME=/home/infrakt/.infrakt
 RUN mkdir -p /home/infrakt/.infrakt/keys /home/infrakt/.infrakt/envs /home/infrakt/.infrakt/backups \
     && chown -R infrakt:infrakt /home/infrakt/.infrakt
 

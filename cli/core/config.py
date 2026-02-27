@@ -1,6 +1,7 @@
+import os
 from pathlib import Path
 
-INFRAKT_HOME = Path.home() / ".infrakt"
+INFRAKT_HOME = Path(os.environ.get("INFRAKT_HOME", Path.home() / ".infrakt"))
 DB_PATH = INFRAKT_HOME / "infrakt.db"
 KEYS_DIR = INFRAKT_HOME / "keys"
 ENVS_DIR = INFRAKT_HOME / "envs"

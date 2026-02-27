@@ -264,6 +264,12 @@ class EnvVarOut(BaseModel):
     value: str  # masked unless ?show_values=true
 
 
+class ContainerEnvVar(BaseModel):
+    key: str
+    value: str
+    container: str
+
+
 # ── Database ────────────────────────────────────────────
 
 

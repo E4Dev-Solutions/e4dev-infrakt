@@ -36,6 +36,7 @@ import {
   useSetEnv,
   useDeleteEnv,
   useUpdateApp,
+  useContainerEnv,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { useDeploymentStream } from "@/hooks/useDeploymentStream";
@@ -223,6 +224,7 @@ function LogsTab({ appName }: { appName: string }) {
 
 function EnvTab({ appName }: { appName: string }) {
   const { data: vars = [], isLoading } = useAppEnv(appName, true);
+  const { data: containerVars = [], isLoading: containerLoading } = useContainerEnv(appName);
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const toast = useToast();
@@ -259,112 +261,177 @@ function EnvTab({ appName }: { appName: string }) {
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
-      {/* Add form */}
-      <form
-        onSubmit={handleAdd}
-        className="flex items-end gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-4"
-      >
-        <div className="flex-1">
-          <label
-            htmlFor="env-key"
-            className="mb-1.5 block text-xs font-medium text-slate-400"
-          >
-            Key
-          </label>
-          <input
-            id="env-key"
-            value={newKey}
-            onChange={(e) => setNewKey(e.target.value)}
-            placeholder="DATABASE_URL"
-            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-          />
-        </div>
-        <div className="flex-1">
-          <label
-            htmlFor="env-value"
-            className="mb-1.5 block text-xs font-medium text-slate-400"
-          >
-            Value
-          </label>
-          <input
-            id="env-value"
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            placeholder="postgres://..."
-            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={setEnv.isPending || !newKey.trim()}
-          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
-        >
-          {setEnv.isPending ? (
-            <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-          ) : (
-            <Plus size={14} aria-hidden="true" />
-          )}
-          Add
-        </button>
-      </form>
+  // Group container vars by container name
+  const grouped = containerVars.reduce<Record<string, { key: string; value: string }[]>>(
+    (acc, v) => {
+      (acc[v.container] ??= []).push({ key: v.key, value: v.value });
+      return acc;
+    },
+    {},
+  );
 
-      {/* Env var table */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Loading env vars" />
-        </div>
-      ) : vars.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-500">
-          No environment variables set.
-        </p>
-      ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-700">
-          <table className="w-full text-sm" role="table">
-            <thead>
-              <tr className="border-b border-slate-700 bg-slate-800/60">
-                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Key
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Value
-                </th>
-                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/40">
-              {vars.map((v) => (
-                <tr key={v.key} className="bg-slate-800/30 hover:bg-slate-800/60">
-                  <td className="px-4 py-3 font-mono text-xs font-medium text-slate-200">
-                    {v.key}
-                  </td>
-                  <td className="max-w-xs truncate px-4 py-3 font-mono text-xs text-slate-400">
-                    {v.value ?? <span className="text-slate-500 italic">hidden</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => handleDelete(v.key)}
-                      disabled={deletingKey === v.key}
-                      className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
-                      aria-label={`Delete ${v.key}`}
-                    >
-                      {deletingKey === v.key ? (
-                        <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Trash size={13} aria-hidden="true" />
-                      )}
-                    </button>
-                  </td>
+  return (
+    <div className="space-y-6">
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
+
+      {/* ── User Variables ─────────────────────────────────── */}
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          User Variables
+        </h3>
+
+        {/* Add form */}
+        <form
+          onSubmit={handleAdd}
+          className="mb-4 flex items-end gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-4"
+        >
+          <div className="flex-1">
+            <label
+              htmlFor="env-key"
+              className="mb-1.5 block text-xs font-medium text-slate-400"
+            >
+              Key
+            </label>
+            <input
+              id="env-key"
+              value={newKey}
+              onChange={(e) => setNewKey(e.target.value)}
+              placeholder="DATABASE_URL"
+              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+            />
+          </div>
+          <div className="flex-1">
+            <label
+              htmlFor="env-value"
+              className="mb-1.5 block text-xs font-medium text-slate-400"
+            >
+              Value
+            </label>
+            <input
+              id="env-value"
+              value={newValue}
+              onChange={(e) => setNewValue(e.target.value)}
+              placeholder="postgres://..."
+              className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={setEnv.isPending || !newKey.trim()}
+            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+          >
+            {setEnv.isPending ? (
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Plus size={14} aria-hidden="true" />
+            )}
+            Add
+          </button>
+        </form>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Loading env vars" />
+          </div>
+        ) : vars.length === 0 ? (
+          <p className="py-4 text-center text-sm text-slate-500">
+            No user variables set. Add variables above to override container defaults.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-slate-700">
+            <table className="w-full text-sm" role="table">
+              <thead>
+                <tr className="border-b border-slate-700 bg-slate-800/60">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Key
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Value
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody className="divide-y divide-slate-700/40">
+                {vars.map((v) => (
+                  <tr key={v.key} className="bg-slate-800/30 hover:bg-slate-800/60">
+                    <td className="px-4 py-3 font-mono text-xs font-medium text-slate-200">
+                      {v.key}
+                    </td>
+                    <td className="max-w-xs truncate px-4 py-3 font-mono text-xs text-slate-400">
+                      {v.value ?? <span className="text-slate-500 italic">hidden</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleDelete(v.key)}
+                        disabled={deletingKey === v.key}
+                        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        aria-label={`Delete ${v.key}`}
+                      >
+                        {deletingKey === v.key ? (
+                          <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Trash size={13} aria-hidden="true" />
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Container Variables (read-only) ────────────────── */}
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Container Variables
+          <span className="ml-2 text-[10px] font-normal normal-case text-slate-500">
+            read-only — from docker-compose.yml
+          </span>
+        </h3>
+
+        {containerLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Loading container vars" />
+          </div>
+        ) : containerVars.length === 0 ? (
+          <p className="py-4 text-center text-sm text-slate-500">
+            No running containers found or no env vars detected.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(grouped).map(([container, envs]) => (
+              <div key={container} className="overflow-hidden rounded-lg border border-slate-700/60">
+                <div className="border-b border-slate-700/40 bg-slate-800/40 px-4 py-2">
+                  <span className="font-mono text-xs font-medium text-slate-300">
+                    {container}
+                  </span>
+                  <span className="ml-2 text-[10px] text-slate-500">
+                    {envs.length} var{envs.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                <table className="w-full text-sm" role="table">
+                  <tbody className="divide-y divide-slate-700/20">
+                    {envs.map((v) => (
+                      <tr key={v.key} className="hover:bg-slate-800/30">
+                        <td className="w-1/3 px-4 py-2 font-mono text-xs font-medium text-slate-300">
+                          {v.key}
+                        </td>
+                        <td className="max-w-xs truncate px-4 py-2 font-mono text-xs text-slate-500">
+                          {v.value}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

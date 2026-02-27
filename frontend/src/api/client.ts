@@ -118,6 +118,12 @@ export interface EnvVar {
   value: string;
 }
 
+export interface ContainerEnvVar {
+  key: string;
+  value: string;
+  container: string;
+}
+
 export interface ContainerHealthInfo {
   name: string;
   state: string;
@@ -465,6 +471,9 @@ export const appsApi = {
 
   deleteEnv: (name: string, key: string): Promise<void> =>
     del(`/apps/${encodeURIComponent(name)}/env/${encodeURIComponent(key)}`),
+
+  getContainerEnv: (name: string): Promise<ContainerEnvVar[]> =>
+    get(`/apps/${encodeURIComponent(name)}/env/container`),
 
   health: (name: string): Promise<AppHealth> =>
     get(`/apps/${encodeURIComponent(name)}/health`),

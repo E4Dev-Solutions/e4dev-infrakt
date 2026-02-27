@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from api.schemas import EnvVarOut, EnvVarSet
+from api.schemas import ContainerEnvVar, EnvVarOut, EnvVarSet
 from cli.core.config import ENVS_DIR, ensure_config_dir
 from cli.core.crypto import decrypt, encrypt
 from cli.core.database import get_session, init_db
@@ -104,3 +104,76 @@ def push_env(app_name: str) -> dict[str, str]:
         ssh.run_checked(f"cd {q_path} && docker compose restart", timeout=60)
 
     return {"message": f"Pushed {len(data)} variable(s) and restarted"}
+
+
+# Docker-internal vars that aren't useful to show users
+_FILTERED_KEYS = frozenset(
+    {
+        "PATH",
+        "HOSTNAME",
+        "HOME",
+        "LANG",
+        "GPG_KEY",
+        "PYTHON_VERSION",
+        "PYTHON_PIP_VERSION",
+        "PYTHON_GET_PIP_URL",
+        "PYTHON_GET_PIP_SHA256",
+        "PYTHON_SHA256",
+        "PYTHON_SETUPTOOLS_VERSION",
+        "TERM",
+        "GOPATH",
+        "GOSU_VERSION",
+        "PGDATA",
+    }
+)
+
+
+@router.get("/container", response_model=list[ContainerEnvVar])
+def container_env(app_name: str) -> list[ContainerEnvVar]:
+    """Read env vars from running Docker containers for this app."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == app_name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{app_name}' not found")
+        srv = app_obj.server
+        ssh = SSHClient(
+            host=srv.host,
+            user=srv.user,
+            port=srv.port,
+            key_path=srv.ssh_key_path,
+        )
+
+    prefix = f"infrakt-{app_name}"
+    with ssh:
+        # List all containers matching this app
+        stdout, _, rc = ssh.run(
+            f"docker ps --filter name={shlex.quote(prefix)} --format '{{{{.Names}}}}'"
+        )
+        if rc != 0 or not stdout.strip():
+            return []
+
+        containers = [c.strip() for c in stdout.strip().splitlines() if c.strip()]
+        result: list[ContainerEnvVar] = []
+        for cname in containers:
+            # Short label: strip "infrakt-" prefix for readability
+            label = cname.removeprefix(f"{prefix}-") or cname
+            stdout, _, rc = ssh.run(
+                f"docker inspect --format '{{{{json .Config.Env}}}}' {shlex.quote(cname)}"
+            )
+            if rc != 0 or not stdout.strip():
+                continue
+            raw = stdout.strip().strip("'")
+            try:
+                env_list: list[str] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            for entry in env_list:
+                if "=" not in entry:
+                    continue
+                k, v = entry.split("=", 1)
+                if k in _FILTERED_KEYS:
+                    continue
+                result.append(ContainerEnvVar(key=k, value=v, container=label))
+
+    return result

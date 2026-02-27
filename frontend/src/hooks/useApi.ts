@@ -218,6 +218,14 @@ export function useAppEnv(
   });
 }
 
+export function useContainerEnv(name: string) {
+  return useQuery({
+    queryKey: [...queryKeys.appEnv(name), "container"] as const,
+    queryFn: () => appsApi.getContainerEnv(name),
+    enabled: Boolean(name),
+  });
+}
+
 export function useAppHealth(
   name: string,
   options?: Partial<UseQueryOptions<AppHealth>>

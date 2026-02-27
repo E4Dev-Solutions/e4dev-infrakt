@@ -418,8 +418,9 @@ if [[ -n "$WEBHOOK_SECRET" ]]; then
     # Use the GitHub API to set repository secrets (encrypted with libsodium).
     # This requires the PAT to have the 'repo' scope.
 
-    # Install pynacl for secret encryption (libsodium sealed box)
-    pip install -q pynacl 2>/dev/null || true
+    # Install pynacl for secret encryption (libsodium sealed box).
+    # Use apt on Ubuntu (pip blocked by PEP 668 externally-managed env).
+    apt-get install -y -qq python3-nacl 2>/dev/null || pip install --break-system-packages -q pynacl 2>/dev/null || true
 
     _set_gh_secret() {
         local SECRET_NAME="$1"

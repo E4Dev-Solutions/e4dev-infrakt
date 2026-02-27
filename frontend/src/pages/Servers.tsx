@@ -3,23 +3,22 @@ import { Link } from "react-router-dom";
 import {
   Plus,
   Trash2,
-  Settings,
   Loader2,
   Server,
-  ChevronRight,
+  Box,
 } from "lucide-react";
 import {
   useServers,
   useAddServer,
   useDeleteServer,
-  useProvisionServer,
+  useServerStatus,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
 import EmptyState from "@/components/EmptyState";
-import type { CreateServerInput } from "@/api/client";
+import type { CreateServerInput, Server as ServerType } from "@/api/client";
 
 const PROVIDERS = ["", "hetzner", "digitalocean", "linode", "vultr", "aws", "gcp", "azure", "bare-metal", "other"];
 
@@ -32,11 +31,126 @@ const defaultForm: CreateServerInput = {
   provider: "",
 };
 
+// ─── MiniBar ──────────────────────────────────────────────────────────────────
+
+function MiniBar({ label, percent }: { label: string; percent: number }) {
+  const color = percent > 85 ? "bg-red-500" : percent > 65 ? "bg-amber-500" : "bg-emerald-500";
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-7 text-zinc-500">{label}</span>
+      <div className="h-1.5 flex-1 rounded-full bg-zinc-700">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, percent)}%` }} />
+      </div>
+      <span className="w-8 text-right text-zinc-400">{percent.toFixed(0)}%</span>
+    </div>
+  );
+}
+
+// ─── ServerCard ───────────────────────────────────────────────────────────────
+
+function ServerCard({
+  server,
+  onDelete,
+  isDeleting,
+}: {
+  server: ServerType;
+  onDelete: (name: string) => void;
+  isDeleting: boolean;
+}) {
+  const { data: statusData } = useServerStatus(server.name, {
+    enabled: server.status === "active",
+  });
+
+  return (
+    <div className="relative rounded-xl border border-zinc-700 bg-zinc-800 p-5 transition-all hover:border-orange-500/20">
+      {/* Delete button */}
+      <button
+        onClick={() => onDelete(server.name)}
+        disabled={isDeleting}
+        title="Delete server"
+        className="absolute right-3 top-3 rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
+        aria-label={`Delete ${server.name}`}
+      >
+        {isDeleting ? (
+          <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+        ) : (
+          <Trash2 size={14} aria-hidden="true" />
+        )}
+      </button>
+
+      {/* Name + Status */}
+      <div className="mb-3 flex items-center gap-2.5">
+        <Link
+          to={`/servers/${encodeURIComponent(server.name)}`}
+          className="text-base font-semibold text-orange-400 hover:text-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+        >
+          {server.name}
+        </Link>
+        <StatusBadge status={server.status} />
+      </div>
+
+      {/* Connection string */}
+      <p className="mb-1 font-mono text-xs text-zinc-400">
+        {server.user}@{server.host}:{server.port}
+      </p>
+
+      {/* Provider */}
+      {server.provider && (
+        <p className="mb-3 text-xs text-zinc-500">{server.provider}</p>
+      )}
+      {!server.provider && <div className="mb-3" />}
+
+      {/* Resource bars or offline */}
+      <div className="mb-3 space-y-1.5">
+        {statusData ? (
+          <>
+            {statusData.cpu != null && (
+              <MiniBar label="CPU" percent={statusData.cpu} />
+            )}
+            {statusData.memory && (
+              <MiniBar label="MEM" percent={statusData.memory.percent} />
+            )}
+            {statusData.disk && (
+              <MiniBar label="DSK" percent={statusData.disk.percent} />
+            )}
+          </>
+        ) : server.status === "active" ? (
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+            Loading metrics...
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">Offline</p>
+        )}
+      </div>
+
+      {/* Footer: app count + tags */}
+      <div className="flex items-center justify-between border-t border-zinc-700/50 pt-3">
+        <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+          <Box size={12} aria-hidden="true" />
+          {server.app_count} app{server.app_count !== 1 ? "s" : ""}
+        </span>
+        <div className="flex flex-wrap gap-1">
+          {(server.tags ?? []).map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center rounded-md bg-zinc-700 px-2 py-0.5 text-[11px] font-medium text-zinc-300"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Servers Page ─────────────────────────────────────────────────────────────
+
 export default function Servers() {
   const { data: servers = [], isLoading, isError, error } = useServers();
   const addServer = useAddServer();
   const deleteServer = useDeleteServer();
-  const provisionServer = useProvisionServer();
   const toast = useToast();
 
   const [showModal, setShowModal] = useState(false);
@@ -79,17 +193,6 @@ export default function Servers() {
       );
     } finally {
       setDeletingName(null);
-    }
-  }
-
-  async function handleProvision(name: string) {
-    try {
-      await provisionServer.mutateAsync(name);
-      toast.success(`Provisioning started for "${name}".`);
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to provision server."
-      );
     }
   }
 
@@ -141,98 +244,17 @@ export default function Servers() {
         />
       )}
 
-      {/* Table */}
+      {/* Card Grid */}
       {servers.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-zinc-700">
-          <table className="w-full text-sm" role="table">
-            <thead>
-              <tr className="border-b border-zinc-700 bg-zinc-800/60">
-                {["Name", "Host", "Status", "Provider", "Tags", "Apps", "Actions"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      scope="col"
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
-                    >
-                      {h}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-700/40">
-              {servers.map((server) => (
-                <tr
-                  key={server.id}
-                  className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/70"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/servers/${encodeURIComponent(server.name)}`}
-                      className="flex items-center gap-1.5 font-medium text-orange-400 hover:text-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
-                    >
-                      {server.name}
-                      <ChevronRight size={14} aria-hidden="true" />
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">
-                    {server.user}@{server.host}:{server.port}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={server.status} />
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {server.provider ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {(server.tags ?? []).length > 0 ? (
-                        server.tags!.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center rounded-md bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-300"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-zinc-500">—</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-zinc-300">
-                    {server.app_count}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleProvision(server.name)}
-                        disabled={provisionServer.isPending}
-                        title="Provision server"
-                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
-                        aria-label={`Provision ${server.name}`}
-                      >
-                        <Settings size={15} aria-hidden="true" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(server.name)}
-                        disabled={deletingName === server.name}
-                        title="Delete server"
-                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
-                        aria-label={`Delete ${server.name}`}
-                      >
-                        {deletingName === server.name ? (
-                          <Loader2 size={15} className="animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Trash2 size={15} aria-hidden="true" />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {servers.map((server) => (
+            <ServerCard
+              key={server.id}
+              server={server}
+              onDelete={handleDelete}
+              isDeleting={deletingName === server.name}
+            />
+          ))}
         </div>
       )}
 

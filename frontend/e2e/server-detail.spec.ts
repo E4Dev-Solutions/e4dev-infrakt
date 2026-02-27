@@ -25,8 +25,8 @@ test.describe("Server Detail", () => {
   });
 
   test("shows provider in subtitle", async ({ page }) => {
-    // Subtitle format: user@host:port · provider
-    await expect(page.getByText(`· ${SRV.provider}`)).toBeVisible();
+    // Provider appears inline in the subtitle line
+    await expect(page.getByText(SRV.provider).first()).toBeVisible();
   });
 
   test("shows status badge", async ({ page }) => {
@@ -38,28 +38,16 @@ test.describe("Server Detail", () => {
     await expect(page).toHaveURL(/\/servers$/);
   });
 
-  // ─── Server info card ───────────────────────────────────────────────────────
-
-  test("Server Info card shows host and user", async ({ page }) => {
-    // Info card renders InfoRow components with label + value pairs
-    const infoCard = page.getByRole("heading", { name: "Server Info" }).locator("..");
-    await expect(infoCard).toBeVisible();
-    // The host appears in both subtitle and info card — just verify the card section exists
-    await expect(page.getByText(SRV.host).first()).toBeVisible();
-  });
-
   // ─── Action buttons ─────────────────────────────────────────────────────────
 
-  test("has Edit, Test Connection, and Provision buttons", async ({
+  test("has Provision, Test Connection buttons and kebab menu", async ({
     page,
   }) => {
-    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Provision" })).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Test Connection" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Provision" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "More actions" })).toBeVisible();
   });
 
   test("Test Connection shows success toast", async ({ page }) => {
@@ -67,66 +55,33 @@ test.describe("Server Detail", () => {
     await expect(page.getByText("Server is reachable")).toBeVisible();
   });
 
-  // ─── Edit modal ─────────────────────────────────────────────────────────────
-
-  test("Edit button opens modal with all fields", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit Server" }),
-    ).toBeVisible();
-    await expect(page.getByLabel("Host / IP")).toBeVisible();
-    await expect(page.getByLabel("SSH User")).toBeVisible();
-    await expect(page.getByLabel("SSH Port")).toBeVisible();
-    await expect(page.getByLabel("SSH Key Path")).toBeVisible();
-    await expect(page.getByLabel("Provider")).toBeVisible();
+  test("Delete Server is in kebab menu", async ({ page }) => {
+    page.on("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "More actions" }).click();
+    await expect(page.getByText("Delete Server")).toBeVisible();
   });
 
-  test("Edit modal fields are pre-populated", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(page.getByLabel("Host / IP")).toHaveValue(SRV.host);
-    await expect(page.getByLabel("SSH User")).toHaveValue(SRV.user);
-    await expect(page.getByLabel("SSH Port")).toHaveValue(String(SRV.port));
-    await expect(page.getByLabel("Provider")).toHaveValue(SRV.provider);
+  // ─── Overview tab (default) ────────────────────────────────────────────────
+
+  test("Overview tab is active by default", async ({ page }) => {
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
-  test("Cancel closes Edit modal", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit Server" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit Server" }),
-    ).not.toBeVisible();
+  test("Overview shows stat cards", async ({ page }) => {
+    const overview = page.getByLabel("Overview");
+    await expect(overview.getByText("Status", { exact: true })).toBeVisible();
+    await expect(overview.getByText("Uptime", { exact: true })).toBeVisible();
+    // "Apps" and "Containers" labels in stat cards
+    await expect(overview.getByText("Containers", { exact: true })).toBeVisible();
   });
 
-  test("Escape closes Edit modal", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit Server" }),
-    ).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(
-      page.getByRole("heading", { name: "Edit Server" }),
-    ).not.toBeVisible();
+  test("Overview shows Quick Info section", async ({ page }) => {
+    await expect(page.getByText("Quick Info")).toBeVisible();
+    await expect(page.getByLabel("Overview").getByText(SRV.host)).toBeVisible();
   });
-
-  test("Edit submit shows success toast and closes modal", async ({
-    page,
-  }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await page.getByLabel("Host / IP").fill("10.0.0.99");
-    await page
-      .locator("form")
-      .getByRole("button", { name: "Save Changes" })
-      .click();
-    await expect(page.getByText("Server updated")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Edit Server" }),
-    ).not.toBeVisible();
-  });
-
-  // ─── Resource usage ─────────────────────────────────────────────────────────
 
   test("shows Resource Usage section", async ({ page }) => {
     await expect(
@@ -152,7 +107,7 @@ test.describe("Server Detail", () => {
     await expect(page.getByLabel("Refresh status")).toBeVisible();
   });
 
-  // ─── Containers ─────────────────────────────────────────────────────────────
+  // ─── Containers (in Overview) ─────────────────────────────────────────────
 
   test("shows running containers section", async ({ page }) => {
     await expect(
@@ -167,16 +122,10 @@ test.describe("Server Detail", () => {
     await expect(page.getByText("redis:7")).toBeVisible();
   });
 
-  // ─── Apps on server ─────────────────────────────────────────────────────────
+  // ─── Apps tab ─────────────────────────────────────────────────────────────
 
-  test("shows Apps on this Server section", async ({ page }) => {
-    await expect(
-      page.getByRole("heading", { name: "Apps on this Server" }),
-    ).toBeVisible();
-  });
-
-  test("lists apps deployed to this server", async ({ page }) => {
-    // MOCK_APPS has web-api and redis-cache both on server_id 1 (prod-1)
+  test("Apps tab shows deployed apps", async ({ page }) => {
+    await page.getByRole("tab", { name: "Apps" }).click();
     await expect(
       page.getByRole("link", { name: MOCK_APPS[0].name }),
     ).toBeVisible();
@@ -185,9 +134,65 @@ test.describe("Server Detail", () => {
     ).toBeVisible();
   });
 
+  test("Apps tab shows app type badges", async ({ page }) => {
+    await page.getByRole("tab", { name: "Apps" }).click();
+    await expect(page.getByText("git").first()).toBeVisible();
+    await expect(page.getByText("image").first()).toBeVisible();
+  });
+
   test("app links navigate to app detail", async ({ page }) => {
+    await page.getByRole("tab", { name: "Apps" }).click();
     await page.getByRole("link", { name: MOCK_APPS[0].name }).click();
     await expect(page).toHaveURL(/\/apps\/web-api/);
+  });
+
+  // ─── Settings tab ─────────────────────────────────────────────────────────
+
+  test("Settings tab has form fields", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByLabel("Host / IP")).toBeVisible();
+    await expect(page.getByLabel("SSH User")).toBeVisible();
+    await expect(page.getByLabel("SSH Port")).toBeVisible();
+    await expect(page.getByLabel("SSH Key Path")).toBeVisible();
+    await expect(page.getByLabel("Provider")).toBeVisible();
+  });
+
+  test("Settings tab pre-populates values", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByLabel("Host / IP")).toHaveValue(SRV.host);
+    await expect(page.getByLabel("SSH User")).toHaveValue(SRV.user);
+    await expect(page.getByLabel("SSH Port")).toHaveValue(String(SRV.port));
+    await expect(page.getByLabel("Provider")).toHaveValue(SRV.provider);
+  });
+
+  test("Settings Save button is disabled when no changes", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByRole("button", { name: "Save Changes" })).toBeDisabled();
+  });
+
+  test("Settings Save button enables on change and shows toast", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.getByLabel("Host / IP").fill("10.0.0.99");
+    const saveBtn = page.getByRole("button", { name: "Save Changes" });
+    await expect(saveBtn).toBeEnabled();
+    await saveBtn.click();
+    await expect(page.getByText("Server configuration updated")).toBeVisible();
+  });
+
+  test("Settings Danger Zone is collapsed by default", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByText("Danger Zone")).toBeVisible();
+    await expect(
+      page.locator("[id='tabpanel-settings']").getByRole("button", { name: "Delete Server" }),
+    ).not.toBeVisible();
+  });
+
+  test("Settings Danger Zone expands and shows Delete button", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.getByText("Danger Zone").click();
+    await expect(
+      page.locator("[id='tabpanel-settings']").getByRole("button", { name: "Delete Server" }),
+    ).toBeVisible();
   });
 
   // ─── Provisioning ──────────────────────────────────────────────────────────

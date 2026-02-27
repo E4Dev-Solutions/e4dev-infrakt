@@ -25,13 +25,13 @@ test.describe("App Detail", () => {
   });
 
   test("shows server name and domain in subtitle", async ({ page }) => {
-    await expect(page.getByText(APP.server_name)).toBeVisible();
-    await expect(page.getByText(APP.domain!)).toBeVisible();
+    await expect(page.getByText(APP.server_name).first()).toBeVisible();
+    await expect(page.getByText(APP.domain!).first()).toBeVisible();
   });
 
   test("shows app type and branch", async ({ page }) => {
-    await expect(page.getByText(APP.app_type)).toBeVisible();
-    await expect(page.getByText(APP.branch!)).toBeVisible();
+    await expect(page.getByText(APP.app_type).first()).toBeVisible();
+    await expect(page.getByText(APP.branch!).first()).toBeVisible();
   });
 
   test("shows status badge", async ({ page }) => {
@@ -40,12 +40,11 @@ test.describe("App Detail", () => {
 
   // ─── Action buttons ─────────────────────────────────────────────────────────
 
-  test("has all action buttons", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
+  test("has Deploy, Restart, Stop buttons and kebab menu", async ({ page }) => {
     await expect(page.getByRole("button", { name: "Deploy" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Restart" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Destroy" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "More actions" })).toBeVisible();
   });
 
   test("Restart button shows toast", async ({ page }) => {
@@ -58,90 +57,58 @@ test.describe("App Detail", () => {
     await expect(page.getByText(/stopped/i)).toBeVisible();
   });
 
-  test("Destroy button shows confirmation dialog", async ({ page }) => {
+  test("Destroy is in kebab menu and shows confirmation", async ({ page }) => {
     let dialogMessage = "";
     page.on("dialog", (dialog) => {
       dialogMessage = dialog.message();
       void dialog.accept();
     });
-    await page.getByRole("button", { name: "Destroy" }).click();
+    await page.getByRole("button", { name: "More actions" }).click();
+    await page.getByText("Destroy App").click();
     expect(dialogMessage).toContain(APP.name);
   });
 
-  // ─── Edit modal ─────────────────────────────────────────────────────────────
+  // ─── Overview tab (default) ──────────────────────────────────────────────────
 
-  test("Edit button opens modal with all fields", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit App" }),
-    ).toBeVisible();
-    await expect(page.getByLabel("Domain")).toBeVisible();
-    await expect(page.getByLabel("Port")).toBeVisible();
-    await expect(page.getByLabel("Git Repository")).toBeVisible();
-    await expect(page.getByLabel("Branch")).toBeVisible();
-    await expect(page.getByLabel("Docker Image")).toBeVisible();
+  test("Overview tab is active by default", async ({ page }) => {
+    await expect(page.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
-  test("Edit modal fields are pre-populated with app data", async ({
-    page,
-  }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(page.getByLabel("Domain")).toHaveValue(APP.domain!);
-    await expect(page.getByLabel("Port")).toHaveValue(String(APP.port));
-    await expect(page.getByLabel("Git Repository")).toHaveValue(APP.git_repo!);
-    await expect(page.getByLabel("Branch")).toHaveValue(APP.branch!);
+  test("Overview shows stat cards", async ({ page }) => {
+    await expect(page.getByText("Status")).toBeVisible();
+    await expect(page.getByText("Last Deploy")).toBeVisible();
+    await expect(page.getByText("App Type")).toBeVisible();
   });
 
-  test("Cancel closes Edit modal", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit App" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Cancel" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit App" }),
-    ).not.toBeVisible();
+  test("Overview shows Quick Info section", async ({ page }) => {
+    await expect(page.getByText("Quick Info")).toBeVisible();
+    // Server name appears in both header subtitle and Quick Info — scope to Overview panel
+    await expect(page.getByLabel("Overview").getByText(APP.server_name)).toBeVisible();
   });
 
-  test("Escape closes Edit modal", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Edit App" }),
-    ).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(
-      page.getByRole("heading", { name: "Edit App" }),
-    ).not.toBeVisible();
+  test("Overview shows container metrics after refresh", async ({ page }) => {
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await expect(page.getByText("infrakt-web-api")).toBeVisible();
   });
 
-  test("Edit submit shows success toast and closes modal", async ({
-    page,
-  }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await page.getByLabel("Domain").fill("new.example.com");
-    await page
-      .locator("form")
-      .getByRole("button", { name: "Save Changes" })
-      .click();
-    await expect(page.getByText("App configuration updated")).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Edit App" }),
-    ).not.toBeVisible();
+  test("Overview shows recent deploys", async ({ page }) => {
+    await expect(page.getByText("Recent Deploys")).toBeVisible();
+    // Should show deployment IDs
+    await expect(page.getByText(`#${MOCK_DEPLOYMENTS[0].id}`)).toBeVisible();
   });
 
   // ─── Logs tab ───────────────────────────────────────────────────────────────
 
-  test("Logs tab is active by default and shows log content", async ({
-    page,
-  }) => {
-    await expect(page.getByRole("tab", { name: "Logs" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+  test("Logs tab shows log content", async ({ page }) => {
+    await page.getByRole("tab", { name: "Logs" }).click();
     await expect(page.getByText("Container started")).toBeVisible();
   });
 
   test("Live toggle button is visible on Logs tab", async ({ page }) => {
+    await page.getByRole("tab", { name: "Logs" }).click();
     await expect(
       page.getByRole("button", { name: /live/i }),
     ).toBeVisible();
@@ -204,20 +171,49 @@ test.describe("App Detail", () => {
     await expect(page.getByLabel("Rollback")).toBeVisible();
   });
 
-  // ─── Health tab ─────────────────────────────────────────────────────────────
+  // ─── Settings tab ──────────────────────────────────────────────────────────
 
-  test("Health tab shows Check Health button", async ({ page }) => {
-    await page.getByRole("tab", { name: "Health" }).click();
-    await expect(
-      page.getByRole("button", { name: "Check Health" }),
-    ).toBeVisible();
+  test("Settings tab shows form sections", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByText("General")).toBeVisible();
+    await expect(page.getByText("Resources")).toBeVisible();
+    await expect(page.getByText("Health Check")).toBeVisible();
   });
 
-  test("Health tab shows container info after check", async ({ page }) => {
-    await page.getByRole("tab", { name: "Health" }).click();
-    await page.getByRole("button", { name: "Check Health" }).click();
-    await expect(page.getByText("infrakt-web-api")).toBeVisible();
-    await expect(page.getByText("Up 2 hours")).toBeVisible();
-    await expect(page.getByText("nginx:latest")).toBeVisible();
+  test("Settings pre-populates with app data", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByLabel("Domain")).toHaveValue(APP.domain!);
+    await expect(page.getByLabel("Port")).toHaveValue(String(APP.port));
+  });
+
+  test("Settings Save button is disabled when no changes", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByRole("button", { name: "Save Changes" })).toBeDisabled();
+  });
+
+  test("Settings Save button enables on change and shows toast", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.getByLabel("Domain").fill("new.example.com");
+    const saveBtn = page.getByRole("button", { name: "Save Changes" });
+    await expect(saveBtn).toBeEnabled();
+    await saveBtn.click();
+    await expect(page.getByText("App configuration updated")).toBeVisible();
+  });
+
+  test("Settings Danger Zone is collapsed by default", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByText("Danger Zone")).toBeVisible();
+    // Destroy button should not be visible when collapsed
+    await expect(
+      page.locator("[id='tabpanel-settings']").getByRole("button", { name: "Destroy App" }),
+    ).not.toBeVisible();
+  });
+
+  test("Settings Danger Zone expands and shows Destroy button", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.getByText("Danger Zone").click();
+    await expect(
+      page.locator("[id='tabpanel-settings']").getByRole("button", { name: "Destroy App" }),
+    ).toBeVisible();
   });
 });

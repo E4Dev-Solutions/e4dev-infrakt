@@ -10,38 +10,25 @@ test.describe("App Detail — Resource Limits", () => {
     await page.goto(`/apps/${APP.name}`);
   });
 
-  // ─── Header display ──────────────────────────────────────────────────────────
+  // ─── Settings tab fields ────────────────────────────────────────────────────
 
-  test("shows CPU limit in app header", async ({ page }) => {
-    await expect(page.getByText(`CPU: ${APP.cpu_limit}`)).toBeVisible();
-  });
-
-  test("shows memory limit in app header", async ({ page }) => {
-    await expect(page.getByText(`Mem: ${APP.memory_limit}`)).toBeVisible();
-  });
-
-  // ─── Edit modal fields ────────────────────────────────────────────────────────
-
-  test("Edit modal has CPU Limit and Memory Limit fields", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
+  test("Settings tab has CPU Limit and Memory Limit fields", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
     await expect(page.getByLabel("CPU Limit")).toBeVisible();
     await expect(page.getByLabel("Memory Limit")).toBeVisible();
   });
 
-  test("Edit modal pre-populates resource limit values", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
+  test("Settings tab pre-populates resource limit values", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
     await expect(page.getByLabel("CPU Limit")).toHaveValue(APP.cpu_limit!);
     await expect(page.getByLabel("Memory Limit")).toHaveValue(APP.memory_limit!);
   });
 
-  test("resource limits can be updated via Edit modal", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
+  test("resource limits can be updated via Settings tab", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
     await page.getByLabel("CPU Limit").fill("2.0");
     await page.getByLabel("Memory Limit").fill("1G");
-    await page
-      .locator("form")
-      .getByRole("button", { name: "Save Changes" })
-      .click();
+    await page.getByRole("button", { name: "Save Changes" }).click();
     await expect(page.getByText("App configuration updated")).toBeVisible();
   });
 });
@@ -53,34 +40,31 @@ test.describe("App Detail — Health Check Config", () => {
     await page.goto(`/apps/${APP.name}`);
   });
 
-  // ─── Edit modal fields ────────────────────────────────────────────────────────
+  // ─── Settings tab fields ────────────────────────────────────────────────────
 
-  test("Edit modal has Health Check URL field", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(page.getByLabel("Health Check URL")).toBeVisible();
+  test("Settings tab has Health Check URL field", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByLabel(/URL/)).toBeVisible();
   });
 
-  test("Edit modal has Health Check Interval field", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(page.getByLabel(/Health Check Interval/)).toBeVisible();
+  test("Settings tab has Health Check Interval field", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByLabel(/Interval/)).toBeVisible();
   });
 
-  test("Edit modal pre-populates health check values", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await expect(page.getByLabel("Health Check URL")).toHaveValue(APP.health_check_url!);
-    await expect(page.getByLabel(/Health Check Interval/)).toHaveValue(
+  test("Settings tab pre-populates health check values", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByLabel(/URL/)).toHaveValue(APP.health_check_url!);
+    await expect(page.getByLabel(/Interval/)).toHaveValue(
       String(APP.health_check_interval),
     );
   });
 
-  test("health check fields can be updated via Edit modal", async ({ page }) => {
-    await page.getByRole("button", { name: "Edit" }).click();
-    await page.getByLabel("Health Check URL").fill("/healthz");
-    await page.getByLabel(/Health Check Interval/).fill("60");
-    await page
-      .locator("form")
-      .getByRole("button", { name: "Save Changes" })
-      .click();
+  test("health check fields can be updated via Settings tab", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.getByLabel(/URL/).fill("/healthz");
+    await page.getByLabel(/Interval/).fill("60");
+    await page.getByRole("button", { name: "Save Changes" }).click();
     await expect(page.getByText("App configuration updated")).toBeVisible();
   });
 });
@@ -92,31 +76,28 @@ test.describe("App Detail — HTTP Health Check Results", () => {
     await page.goto(`/apps/${APP.name}`);
   });
 
-  test("Health tab shows HTTP Health Check section after check", async ({ page }) => {
-    await page.getByRole("tab", { name: "Health" }).click();
-    await page.getByRole("button", { name: "Check Health" }).click();
+  test("Overview shows HTTP Health Check section after refresh", async ({ page }) => {
+    // Overview is the default tab — click Refresh to load health data
+    await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("HTTP Health Check")).toBeVisible();
   });
 
-  test("Health tab shows HTTP status code", async ({ page }) => {
-    await page.getByRole("tab", { name: "Health" }).click();
-    await page.getByRole("button", { name: "Check Health" }).click();
+  test("Overview shows HTTP status code after refresh", async ({ page }) => {
+    await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("200")).toBeVisible();
   });
 
-  test("Health tab shows response time", async ({ page }) => {
-    await page.getByRole("tab", { name: "Health" }).click();
-    await page.getByRole("button", { name: "Check Health" }).click();
+  test("Overview shows response time after refresh", async ({ page }) => {
+    await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("43ms")).toBeVisible(); // 42.5 rounded to 43
   });
 
-  test("Health tab shows healthy badge", async ({ page }) => {
-    await page.getByRole("tab", { name: "Health" }).click();
-    await page.getByRole("button", { name: "Check Health" }).click();
+  test("Overview shows healthy badge after refresh", async ({ page }) => {
+    await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("healthy").first()).toBeVisible();
   });
 
-  test("Health tab shows unhealthy HTTP health", async ({ page }) => {
+  test("Overview shows unhealthy HTTP health", async ({ page }) => {
     await page.route("**/api/apps/*/health", (route) => {
       return route.fulfill({
         json: {
@@ -144,8 +125,7 @@ test.describe("App Detail — HTTP Health Check Results", () => {
       });
     });
     await page.goto(`/apps/${APP.name}`);
-    await page.getByRole("tab", { name: "Health" }).click();
-    await page.getByRole("button", { name: "Check Health" }).click();
+    await page.getByRole("button", { name: "Refresh" }).click();
     await expect(page.getByText("unhealthy")).toBeVisible();
     await expect(page.getByText("503")).toBeVisible();
     await expect(page.getByText("Service Unavailable")).toBeVisible();

@@ -6,7 +6,8 @@ test.describe("Logs Tab", () => {
     await mockApi(page);
     await login(page);
     await page.goto(`/apps/${MOCK_APPS[0].name}`);
-    // Logs tab is the default active tab
+    // Overview is the default tab — navigate to Logs
+    await page.getByRole("tab", { name: "Logs" }).click();
   });
 
   test("displays static logs by default", async ({ page }) => {

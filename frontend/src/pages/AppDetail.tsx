@@ -823,12 +823,20 @@ export default function AppDetail() {
                   <Server size={11} aria-hidden="true" />
                   {app.server_name}
                 </span>
-                {app.domain && (
+                {app.domains && Object.keys(app.domains).length > 1 ? (
+                  Object.entries(app.domains).map(([svc, d]) => (
+                    <span key={svc} className="flex items-center gap-1">
+                      <Globe size={11} aria-hidden="true" />
+                      <span className="text-slate-500">{svc}:</span>
+                      {d}
+                    </span>
+                  ))
+                ) : app.domain ? (
                   <span className="flex items-center gap-1">
                     <Globe size={11} aria-hidden="true" />
                     {app.domain}
                   </span>
-                )}
+                ) : null}
                 {app.port && (
                   <span>:{app.port}</span>
                 )}

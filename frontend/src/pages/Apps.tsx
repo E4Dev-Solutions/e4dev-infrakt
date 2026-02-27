@@ -309,7 +309,17 @@ export default function Apps() {
                   </td>
                   {/* Domain */}
                   <td className="px-4 py-3">
-                    {app.domain ? (
+                    {app.domains && Object.keys(app.domains).length > 1 ? (
+                      <div className="flex flex-col gap-1">
+                        {Object.entries(app.domains).map(([svc, d]) => (
+                          <div key={svc} className="flex items-center gap-1.5 text-xs text-slate-300">
+                            <Globe size={12} className="shrink-0" aria-hidden="true" />
+                            <span className="text-slate-500">{svc}:</span>
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+                    ) : app.domain ? (
                       <div className="flex items-center gap-1.5 text-xs text-slate-300">
                         <Globe size={12} aria-hidden="true" />
                         {app.domain}

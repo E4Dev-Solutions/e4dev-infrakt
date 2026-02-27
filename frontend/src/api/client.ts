@@ -74,6 +74,7 @@ export interface App {
   server_id: string;
   server_name: string;
   domain?: string;
+  domains?: Record<string, string>;
   port?: number;
   git_repo?: string;
   branch?: string;

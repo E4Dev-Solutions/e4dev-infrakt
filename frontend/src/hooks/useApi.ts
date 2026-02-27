@@ -182,14 +182,24 @@ export function useApps(
 export function useAppLogs(
   name: string,
   lines = 100,
-  options?: Partial<UseQueryOptions<AppLogs>>
+  options?: Partial<UseQueryOptions<AppLogs>>,
+  service?: string,
 ) {
   return useQuery({
-    queryKey: queryKeys.appLogs(name),
-    queryFn: () => appsApi.logs(name, lines),
+    queryKey: [...queryKeys.appLogs(name), service ?? "all"],
+    queryFn: () => appsApi.logs(name, lines, service || undefined),
     enabled: Boolean(name),
     refetchInterval: 15_000,
     ...options,
+  });
+}
+
+export function useAppServices(name: string) {
+  return useQuery({
+    queryKey: [...queryKeys.appLogs(name), "services"] as const,
+    queryFn: () => appsApi.services(name),
+    enabled: Boolean(name),
+    staleTime: 60_000,
   });
 }
 

@@ -247,15 +247,23 @@ def destroy_app(ssh: SSHClient, app_name: str) -> None:
     ssh.run_checked(f"rm -rf {q}")
 
 
-def get_logs(ssh: SSHClient, app_name: str, lines: int = 100) -> str:
+def get_logs(
+    ssh: SSHClient, app_name: str, lines: int = 100, service: str | None = None
+) -> str:
     app_path = _app_dir(app_name)
     lines = max(1, min(lines, 10000))  # clamp to sane range
-    ssh_cmd = f"cd {shlex.quote(app_path)} && docker compose logs --tail={int(lines)} --no-color"
+    svc = f" {shlex.quote(service)}" if service else ""
+    ssh_cmd = (
+        f"cd {shlex.quote(app_path)} && docker compose logs"
+        f" --tail={int(lines)} --no-color{svc}"
+    )
     stdout = ssh.run_checked(ssh_cmd, timeout=30)
     return stdout
 
 
-def stream_logs(ssh: SSHClient, app_name: str, lines: int = 100) -> Generator[str, None, None]:
+def stream_logs(
+    ssh: SSHClient, app_name: str, lines: int = 100, service: str | None = None
+) -> Generator[str, None, None]:
     """Stream container logs in real time via ``docker compose logs -f``.
 
     Yields log lines as they arrive.  The caller controls the lifetime —
@@ -263,7 +271,11 @@ def stream_logs(ssh: SSHClient, app_name: str, lines: int = 100) -> Generator[st
     """
     app_path = _app_dir(app_name)
     lines = max(1, min(lines, 10000))
-    cmd = f"cd {shlex.quote(app_path)} && docker compose logs -f --tail={int(lines)} --no-color"
+    svc = f" {shlex.quote(service)}" if service else ""
+    cmd = (
+        f"cd {shlex.quote(app_path)} && docker compose logs"
+        f" -f --tail={int(lines)} --no-color{svc}"
+    )
     channel = ssh.exec_stream(cmd)
     buf = b""
     try:
@@ -290,6 +302,14 @@ def stream_logs(ssh: SSHClient, app_name: str, lines: int = 100) -> Generator[st
                     continue
     finally:
         channel.close()
+
+
+def list_services(ssh: SSHClient, app_name: str) -> list[str]:
+    """Return compose service names for an app."""
+    app_path = _app_dir(app_name)
+    cmd = f"cd {shlex.quote(app_path)} && docker compose config --services"
+    stdout = ssh.run_checked(cmd, timeout=15)
+    return [s.strip() for s in stdout.strip().splitlines() if s.strip()]
 
 
 def _generate_compose(

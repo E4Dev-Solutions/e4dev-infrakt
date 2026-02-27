@@ -457,8 +457,13 @@ export const appsApi = {
   delete: (name: string): Promise<void> =>
     del(`/apps/${encodeURIComponent(name)}`),
 
-  logs: (name: string, lines = 100): Promise<AppLogs> =>
-    get(`/apps/${encodeURIComponent(name)}/logs?lines=${lines}`),
+  logs: (name: string, lines = 100, service?: string): Promise<AppLogs> =>
+    get(
+      `/apps/${encodeURIComponent(name)}/logs?lines=${lines}${service ? `&service=${encodeURIComponent(service)}` : ""}`,
+    ),
+
+  services: (name: string): Promise<string[]> =>
+    get(`/apps/${encodeURIComponent(name)}/services`),
 
   deployments: (name: string): Promise<Deployment[]> =>
     get(`/apps/${encodeURIComponent(name)}/deployments`),

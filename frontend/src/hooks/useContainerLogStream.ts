@@ -20,6 +20,7 @@ export function useContainerLogStream(
   appName: string | null,
   lines: number,
   enabled: boolean,
+  service?: string,
 ): ContainerLogStreamState {
   const [logLines, setLogLines] = useState<string[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -43,7 +44,8 @@ export function useContainerLogStream(
 
     async function connect() {
       const apiKey = getApiKey();
-      const url = `/api/apps/${encodeURIComponent(appName!)}/logs/stream?lines=${lines}`;
+      const svcParam = service ? `&service=${encodeURIComponent(service)}` : "";
+      const url = `/api/apps/${encodeURIComponent(appName!)}/logs/stream?lines=${lines}${svcParam}`;
 
       try {
         const response = await fetch(url, {
@@ -107,7 +109,7 @@ export function useContainerLogStream(
     return () => {
       controller.abort();
     };
-  }, [appName, lines, enabled]);
+  }, [appName, lines, enabled, service]);
 
   return { lines: logLines, isStreaming, error, clear };
 }

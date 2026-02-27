@@ -37,6 +37,7 @@ import {
   useDeleteEnv,
   useUpdateApp,
   useContainerEnv,
+  useAppServices,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { useDeploymentStream } from "@/hooks/useDeploymentStream";
@@ -100,11 +101,18 @@ function TabButton({
 function LogsTab({ appName }: { appName: string }) {
   const [lines, setLines] = useState(100);
   const [live, setLive] = useState(false);
-  const { data, isLoading, refetch, isFetching } = useAppLogs(appName, lines, {
-    enabled: !live && Boolean(appName),
-    refetchInterval: live ? false : 15_000,
-  });
-  const stream = useContainerLogStream(appName, lines, live);
+  const [service, setService] = useState<string>("");
+  const { data: services = [] } = useAppServices(appName);
+  const { data, isLoading, refetch, isFetching } = useAppLogs(
+    appName,
+    lines,
+    {
+      enabled: !live && Boolean(appName),
+      refetchInterval: live ? false : 15_000,
+    },
+    service || undefined,
+  );
+  const stream = useContainerLogStream(appName, lines, live, service || undefined);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -124,6 +132,29 @@ function LogsTab({ appName }: { appName: string }) {
         <div className="flex items-center gap-3">
           {!live && (
             <>
+              {services.length > 1 && (
+                <>
+                  <label
+                    htmlFor="log-service"
+                    className="text-xs text-slate-400"
+                  >
+                    Service:
+                  </label>
+                  <select
+                    id="log-service"
+                    value={service}
+                    onChange={(e) => setService(e.target.value)}
+                    className="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  >
+                    <option value="">All services</option>
+                    {services.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
               <label
                 htmlFor="log-lines"
                 className="text-xs text-slate-400"

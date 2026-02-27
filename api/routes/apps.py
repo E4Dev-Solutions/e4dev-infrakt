@@ -36,6 +36,7 @@ from cli.core.deployer import (
     destroy_app,
     get_container_health,
     get_logs,
+    list_services,
     reconcile_app_status,
     restart_app,
     stop_app,
@@ -649,7 +650,12 @@ async def rollback(
 
 
 @router.get("/{name}/logs", response_model=AppLogs)
-def app_logs(name: str, server: str | None = None, lines: int = 100) -> AppLogs:
+def app_logs(
+    name: str,
+    server: str | None = None,
+    lines: int = 100,
+    service: str | None = None,
+) -> AppLogs:
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name)
@@ -662,7 +668,7 @@ def app_logs(name: str, server: str | None = None, lines: int = 100) -> AppLogs:
 
     try:
         with ssh:
-            output = get_logs(ssh, name, lines=lines)
+            output = get_logs(ssh, name, lines=lines, service=service)
     except SSHConnectionError as exc:
         raise HTTPException(502, str(exc))
 
@@ -670,7 +676,9 @@ def app_logs(name: str, server: str | None = None, lines: int = 100) -> AppLogs:
 
 
 @router.get("/{name}/logs/stream")
-async def stream_app_logs(name: str, lines: int = 100) -> StreamingResponse:
+async def stream_app_logs(
+    name: str, lines: int = 100, service: str | None = None
+) -> StreamingResponse:
     """Stream live container logs via Server-Sent Events."""
     init_db()
     with get_session() as session:
@@ -688,7 +696,7 @@ async def stream_app_logs(name: str, lines: int = 100) -> StreamingResponse:
 
     async def _generate() -> AsyncIterator[str]:
         try:
-            gen = stream_logs(ssh, name, lines=lines)
+            gen = stream_logs(ssh, name, lines=lines, service=service)
             while True:
                 line = await loop.run_in_executor(None, _next_line, gen)
                 if line is _sentinel:
@@ -708,6 +716,22 @@ async def stream_app_logs(name: str, lines: int = 100) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/{name}/services", response_model=list[str])
+def app_services(name: str) -> list[str]:
+    """List compose service names for an app."""
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        ssh = _ssh_for(app_obj.server)
+    try:
+        with ssh:
+            return list_services(ssh, name)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, str(exc))
 
 
 @router.get("/{name}/deployments", response_model=list[DeploymentOut])

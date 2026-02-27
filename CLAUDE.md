@@ -1,6 +1,6 @@
-# infrakt
+# infrakT
 
-A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app deployments over SSH. infrakt provisions bare VMs into Docker + Traefik hosts, deploys apps via Docker Compose, manages encrypted environment variables, and provisions databases — all without any remote agent.
+A self-hosted PaaS CLI and web dashboard for managing multi-server, multi-app deployments over SSH. infrakT provisions bare VMs into Docker + Traefik hosts, deploys apps via Docker Compose, manages encrypted environment variables, and provisions databases — all without any remote agent.
 
 ## Table of Contents
 
@@ -77,6 +77,9 @@ cli/
     env.py             # infrakt env *
     db.py              # infrakt db *
     proxy.py           # infrakt proxy *
+    ci.py              # infrakt ci * (deploy keys, CI/CD triggers)
+    key.py             # infrakt key * (SSH key management)
+    webhook.py         # infrakt webhook * (notification webhooks)
   core/                # Business logic (shared by CLI and API)
     config.py          # Paths: INFRAKT_HOME, DB_PATH, ENVS_DIR, etc.
     database.py        # SQLAlchemy engine, session factory, init_db()
@@ -87,16 +90,32 @@ cli/
     crypto.py          # Fernet encrypt/decrypt for env vars
     console.py         # Rich-based output helpers
     exceptions.py      # Custom exception hierarchy
+    app_templates.py   # Built-in app template registry and compose generators
+    backup.py          # Database backup/restore logic
+    compose_renderer.py # Docker Compose YAML rendering (Jinja2)
+    db_stats.py        # Database statistics collection via SSH
+    deploy_keys.py     # CI/CD deploy key management
+    github.py          # GitHub integration logic
+    health.py          # Health check monitoring
+    key_manager.py     # SSH key management
+    webhook_sender.py  # Webhook notification sender (HMAC-SHA256)
   models/              # SQLAlchemy ORM models
     server.py          # Server model
     app.py             # App model (also used for database services)
     deployment.py      # Deployment model
-  templates/           # Jinja2 templates (reserved for future use)
+    app_dependency.py  # App dependency relationships
+    github_integration.py # GitHub integration configuration
+    server_metric.py   # Server metrics history
+    server_tag.py      # Server tagging system
+    ssh_key.py         # SSH key storage
+    webhook.py         # Webhook configuration
+  templates/           # Jinja2 templates for Docker Compose generation
 
 api/
   main.py              # FastAPI app, CORS config, router registration (all routes require API key)
   auth.py              # API key generation (secrets.token_urlsafe), validation (hmac.compare_digest)
   schemas.py           # Pydantic request/response models (includes name/domain/SSRF validation)
+  log_broadcaster.py   # Real-time log streaming via SSE
   routes/
     dashboard.py       # GET /api/dashboard
     servers.py         # /api/servers/*
@@ -108,25 +127,61 @@ api/
     webhooks.py        # /api/webhooks/* (notification webhooks)
     deploy.py          # /api/deploy (CI/CD deploy trigger, own auth)
     self_update.py     # /api/self-update (GitHub webhook receiver, HMAC auth)
+    templates.py       # /api/templates/* (built-in app templates)
+    github.py          # /api/github/* (GitHub integration)
+    github_webhook.py  # /api/github/webhook (GitHub webhook receiver)
 
 frontend/
   src/
     api/client.ts      # Typed fetch wrappers; stores/sends API key via X-API-Key header
-    hooks/useApi.ts    # TanStack Query hooks (useServers, useApps, etc.)
-    pages/             # Login, Dashboard, Servers, ServerDetail, Apps, AppDetail, Databases
-    components/        # Layout (with logout), StatusBadge, DataTable, Modal, Toast, EmptyState
+    hooks/
+      useApi.ts            # TanStack Query hooks (useServers, useApps, etc.)
+      useContainerLogStream.ts # SSE hook for live container logs
+      useDeploymentStream.ts   # SSE hook for deployment progress
+      useProvisionStream.ts    # SSE hook for provisioning progress
+      useToast.ts              # Toast notification hook
+    pages/             # Login, Dashboard, Servers, ServerDetail, Apps, AppDetail,
+                       # Databases, DatabaseDetail, ProxyDomains, Settings
+    components/        # Layout, StatusBadge, DataTable, Modal, Toast, EmptyState,
+                       # DeploymentLogStream, SparklineChart
+  e2e/                 # Playwright E2E tests (~254 tests)
+    fixtures.ts        # Mock API setup, login helper, mock data
+    dashboard.spec.ts  # Dashboard stats and navigation
+    servers.spec.ts    # Server list CRUD
+    server-detail.spec.ts  # Server detail tabs (Overview, Apps, Settings)
+    apps.spec.ts       # App list CRUD
+    app-detail.spec.ts # App detail tabs (Overview, Settings)
+    databases.spec.ts  # Database list CRUD
+    database-detail.spec.ts # Database detail and stats
+    database-stats.spec.ts  # Database statistics
+    deploy-stream.spec.ts   # Live deployment streaming
+    deployments.spec.ts     # Deployment history
+    env.spec.ts        # Environment variable management
+    health.spec.ts     # Health check UI
+    logs.spec.ts       # Container log streaming
+    proxy.spec.ts      # Proxy domain management
+    resource-limits-health.spec.ts # Resource limits and health
+    settings.spec.ts   # Settings page (SSH keys, webhooks)
+    ssh-keys.spec.ts   # SSH key management
+    auth.spec.ts       # Authentication flow
 
 scripts/
   setup-vps.sh         # One-command VPS deployment (provision, deploy, register, webhook)
 
-docker-compose.prod.yml  # Production compose (infrakt on localhost:8000, Traefik handles HTTPS)
+docker-compose.yml       # Development compose
+docker-compose.prod.yml  # Production compose (infrakT on localhost:8000, Traefik handles HTTPS)
 Dockerfile               # Multi-stage build (Python backend + Node frontend)
+entrypoint.sh            # Container entrypoint script
+pyproject.toml           # Python project configuration
 DEPLOYMENT.md            # VPS deployment guide
 
 tests/
   conftest.py          # isolated_config fixture (temp dir), mock_ssh fixture
-  unit/                # Unit tests for core modules
+  unit/                # Unit tests for core modules (~307 tests)
   integration/         # Integration tests
+
+docs/
+  plans/               # Design docs and implementation plans
 ```
 
 ---
@@ -165,7 +220,7 @@ infrakt server add \
   --provider hetzner
 ```
 
-infrakt immediately tests the SSH connection and reports whether it succeeded.
+infrakT immediately tests the SSH connection and reports whether it succeeded.
 
 ### Provision the Server
 
@@ -204,7 +259,7 @@ infrakt app create \
 infrakt app deploy api
 ```
 
-If your repository contains a `docker-compose.yml`, infrakt uses it directly. Otherwise it generates a minimal one.
+If your repository contains a `docker-compose.yml`, infrakT uses it directly. Otherwise it generates a minimal one.
 
 ### Set Environment Variables
 
@@ -633,12 +688,14 @@ The full dashboard is now available at `http://localhost:8000`.
 |------|-------|-------------|
 | Login | (no route, shown before auth) | API key entry; validates key against `GET /api/dashboard` |
 | Dashboard | `/` | Platform stats: servers, apps, databases, recent deployments |
-| Servers | `/servers` | List servers, add/remove, provision, test connection |
-| Server Detail | `/servers/:name` | Live metrics, app list, proxy routes |
-| Apps | `/apps` | List all apps, create, deploy, stop, destroy |
-| App Detail | `/apps/:name` | Logs, deployment history, environment variables |
-| Databases | `/databases` | List database services, create, destroy |
-| Settings | `/settings` | SSH keys, auto-deploy webhook config, notification webhooks |
+| Servers | `/servers` | Card grid with live resource bars, add/remove servers |
+| Server Detail | `/servers/:name` | Tabs: Overview (metrics, containers), Apps, Settings |
+| Apps | `/apps` | List all apps, create from template/git/image, deploy, stop, destroy |
+| App Detail | `/apps/:name` | Tabs: Overview (logs, deployments, env vars), Settings |
+| Databases | `/databases` | List database services, create, destroy, backup/restore |
+| Database Detail | `/databases/:name` | Database stats, backup management |
+| Proxy Domains | `/proxy` | Manage Traefik proxy routes per server |
+| Settings | `/settings` | SSH keys, GitHub integration, auto-deploy webhook, notification webhooks |
 
 ---
 
@@ -700,9 +757,9 @@ npm run build        # production build to frontend/dist/
 
 ## Security Model
 
-**No remote agent.** infrakt runs entirely from the developer's machine over SSH. There is no persistent daemon on the server that could be compromised.
+**No remote agent.** infrakT runs entirely from the developer's machine over SSH. There is no persistent daemon on the server that could be compromised.
 
-**SSH-only access.** All remote operations (provisioning, deploying, log retrieval, proxy management) go through a Paramiko SSH connection using either key-based or agent authentication. Password authentication is not used by infrakt.
+**SSH-only access.** All remote operations (provisioning, deploying, log retrieval, proxy management) go through a Paramiko SSH connection using either key-based or agent authentication. Password authentication is not used by infrakT.
 
 **Encrypted environment variables.** Env vars are stored locally in `~/.infrakt/envs/<app_id>.json`. Each value is encrypted with Fernet (AES-128-CBC + HMAC-SHA256) using a master key stored in `~/.infrakt/master.key` with permissions `0600`. The plaintext is only decrypted immediately before being sent to the server at deploy time, and then only over the encrypted SSH channel.
 
@@ -719,7 +776,7 @@ npm run build        # production build to frontend/dist/
 
 **Automatic TLS.** Traefik obtains and renews TLS certificates automatically via ACME (Let's Encrypt). Apps served over a custom domain always get HTTPS with zero configuration.
 
-**Database passwords.** When `infrakt db create` generates a database, it uses `secrets.token_urlsafe(24)` for the password, which provides 144 bits of entropy. The password is not stored by infrakt — it is printed once and must be saved externally (e.g. in an app's env vars via `infrakt env set`).
+**Database passwords.** When `infrakt db create` generates a database, it uses `secrets.token_urlsafe(24)` for the password, which provides 144 bits of entropy. The password is not stored by infrakT — it is printed once and must be saved externally (e.g. in an app's env vars via `infrakt env set`).
 
 ---
 

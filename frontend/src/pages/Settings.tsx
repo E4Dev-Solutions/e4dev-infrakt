@@ -503,7 +503,7 @@ export default function Settings() {
                     <code className="font-mono text-zinc-400">admin:repo_hook</code>
                   </p>
                   <a
-                    href="https://github.com/settings/tokens/new?scopes=repo,admin:repo_hook&description=infrakt"
+                    href="https://github.com/settings/tokens/new?scopes=repo,admin:repo_hook&description=infrakT"
                     target="_blank"
                     rel="noreferrer noopener"
                     className="mt-1 inline-flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300"
@@ -538,7 +538,7 @@ export default function Settings() {
               Auto-Deploy Webhook
             </h2>
             <p className="mt-1 text-sm text-zinc-400">
-              Configure a GitHub webhook to automatically update infrakt when you push to main.
+              Configure a GitHub webhook to automatically update infrakT when you push to main.
             </p>
           </div>
 

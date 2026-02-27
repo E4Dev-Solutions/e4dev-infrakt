@@ -68,7 +68,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           </div>
           <div>
             <span className="text-lg font-bold tracking-tight text-zinc-100">
-              infrakt
+              infrakT
             </span>
             <span className="ml-1.5 font-mono text-[10px] text-zinc-600">
               v0.1
@@ -103,7 +103,7 @@ export default function Layout({ onLogout }: LayoutProps) {
 
         {/* Footer */}
         <div className="border-t border-zinc-800/80 px-5 py-4 flex items-center justify-between">
-          <p className="font-mono text-[11px] text-zinc-600">infrakt</p>
+          <p className="font-mono text-[11px] text-zinc-600">infrakT</p>
           {onLogout && (
             <button
               onClick={onLogout}

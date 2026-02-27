@@ -62,7 +62,7 @@ export default function Login({ onLogin }: Props) {
             <Zap size={24} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-50">
-            infrakt
+            infrakT
           </h1>
           <p className="text-zinc-500 mt-2 text-sm">
             Sign in to your platform dashboard

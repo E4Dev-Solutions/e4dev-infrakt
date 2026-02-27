@@ -48,12 +48,14 @@ def setup(server_name: str) -> None:
 @click.argument("domain")
 @click.option("--server", "server_name", required=True)
 @click.option("--port", required=True, type=int, help="Local port to proxy to")
-def add_route(domain: str, server_name: str, port: int) -> None:
+@click.option("--app-name", default=None, help="App name to route to its container (infrakt-<app-name>)")
+def add_route(domain: str, server_name: str, port: int, app_name: str | None) -> None:
     """Add a domain reverse proxy route."""
     ssh = _get_ssh(server_name)
     with ssh:
-        add_domain(ssh, domain, port)
-    success(f"Added proxy: {domain} -> localhost:{port}")
+        add_domain(ssh, domain, port, app_name=app_name)
+    target = f"infrakt-{app_name}:{port}" if app_name else f"host.docker.internal:{port}"
+    success(f"Added proxy: {domain} -> {target}")
 
 
 @proxy.command("remove")

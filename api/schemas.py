@@ -330,6 +330,7 @@ class ProxyRouteCreate(BaseModel):
     domain: str
     port: int = Field(..., ge=1, le=65535)
     server_name: str
+    app_name: str | None = None
 
     @field_validator("domain")
     @classmethod

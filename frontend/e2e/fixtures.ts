@@ -260,6 +260,20 @@ export async function login(page: Page): Promise<void> {
  * Call this before navigating to a page.
  */
 export async function mockApi(page: Page): Promise<void> {
+  // Catchall for any unmatched /api/* requests — prevents Vite from proxying
+  // to a non-existent backend, eliminating proxy errors and speeding up tests.
+  // Registered first so it has lowest priority (Playwright uses LIFO ordering).
+  // Uses a regex anchored after the host to avoid matching Vite module paths
+  // like /src/api/client.ts.
+  await page.route(/\/api\/[^.]/, (route) => {
+    const url = route.request().url();
+    // Only intercept actual API calls (path starts with /api/), not Vite module imports
+    if (new URL(url).pathname.startsWith("/api/")) {
+      return route.fulfill({ status: 404, json: { detail: "Not found (mock catchall)" } });
+    }
+    return route.continue();
+  });
+
   // Dashboard
   await page.route("**/api/dashboard", (route) => {
     if (route.request().method() === "GET") {
@@ -477,6 +491,11 @@ export async function mockApi(page: Page): Promise<void> {
       });
     }
     return route.continue();
+  });
+
+  // App services list (used by logs service filter)
+  await page.route(/\/api\/apps\/[^/]+\/services/, (route) => {
+    return route.fulfill({ json: ["web-api"] });
   });
 
   // App detail (PUT, DELETE)
@@ -697,5 +716,27 @@ export async function mockApi(page: Page): Promise<void> {
       return route.fulfill({ json: MOCK_DATABASE_STATS });
     }
     return route.continue();
+  });
+
+  // Templates list
+  await page.route("**/api/templates", (route) => {
+    return route.fulfill({ json: [] });
+  });
+
+  // GitHub status
+  await page.route("**/api/github/status", (route) => {
+    return route.fulfill({ json: { connected: false, username: null } });
+  });
+
+  // GitHub repos
+  await page.route("**/api/github/repos", (route) => {
+    return route.fulfill({ json: [] });
+  });
+
+  // Self-update config
+  await page.route("**/api/config/self-update", (route) => {
+    return route.fulfill({
+      json: { webhook_url: "", webhook_secret: "", configured: false },
+    });
   });
 }

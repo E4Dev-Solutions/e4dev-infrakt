@@ -33,7 +33,7 @@ test.describe("Environment Variables", () => {
     await page.getByRole("textbox", { name: "Value" }).fill("some-value");
     await page.getByRole("button", { name: "Add", exact: true }).click();
 
-    await expect(page.getByText(/NEW_VAR.*saved/)).toBeVisible();
+    await expect(page.getByText(/Set "NEW_VAR"/)).toBeVisible();
   });
 
   test("add form clears after successful submission", async ({ page }) => {
@@ -42,7 +42,7 @@ test.describe("Environment Variables", () => {
     await page.getByRole("button", { name: "Add", exact: true }).click();
 
     // Wait for toast to confirm success
-    await expect(page.getByText(/TEMP_KEY.*saved/)).toBeVisible();
+    await expect(page.getByText(/Set "TEMP_KEY"/)).toBeVisible();
     // Inputs should be cleared
     await expect(page.getByRole("textbox", { name: "Key" })).toHaveValue("");
     await expect(page.getByRole("textbox", { name: "Value" })).toHaveValue("");
@@ -50,7 +50,7 @@ test.describe("Environment Variables", () => {
 
   test("delete env var shows success toast", async ({ page }) => {
     await page.getByLabel(`Delete ${MOCK_ENV_VARS[0].key}`).click();
-    await expect(page.getByText(/"DATABASE_URL" deleted/)).toBeVisible();
+    await expect(page.getByText(/Deleted "DATABASE_URL"/)).toBeVisible();
   });
 
   test("shows empty state when no env vars", async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe("Environment Variables", () => {
     await page.goto(`/apps/${MOCK_APPS[0].name}`);
     await page.getByRole("tab", { name: "Environment" }).click();
 
-    await expect(page.getByText("No environment variables set.")).toBeVisible();
+    await expect(page.getByText("No environment variables found.")).toBeVisible();
   });
 
   test("handles add error gracefully", async ({ page }) => {

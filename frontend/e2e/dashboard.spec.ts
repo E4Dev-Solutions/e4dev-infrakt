@@ -28,52 +28,58 @@ test.describe("Dashboard", () => {
   // ─── Stat cards ───────────────────────────────────────────────────────────────
 
   test("displays stat cards with correct counts", async ({ page }) => {
-    // Use exact text match to avoid strict mode violations from sublabels
+    // Stat card labels: "Servers", "Active", "Apps", "Databases"
     await expect(
       page
-        .locator("text=Total Servers")
+        .locator("text=Servers")
+        .first()
         .locator("..")
         .getByText(String(MOCK_DASHBOARD.total_servers), { exact: true }),
     ).toBeVisible();
     await expect(
       page
         .locator("text=Databases")
+        .first()
         .locator("..")
         .getByText(String(MOCK_DASHBOARD.total_databases), { exact: true }),
     ).toBeVisible();
   });
 
-  test("Active Servers stat card shows correct count", async ({ page }) => {
+  test("Active stat card shows correct count", async ({ page }) => {
     await expect(
       page
-        .locator("text=Active Servers")
+        .locator("text=Active")
+        .first()
         .locator("..")
         .getByText(String(MOCK_DASHBOARD.active_servers), { exact: true }),
     ).toBeVisible();
   });
 
-  test("Running Apps stat card shows correct count", async ({ page }) => {
+  test("Apps stat card shows correct count", async ({ page }) => {
     await expect(
       page
-        .locator("text=Running Apps")
+        .locator("text=Apps")
+        .first()
         .locator("..")
         .getByText(String(MOCK_DASHBOARD.running_apps), { exact: true }),
     ).toBeVisible();
   });
 
   test("stat cards show sublabels", async ({ page }) => {
-    // "Total Servers" sublabel: "<active_servers> active"
+    // "Servers" sublabel: "<active_servers> active"
     await expect(
       page.getByText(`${MOCK_DASHBOARD.active_servers} active`),
     ).toBeVisible();
 
-    // "Active Servers" and "Running Apps" both use "of <n> total"
-    // There are two such sublabels on the page so use .first() / .nth()
-    const ofTotalLabels = page.getByText(`of ${MOCK_DASHBOARD.total_servers} total`);
-    await expect(ofTotalLabels.first()).toBeVisible();
+    // "Active" sublabel: "of <total_servers> total"
+    await expect(
+      page.getByText(`of ${MOCK_DASHBOARD.total_servers} total`),
+    ).toBeVisible();
 
-    // total_apps === total_servers so "of 2 total" appears twice — use .nth(1)
-    await expect(ofTotalLabels.nth(1)).toBeVisible();
+    // "Apps" sublabel: "<running_apps> of <total_apps> running"
+    await expect(
+      page.getByText(`${MOCK_DASHBOARD.running_apps} of ${MOCK_DASHBOARD.total_apps} running`),
+    ).toBeVisible();
   });
 
   // ─── Recent Deployments table ─────────────────────────────────────────────────
@@ -151,8 +157,9 @@ test.describe("Dashboard", () => {
 
     await page.goto("/");
 
+    await expect(page.getByText("No deployments yet")).toBeVisible();
     await expect(
-      page.getByText("No deployments yet. Deploy an app to see activity here."),
+      page.getByText("Deploy an app to see activity here"),
     ).toBeVisible();
   });
 

@@ -39,7 +39,9 @@ test.describe("Apps", () => {
 
     await page.getByLabel(/App Name/).fill("new-app");
     await page.getByLabel(/Server/).selectOption("prod-1");
-    await page.getByLabel(/Docker Image/).fill("nginx:latest");
+    // Switch to Image source type (default is Template)
+    await page.getByRole("button", { name: "Image" }).click();
+    await page.getByLabel(/Image/).fill("nginx:latest");
 
     await page.locator("form").getByRole("button", { name: "Create App" }).click();
 

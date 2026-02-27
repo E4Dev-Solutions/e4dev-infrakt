@@ -293,6 +293,7 @@ class DatabaseOut(BaseModel):
     port: int
     status: str
     backup_schedule: str | None = None
+    parent_app_name: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

@@ -157,6 +157,7 @@ export interface Database {
   port?: number;
   status: DbStatus;
   backup_schedule?: string | null;
+  parent_app_name?: string | null;
   created_at?: string;
   updated_at?: string;
 }

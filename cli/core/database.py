@@ -45,6 +45,7 @@ def _apply_migrations(engine: Engine) -> None:
         "ALTER TABLE apps ADD COLUMN deploy_strategy VARCHAR(20) DEFAULT 'restart'",
         "ALTER TABLE apps ADD COLUMN webhook_secret VARCHAR(100)",
         "ALTER TABLE apps ADD COLUMN auto_deploy BOOLEAN DEFAULT 1",
+        "ALTER TABLE apps ADD COLUMN parent_app_id INTEGER REFERENCES apps(id) ON DELETE CASCADE",
     ]
     with engine.connect() as conn:
         for sql in migrations:

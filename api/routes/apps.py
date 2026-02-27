@@ -174,6 +174,23 @@ def create_app(body: AppCreate) -> AppOut:
         session.add(new_app)
         session.flush()
 
+        # Auto-register embedded database services for template apps
+        if body.template and tmpl:
+            from cli.commands.db import DB_TEMPLATES
+
+            db_services: dict[str, str] = tmpl.get("db_services", {})
+            for suffix, db_type in db_services.items():
+                db_port = DB_TEMPLATES.get(db_type, {}).get("port", 0)
+                child_db = App(
+                    name=f"{body.name}-{suffix}",
+                    server_id=srv.id,
+                    port=db_port,
+                    app_type=f"db:{db_type}",
+                    status="stopped",
+                    parent_app_id=new_app.id,
+                )
+                session.add(child_db)
+
         return _app_out(new_app, session)
 
 
@@ -388,6 +405,9 @@ async def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "running"
+                # Update child DB statuses
+                for child in session.query(App).filter(App.parent_app_id == app_id).all():
+                    child.status = "running"
 
             # Auto-create GitHub webhook on first deploy
             original_git_repo = app_data.get("git_repo")
@@ -439,6 +459,8 @@ async def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "error"
+                for child in session.query(App).filter(App.parent_app_id == app_id).all():
+                    child.status = "error"
             fire_webhooks(
                 "deploy.failure",
                 {
@@ -459,6 +481,8 @@ async def deploy(
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
                     a.status = "error"
+                for child in session.query(App).filter(App.parent_app_id == app_id).all():
+                    child.status = "error"
             fire_webhooks(
                 "deploy.failure",
                 {
@@ -944,6 +968,8 @@ def destroy(name: str, server: str | None = None) -> dict[str, str]:
             remove_domain(ssh, app_domain)
 
     with get_session() as session:
+        # Delete child DB records (embedded databases from templates)
+        session.query(App).filter(App.parent_app_id == app_id).delete()
         a = session.query(App).filter(App.id == app_id).first()
         if a:
             session.delete(a)

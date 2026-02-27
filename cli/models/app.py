@@ -36,6 +36,9 @@ class App(Base):
     deploy_strategy: Mapped[str] = mapped_column(String(20), default="restart")
     webhook_secret: Mapped[str | None] = mapped_column(String(100), default=None)
     auto_deploy: Mapped[bool] = mapped_column(Boolean, default=True)
+    parent_app_id: Mapped[int | None] = mapped_column(
+        ForeignKey("apps.id", ondelete="CASCADE"), default=None
+    )
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
@@ -47,6 +50,9 @@ class App(Base):
         "AppDependency",
         foreign_keys="AppDependency.app_id",
         cascade="all, delete-orphan",
+    )
+    parent_app: Mapped[App | None] = relationship(
+        "App", remote_side="App.id", foreign_keys=[parent_app_id]
     )
 
     __table_args__ = (UniqueConstraint("name", "server_id"),)

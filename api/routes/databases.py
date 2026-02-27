@@ -44,20 +44,7 @@ def list_databases(server: str | None = None) -> list[DatabaseOut]:
         if server:
             q = q.filter(Server.name == server)
         dbs = q.order_by(App.name).all()
-        return [
-            DatabaseOut(
-                id=d.id,
-                name=d.name,
-                server_name=d.server.name,
-                db_type=d.app_type.split(":", 1)[1],
-                port=d.port,
-                status=d.status,
-                backup_schedule=d.backup_schedule,
-                created_at=d.created_at,
-                updated_at=d.updated_at,
-            )
-            for d in dbs
-        ]
+        return [_get_db_out(d) for d in dbs]
 
 
 @router.post("", status_code=201)
@@ -146,6 +133,9 @@ def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks) -> 
 
 def _get_db_out(db_app: App) -> DatabaseOut:
     """Build a DatabaseOut from an App record."""
+    parent_name: str | None = None
+    if db_app.parent_app_id and db_app.parent_app:
+        parent_name = db_app.parent_app.name
     return DatabaseOut(
         id=db_app.id,
         name=db_app.name,
@@ -154,6 +144,7 @@ def _get_db_out(db_app: App) -> DatabaseOut:
         port=db_app.port,
         status=db_app.status,
         backup_schedule=db_app.backup_schedule,
+        parent_app_name=parent_name,
         created_at=db_app.created_at,
         updated_at=db_app.updated_at,
     )

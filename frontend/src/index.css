@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0f172a;
-  --color-surface: #1e293b;
-  --color-surface-2: #334155;
-  --color-border: #334155;
-  --color-border-subtle: #1e293b;
-  --color-text: #f1f5f9;
-  --color-muted: #94a3b8;
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
+  --color-bg: #09090b;
+  --color-surface: #18181b;
+  --color-surface-2: #27272a;
+  --color-border: #27272a;
+  --color-border-subtle: #18181b;
+  --color-text: #fafafa;
+  --color-muted: #a1a1aa;
+  --color-primary: #f97316;
+  --color-primary-hover: #ea580c;
   --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
@@ -30,18 +30,15 @@ body,
 }
 
 body {
-  background-color: #0f172a;
-  color: #f1f5f9;
+  background-color: #09090b;
+  color: #fafafa;
   font-family:
+    "Outfit",
     ui-sans-serif,
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
-    Roboto,
-    "Helvetica Neue",
-    Arial,
-    "Noto Sans",
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -54,16 +51,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #09090b;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #3f3f46;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #52525b;
 }
 
 /* Focus ring reset — we handle focus styles explicitly */
@@ -72,7 +69,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid #f97316;
   outline-offset: 2px;
 }
 
@@ -93,6 +90,7 @@ body {
 /* Log viewer monospace */
 .log-viewer {
   font-family:
+    "JetBrains Mono",
     ui-monospace,
     "Cascadia Code",
     "Source Code Pro",

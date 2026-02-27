@@ -86,8 +86,8 @@ function TabButton({
       className={[
         "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors",
         isActive
-          ? "border-indigo-500 text-indigo-400"
-          : "border-transparent text-slate-400 hover:border-slate-500 hover:text-slate-200",
+          ? "border-orange-500 text-orange-400"
+          : "border-transparent text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
       ].join(" ")}
     >
       {icon}
@@ -136,7 +136,7 @@ function LogsTab({ appName }: { appName: string }) {
                 <>
                   <label
                     htmlFor="log-service"
-                    className="text-xs text-slate-400"
+                    className="text-xs text-zinc-400"
                   >
                     Service:
                   </label>
@@ -144,7 +144,7 @@ function LogsTab({ appName }: { appName: string }) {
                     id="log-service"
                     value={service}
                     onChange={(e) => setService(e.target.value)}
-                    className="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    className="rounded-md border border-zinc-600 bg-zinc-700 px-2 py-1 text-xs text-zinc-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                   >
                     <option value="">All services</option>
                     {services.map((s) => (
@@ -157,7 +157,7 @@ function LogsTab({ appName }: { appName: string }) {
               )}
               <label
                 htmlFor="log-lines"
-                className="text-xs text-slate-400"
+                className="text-xs text-zinc-400"
               >
                 Lines:
               </label>
@@ -165,7 +165,7 @@ function LogsTab({ appName }: { appName: string }) {
                 id="log-lines"
                 value={lines}
                 onChange={(e) => setLines(Number(e.target.value))}
-                className="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="rounded-md border border-zinc-600 bg-zinc-700 px-2 py-1 text-xs text-zinc-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               >
                 {[50, 100, 200, 500].map((n) => (
                   <option key={n} value={n}>
@@ -190,7 +190,7 @@ function LogsTab({ appName }: { appName: string }) {
             <button
               onClick={() => void refetch()}
               disabled={isFetching}
-              className="flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
             >
               <RefreshCw
                 size={12}
@@ -203,10 +203,10 @@ function LogsTab({ appName }: { appName: string }) {
           <button
             onClick={handleToggleLive}
             className={[
-              "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500",
+              "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500",
               live
                 ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                : "border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600",
+                : "border-zinc-600 bg-zinc-700 text-zinc-300 hover:bg-zinc-600",
             ].join(" ")}
             aria-label={live ? "Stop live streaming" : "Start live streaming"}
           >
@@ -221,29 +221,29 @@ function LogsTab({ appName }: { appName: string }) {
       </div>
 
       <div
-        className="h-[480px] overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4"
+        className="h-[480px] overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950 p-4"
         aria-label="Application logs"
       >
         {live ? (
           stream.lines.length === 0 && stream.isStreaming ? (
             <div className="flex h-full items-center justify-center">
-              <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Connecting to log stream" />
+              <Loader2 size={20} className="animate-spin text-zinc-500" aria-label="Connecting to log stream" />
             </div>
           ) : stream.lines.length === 0 ? (
-            <p className="text-center text-sm text-slate-500">No logs available.</p>
+            <p className="text-center text-sm text-zinc-500">No logs available.</p>
           ) : (
-            <pre className="log-viewer text-slate-300">
+            <pre className="log-viewer text-zinc-300">
               {stream.lines.join("\n")}
             </pre>
           )
         ) : isLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Loading logs" />
+            <Loader2 size={20} className="animate-spin text-zinc-500" aria-label="Loading logs" />
           </div>
         ) : !data?.logs ? (
-          <p className="text-center text-sm text-slate-500">No logs available.</p>
+          <p className="text-center text-sm text-zinc-500">No logs available.</p>
         ) : (
-          <pre className="log-viewer text-slate-300">{data.logs}</pre>
+          <pre className="log-viewer text-zinc-300">{data.logs}</pre>
         )}
         <div ref={bottomRef} />
       </div>
@@ -376,12 +376,12 @@ function EnvTab({ appName }: { appName: string }) {
       {/* Add / override form */}
       <form
         onSubmit={handleAdd}
-        className="flex items-end gap-3 rounded-lg border border-slate-700 bg-slate-800/50 p-4"
+        className="flex items-end gap-3 rounded-lg border border-zinc-700 bg-zinc-800/50 p-4"
       >
         <div className="flex-1">
           <label
             htmlFor="env-key"
-            className="mb-1.5 block text-xs font-medium text-slate-400"
+            className="mb-1.5 block text-xs font-medium text-zinc-400"
           >
             Key
           </label>
@@ -390,13 +390,13 @@ function EnvTab({ appName }: { appName: string }) {
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
             placeholder="DATABASE_URL"
-            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
           />
         </div>
         <div className="flex-1">
           <label
             htmlFor="env-value"
-            className="mb-1.5 block text-xs font-medium text-slate-400"
+            className="mb-1.5 block text-xs font-medium text-zinc-400"
           >
             Value
           </label>
@@ -405,13 +405,13 @@ function EnvTab({ appName }: { appName: string }) {
             value={newValue}
             onChange={(e) => setNewValue(e.target.value)}
             placeholder="postgres://..."
-            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+            className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
           />
         </div>
         <button
           type="submit"
           disabled={setEnv.isPending || !newKey.trim()}
-          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
         >
           {setEnv.isPending ? (
             <Loader2 size={14} className="animate-spin" />
@@ -427,34 +427,34 @@ function EnvTab({ appName }: { appName: string }) {
         <div className="flex items-center justify-center py-8">
           <Loader2
             size={20}
-            className="animate-spin text-slate-500"
+            className="animate-spin text-zinc-500"
             aria-label="Loading environment variables"
           />
         </div>
       ) : unified.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-500">
+        <p className="py-8 text-center text-sm text-zinc-500">
           No environment variables found.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-700">
+        <div className="overflow-hidden rounded-lg border border-zinc-700">
           <table className="w-full text-sm" role="table">
             <thead>
-              <tr className="border-b border-slate-700 bg-slate-800/60">
+              <tr className="border-b border-zinc-700 bg-zinc-800/60">
                 <th
                   scope="col"
-                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                 >
                   Key
                 </th>
                 <th
                   scope="col"
-                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                 >
                   Value
                 </th>
                 <th
                   scope="col"
-                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                 >
                   Source
                 </th>
@@ -463,16 +463,16 @@ function EnvTab({ appName }: { appName: string }) {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/40">
+            <tbody className="divide-y divide-zinc-700/40">
               {unified.map((v) => (
                 <tr
                   key={`${v.source}-${v.container ?? ""}-${v.key}`}
-                  className="bg-slate-800/30 hover:bg-slate-800/60"
+                  className="bg-zinc-800/30 hover:bg-zinc-800/60"
                 >
-                  <td className="px-4 py-3 font-mono text-xs font-medium text-slate-200">
+                  <td className="px-4 py-3 font-mono text-xs font-medium text-zinc-200">
                     {v.key}
                   </td>
-                  <td className="max-w-xs px-4 py-3 font-mono text-xs text-slate-400">
+                  <td className="max-w-xs px-4 py-3 font-mono text-xs text-zinc-400">
                     {editingKey === v.key ? (
                       <form
                         onSubmit={(e) => {
@@ -489,7 +489,7 @@ function EnvTab({ appName }: { appName: string }) {
                             if (e.key === "Escape") cancelEdit();
                           }}
                           onBlur={() => void saveEdit()}
-                          className="w-full rounded border border-indigo-500 bg-slate-700 px-2 py-1 font-mono text-xs text-slate-100 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                          className="w-full rounded border border-orange-500 bg-zinc-700 px-2 py-1 font-mono text-xs text-zinc-100 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                         />
                       </form>
                     ) : (
@@ -501,21 +501,21 @@ function EnvTab({ appName }: { appName: string }) {
                         <span className="truncate">{v.value}</span>
                         <Pencil
                           size={11}
-                          className="shrink-0 text-slate-600 opacity-0 transition-opacity group-hover:opacity-100"
+                          className="shrink-0 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100"
                         />
                       </button>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     {v.source === "override" ? (
-                      <span className="inline-flex items-center rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] font-medium text-indigo-400">
+                      <span className="inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-medium text-orange-400">
                         override
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-700/50 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
                         compose
                         {v.container && (
-                          <span className="text-slate-500">
+                          <span className="text-zinc-500">
                             · {v.container}
                           </span>
                         )}
@@ -527,7 +527,7 @@ function EnvTab({ appName }: { appName: string }) {
                       <button
                         onClick={() => handleDelete(v.key)}
                         disabled={deletingKey === v.key}
-                        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Delete ${v.key}`}
                       >
                         {deletingKey === v.key ? (
@@ -559,14 +559,14 @@ function DeploymentsTab({ appName }: { appName: string }) {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Loading deployments" />
+        <Loader2 size={20} className="animate-spin text-zinc-500" aria-label="Loading deployments" />
       </div>
     );
   }
 
   if (deployments.length === 0) {
     return (
-      <p className="py-10 text-center text-sm text-slate-500">
+      <p className="py-10 text-center text-sm text-zinc-500">
         No deployments yet. Trigger a deployment to see history here.
       </p>
     );
@@ -590,52 +590,52 @@ function DeploymentsTab({ appName }: { appName: string }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-700">
+    <div className="overflow-hidden rounded-lg border border-zinc-700">
       <table className="w-full text-sm" role="table">
         <thead>
-          <tr className="border-b border-slate-700 bg-slate-800/60">
+          <tr className="border-b border-zinc-700 bg-zinc-800/60">
             {["", "ID", "Status", "Ref", "Started", "Finished", ""].map((h, i) => (
               <th
                 key={`${h}-${i}`}
                 scope="col"
-                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
               >
                 {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-700/40">
+        <tbody className="divide-y divide-zinc-700/40">
           {deployments.map((dep, idx) => (
             <>
               <tr
                 key={dep.id}
-                className="bg-slate-800/30 transition-colors hover:bg-slate-800/60"
+                className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/60"
               >
                 <td className="w-8 px-4 py-3">
                   {dep.log ? (
                     <button
                       onClick={() => setExpandedId(expandedId === dep.id ? null : dep.id)}
-                      className="text-slate-500 hover:text-slate-300"
+                      className="text-zinc-500 hover:text-zinc-300"
                       aria-label={expandedId === dep.id ? "Collapse log" : "View log"}
                     >
                       {expandedId === dep.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </button>
                   ) : null}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                <td className="px-4 py-3 font-mono text-xs text-zinc-400">
                   #{dep.id}
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={dep.status} />
                 </td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                <td className="px-4 py-3 font-mono text-xs text-zinc-400">
                   {getRef(dep)}
                 </td>
-                <td className="px-4 py-3 text-slate-400">
+                <td className="px-4 py-3 text-zinc-400">
                   {formatDate(dep.started_at)}
                 </td>
-                <td className="px-4 py-3 text-slate-400">
+                <td className="px-4 py-3 text-zinc-400">
                   {dep.finished_at ? formatDate(dep.finished_at) : "—"}
                 </td>
                 <td className="px-4 py-3">
@@ -653,8 +653,8 @@ function DeploymentsTab({ appName }: { appName: string }) {
               </tr>
               {expandedId === dep.id && dep.log ? (
                 <tr key={`${dep.id}-log`}>
-                  <td colSpan={7} className="bg-slate-900/60 px-4 py-3">
-                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-400">
+                  <td colSpan={7} className="bg-zinc-900/60 px-4 py-3">
+                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-zinc-400">
                       {dep.log}
                     </pre>
                   </td>
@@ -677,13 +677,13 @@ function HealthTab({ appName }: { appName: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-zinc-400">
           Health checks run on-demand over SSH.
         </p>
         <button
           onClick={() => void refetch()}
           disabled={isFetching}
-          className="flex items-center gap-1.5 rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
         >
           <RefreshCw
             size={12}
@@ -695,19 +695,19 @@ function HealthTab({ appName }: { appName: string }) {
       </div>
 
       {!data && !isLoading && !isFetching ? (
-        <p className="py-10 text-center text-sm text-slate-500">
+        <p className="py-10 text-center text-sm text-zinc-500">
           Click &quot;Check Health&quot; to query real container state from the server.
         </p>
       ) : isLoading || isFetching ? (
         <div className="flex items-center justify-center py-8">
-          <Loader2 size={20} className="animate-spin text-slate-500" aria-label="Checking health" />
+          <Loader2 size={20} className="animate-spin text-zinc-500" aria-label="Checking health" />
         </div>
       ) : data ? (
         <>
           {/* Status summary */}
-          <div className="flex items-center gap-4 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+          <div className="flex items-center gap-4 rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
             <div>
-              <p className="mb-1 text-xs text-slate-400">Actual Status</p>
+              <p className="mb-1 text-xs text-zinc-400">Actual Status</p>
               <StatusBadge status={data.actual_status} />
             </div>
             {data.status_mismatch && (
@@ -719,41 +719,41 @@ function HealthTab({ appName }: { appName: string }) {
 
           {/* Container table */}
           {data.containers.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">
+            <p className="py-6 text-center text-sm text-zinc-500">
               No containers found. The app may not be deployed.
             </p>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-700">
+            <div className="overflow-hidden rounded-lg border border-zinc-700">
               <table className="w-full text-sm" role="table">
                 <thead>
-                  <tr className="border-b border-slate-700 bg-slate-800/60">
+                  <tr className="border-b border-zinc-700 bg-zinc-800/60">
                     {["Container", "State", "Status", "Healthcheck", "Image"].map((h) => (
                       <th
                         key={h}
                         scope="col"
-                        className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                        className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                       >
                         {h}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700/40">
+                <tbody className="divide-y divide-zinc-700/40">
                   {data.containers.map((c) => (
-                    <tr key={c.name} className="bg-slate-800/30 hover:bg-slate-800/60">
-                      <td className="px-4 py-3 font-mono text-xs text-slate-200">{c.name}</td>
+                    <tr key={c.name} className="bg-zinc-800/30 hover:bg-zinc-800/60">
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-200">{c.name}</td>
                       <td className="px-4 py-3">
                         <StatusBadge status={c.state} />
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400">{c.status}</td>
+                      <td className="px-4 py-3 text-xs text-zinc-400">{c.status}</td>
                       <td className="px-4 py-3">
                         {c.health ? (
                           <StatusBadge status={c.health} />
                         ) : (
-                          <span className="text-xs text-slate-500">—</span>
+                          <span className="text-xs text-zinc-500">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-500">
                         {c.image || "—"}
                       </td>
                     </tr>
@@ -765,28 +765,28 @@ function HealthTab({ appName }: { appName: string }) {
 
           {/* HTTP Health Check */}
           {data?.http_health && (
-            <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-slate-200">HTTP Health Check</h3>
+            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-zinc-200">HTTP Health Check</h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
-                  <p className="text-xs text-slate-500">Status</p>
+                  <p className="text-xs text-zinc-500">Status</p>
                   <StatusBadge status={data.http_health.healthy ? "healthy" : "unhealthy"} />
                 </div>
                 {data.http_health.status_code != null && (
                   <div>
-                    <p className="text-xs text-slate-500">HTTP Code</p>
-                    <p className="font-mono text-sm text-slate-200">{data.http_health.status_code}</p>
+                    <p className="text-xs text-zinc-500">HTTP Code</p>
+                    <p className="font-mono text-sm text-zinc-200">{data.http_health.status_code}</p>
                   </div>
                 )}
                 {data.http_health.response_time_ms != null && (
                   <div>
-                    <p className="text-xs text-slate-500">Response Time</p>
-                    <p className="font-mono text-sm text-slate-200">{data.http_health.response_time_ms.toFixed(0)}ms</p>
+                    <p className="text-xs text-zinc-500">Response Time</p>
+                    <p className="font-mono text-sm text-zinc-200">{data.http_health.response_time_ms.toFixed(0)}ms</p>
                   </div>
                 )}
                 {data.http_health.error && (
                   <div className="col-span-full">
-                    <p className="text-xs text-slate-500">Error</p>
+                    <p className="text-xs text-zinc-500">Error</p>
                     <p className="text-sm text-red-400">{data.http_health.error}</p>
                   </div>
                 )}
@@ -935,7 +935,7 @@ export default function AppDetail() {
       {/* Back link */}
       <Link
         to="/apps"
-        className="mb-5 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+        className="mb-5 inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
       >
         <ArrowLeft size={14} aria-hidden="true" />
         Back to Apps
@@ -944,13 +944,13 @@ export default function AppDetail() {
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-700">
-            <Box size={22} className="text-indigo-400" aria-hidden="true" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-700">
+            <Box size={22} className="text-orange-400" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-100">{decodedName}</h1>
+            <h1 className="text-2xl font-bold text-zinc-100">{decodedName}</h1>
             {app && (
-              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-400">
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
                 <span className="flex items-center gap-1">
                   <Server size={11} aria-hidden="true" />
                   {app.server_name}
@@ -959,7 +959,7 @@ export default function AppDetail() {
                   Object.entries(app.domains).map(([svc, d]) => (
                     <span key={svc} className="flex items-center gap-1">
                       <Globe size={11} aria-hidden="true" />
-                      <span className="text-slate-500">{svc}:</span>
+                      <span className="text-zinc-500">{svc}:</span>
                       {d}
                     </span>
                   ))
@@ -985,10 +985,10 @@ export default function AppDetail() {
                   </span>
                 )}
                 {app.cpu_limit && (
-                  <span className="text-xs text-slate-400">CPU: {app.cpu_limit}</span>
+                  <span className="text-xs text-zinc-400">CPU: {app.cpu_limit}</span>
                 )}
                 {app.memory_limit && (
-                  <span className="text-xs text-slate-400">Mem: {app.memory_limit}</span>
+                  <span className="text-xs text-zinc-400">Mem: {app.memory_limit}</span>
                 )}
               </div>
             )}
@@ -1001,7 +1001,7 @@ export default function AppDetail() {
           <button
             onClick={openEditModal}
             disabled={!!actionPending}
-            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
           >
             <Pencil size={14} aria-hidden="true" />
             Edit
@@ -1009,7 +1009,7 @@ export default function AppDetail() {
           <button
             onClick={handleDeploy}
             disabled={!!actionPending}
-            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
           >
             {actionPending === "deploy" ? (
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -1021,7 +1021,7 @@ export default function AppDetail() {
           <button
             onClick={handleRestart}
             disabled={!!actionPending}
-            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
           >
             {actionPending === "restart" ? (
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -1033,7 +1033,7 @@ export default function AppDetail() {
           <button
             onClick={handleStop}
             disabled={!!actionPending}
-            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
           >
             {actionPending === "stop" ? (
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -1058,12 +1058,12 @@ export default function AppDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-xl border border-slate-700 bg-slate-800">
+      <div className="rounded-xl border border-zinc-700 bg-zinc-800">
         {/* Tab list */}
         <div
           role="tablist"
           aria-label="App details"
-          className="flex border-b border-slate-700"
+          className="flex border-b border-zinc-700"
         >
           <TabButton
             id="logs"
@@ -1151,7 +1151,7 @@ export default function AppDetail() {
         <Modal title="Edit App" onClose={() => setShowEditModal(false)}>
           <form onSubmit={handleEditSubmit} className="space-y-4" noValidate>
             <div>
-              <label htmlFor="edit-domain" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Domain
               </label>
               <input
@@ -1161,12 +1161,12 @@ export default function AppDetail() {
                 value={editForm.domain ?? ""}
                 onChange={handleEditChange}
                 placeholder="app.example.com"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Port
               </label>
               <input
@@ -1177,12 +1177,12 @@ export default function AppDetail() {
                 max={65535}
                 value={editForm.port ?? ""}
                 onChange={handleEditChange}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="edit-git-repo" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-git-repo" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Git Repository
               </label>
               <input
@@ -1192,12 +1192,12 @@ export default function AppDetail() {
                 value={editForm.git_repo ?? ""}
                 onChange={handleEditChange}
                 placeholder="https://github.com/user/repo.git"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="edit-branch" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-branch" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Branch
               </label>
               <input
@@ -1207,12 +1207,12 @@ export default function AppDetail() {
                 value={editForm.branch ?? ""}
                 onChange={handleEditChange}
                 placeholder="main"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="edit-image" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-image" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Docker Image
               </label>
               <input
@@ -1222,13 +1222,13 @@ export default function AppDetail() {
                 value={editForm.image ?? ""}
                 onChange={handleEditChange}
                 placeholder="nginx:latest"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="edit-cpu-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                <label htmlFor="edit-cpu-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
                   CPU Limit
                 </label>
                 <input
@@ -1238,11 +1238,11 @@ export default function AppDetail() {
                   value={editForm.cpu_limit ?? ""}
                   onChange={handleEditChange}
                   placeholder="0.5"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
               <div>
-                <label htmlFor="edit-memory-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                <label htmlFor="edit-memory-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
                   Memory Limit
                 </label>
                 <input
@@ -1252,13 +1252,13 @@ export default function AppDetail() {
                   value={editForm.memory_limit ?? ""}
                   onChange={handleEditChange}
                   placeholder="512M"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="edit-health-check-url" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-health-check-url" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Health Check URL
               </label>
               <input
@@ -1268,12 +1268,12 @@ export default function AppDetail() {
                 value={editForm.health_check_url ?? ""}
                 onChange={handleEditChange}
                 placeholder="https://app.example.com/health"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="edit-health-check-interval" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-health-check-interval" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Health Check Interval (seconds)
               </label>
               <input
@@ -1284,7 +1284,7 @@ export default function AppDetail() {
                 value={editForm.health_check_interval ?? ""}
                 onChange={handleEditChange}
                 placeholder="30"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
@@ -1292,14 +1292,14 @@ export default function AppDetail() {
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={updateApp.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {updateApp.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

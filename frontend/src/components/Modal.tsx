@@ -57,23 +57,23 @@ export default function Modal({
       <div
         ref={dialogRef}
         className={[
-          "relative w-full rounded-xl border border-slate-700 bg-slate-800 shadow-2xl",
+          "relative w-full rounded-xl border border-zinc-700 bg-zinc-800 shadow-2xl",
           maxWidth,
         ].join(" ")}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-zinc-700 px-6 py-4">
           <h2
             id="modal-title"
-            className="text-base font-semibold text-slate-100"
+            className="text-base font-semibold text-zinc-100"
           >
             {title}
           </h2>
           <button
             ref={closeBtnRef}
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
             aria-label="Close modal"
           >
             <X size={16} aria-hidden="true" />

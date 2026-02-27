@@ -45,8 +45,8 @@ interface InfoRowProps {
 function InfoRow({ label, value }: InfoRowProps) {
   return (
     <div className="flex items-center justify-between py-2.5 text-sm">
-      <span className="text-slate-400">{label}</span>
-      <span className="font-medium text-slate-200">{value}</span>
+      <span className="text-zinc-400">{label}</span>
+      <span className="font-medium text-zinc-200">{value}</span>
     </div>
   );
 }
@@ -69,17 +69,17 @@ function UsageBar({ label, used, total, percent, icon }: UsageBarProps) {
         : "bg-emerald-500";
 
   return (
-    <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+    <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+        <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
           {icon}
           {label}
         </div>
-        <span className="text-xs font-semibold text-slate-300">
+        <span className="text-xs font-semibold text-zinc-300">
           {clampedPercent.toFixed(0)}%
         </span>
       </div>
-      <div className="mb-1.5 h-2 overflow-hidden rounded-full bg-slate-700">
+      <div className="mb-1.5 h-2 overflow-hidden rounded-full bg-zinc-700">
         <div
           className={["h-full rounded-full transition-all duration-500", barColor].join(" ")}
           style={{ width: `${clampedPercent}%` }}
@@ -90,7 +90,7 @@ function UsageBar({ label, used, total, percent, icon }: UsageBarProps) {
           aria-label={`${label} usage`}
         />
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-zinc-500">
         {used} used of {total}
       </p>
     </div>
@@ -112,19 +112,19 @@ function ProvisionProgress({ lines, isStreaming, status, error }: ProvisionProgr
   }, [lines.length]);
 
   return (
-    <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800" aria-label="Provisioning progress">
-      <div className="flex items-center gap-2 border-b border-slate-700 px-5 py-3">
+    <div className="mb-6 rounded-xl border border-zinc-700 bg-zinc-800" aria-label="Provisioning progress">
+      <div className="flex items-center gap-2 border-b border-zinc-700 px-5 py-3">
         {isStreaming ? (
           <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-indigo-500" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" />
           </span>
         ) : status === "active" ? (
           <CheckCircle2 size={14} className="text-emerald-400" aria-hidden="true" />
         ) : status === "inactive" ? (
           <XCircle size={14} className="text-red-400" aria-hidden="true" />
         ) : null}
-        <h2 className="text-sm font-semibold text-slate-200">
+        <h2 className="text-sm font-semibold text-zinc-200">
           {isStreaming
             ? "Provisioning…"
             : status === "active"
@@ -135,9 +135,9 @@ function ProvisionProgress({ lines, isStreaming, status, error }: ProvisionProgr
         </h2>
       </div>
 
-      <div className="max-h-64 overflow-y-auto px-5 py-3 font-mono text-xs leading-relaxed text-slate-300">
+      <div className="max-h-64 overflow-y-auto px-5 py-3 font-mono text-xs leading-relaxed text-zinc-300">
         {lines.length === 0 && isStreaming && (
-          <p className="text-slate-500">Waiting for progress…</p>
+          <p className="text-zinc-500">Waiting for progress…</p>
         )}
         {lines.map((line, i) => (
           <p key={i}>{line}</p>
@@ -287,7 +287,7 @@ export default function ServerDetail() {
       {/* Back link */}
       <Link
         to="/servers"
-        className="mb-5 inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+        className="mb-5 inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
       >
         <ArrowLeft size={14} aria-hidden="true" />
         Back to Servers
@@ -296,15 +296,15 @@ export default function ServerDetail() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-700">
-            <Server size={22} className="text-indigo-400" aria-hidden="true" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-700">
+            <Server size={22} className="text-orange-400" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-100">
+            <h1 className="text-2xl font-bold text-zinc-100">
               {decodedName}
             </h1>
             {server && (
-              <p className="mt-0.5 text-sm text-slate-400">
+              <p className="mt-0.5 text-sm text-zinc-400">
                 {server.user}@{server.host}:{server.port}
                 {server.provider ? ` · ${server.provider}` : ""}
               </p>
@@ -319,7 +319,7 @@ export default function ServerDetail() {
         <div className="flex items-center gap-2">
           <button
             onClick={openEditModal}
-            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
           >
             <Pencil size={14} aria-hidden="true" />
             Edit
@@ -327,7 +327,7 @@ export default function ServerDetail() {
           <button
             onClick={handleTest}
             disabled={testServer.isPending}
-            className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
           >
             {testServer.isPending ? (
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -339,7 +339,7 @@ export default function ServerDetail() {
           <button
             onClick={handleProvision}
             disabled={provisionServer.isPending}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
           >
             {provisionServer.isPending ? (
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -373,13 +373,13 @@ export default function ServerDetail() {
         {/* Left column: server info */}
         <div className="space-y-6">
           {/* Info card */}
-          <div className="rounded-xl border border-slate-700 bg-slate-800">
-            <div className="border-b border-slate-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+            <div className="border-b border-zinc-700 px-5 py-3">
+              <h2 className="text-sm font-semibold text-zinc-200">
                 Server Info
               </h2>
             </div>
-            <div className="divide-y divide-slate-700/50 px-5">
+            <div className="divide-y divide-zinc-700/50 px-5">
               {server ? (
                 <>
                   <InfoRow label="Host" value={server.host} />
@@ -401,7 +401,7 @@ export default function ServerDetail() {
                   <InfoRow label="Apps" value={server.app_count} />
                 </>
               ) : (
-                <p className="py-6 text-center text-sm text-slate-500">
+                <p className="py-6 text-center text-sm text-zinc-500">
                   Server not found
                 </p>
               )}
@@ -409,10 +409,10 @@ export default function ServerDetail() {
           </div>
 
           {/* Tags card */}
-          <div className="rounded-xl border border-slate-700 bg-slate-800">
-            <div className="border-b border-slate-700 px-5 py-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-                <Tag size={14} className="text-indigo-400" aria-hidden="true" />
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+            <div className="border-b border-zinc-700 px-5 py-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+                <Tag size={14} className="text-orange-400" aria-hidden="true" />
                 Tags
               </h2>
             </div>
@@ -422,7 +422,7 @@ export default function ServerDetail() {
                   server!.tags!.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center gap-1 rounded-md bg-indigo-500/15 px-2 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30"
+                      className="inline-flex items-center gap-1 rounded-md bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-300 ring-1 ring-orange-500/30"
                     >
                       {tag}
                       <button
@@ -435,7 +435,7 @@ export default function ServerDetail() {
                     </span>
                   ))
                 ) : (
-                  <span className="text-xs text-slate-500">No tags</span>
+                  <span className="text-xs text-zinc-500">No tags</span>
                 )}
               </div>
               <form onSubmit={(e) => void handleAddTag(e)} className="flex gap-2">
@@ -444,12 +444,12 @@ export default function ServerDetail() {
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   placeholder="Add tag…"
-                  className="flex-1 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="flex-1 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
                 <button
                   type="submit"
                   disabled={!newTag.trim() || addServerTag.isPending}
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+                  className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
                 >
                   <Plus size={12} aria-hidden="true" />
                 </button>
@@ -459,11 +459,11 @@ export default function ServerDetail() {
 
           {/* Uptime card */}
           {statusData?.uptime && (
-            <div className="rounded-xl border border-slate-700 bg-slate-800 px-5 py-4">
+            <div className="rounded-xl border border-zinc-700 bg-zinc-800 px-5 py-4">
               <div className="flex items-center gap-2 text-sm">
                 <Activity size={16} className="text-emerald-400" aria-hidden="true" />
-                <span className="font-medium text-slate-200">Uptime</span>
-                <span className="ml-auto font-mono text-xs text-slate-400">
+                <span className="font-medium text-zinc-200">Uptime</span>
+                <span className="ml-auto font-mono text-xs text-zinc-400">
                   {statusData.uptime}
                 </span>
               </div>
@@ -474,14 +474,14 @@ export default function ServerDetail() {
         {/* Right column: status */}
         <div className="space-y-6 lg:col-span-2">
           {/* Resource usage */}
-          <div className="rounded-xl border border-slate-700 bg-slate-800">
-            <div className="flex items-center justify-between border-b border-slate-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+            <div className="flex items-center justify-between border-b border-zinc-700 px-5 py-3">
+              <h2 className="text-sm font-semibold text-zinc-200">
                 Resource Usage
               </h2>
               <button
                 onClick={() => void refetchStatus()}
-                className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                 aria-label="Refresh status"
               >
                 <RefreshCw
@@ -495,10 +495,10 @@ export default function ServerDetail() {
             <div className="p-5">
               {statusLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 size={24} className="animate-spin text-slate-500" aria-label="Loading status" />
+                  <Loader2 size={24} className="animate-spin text-zinc-500" aria-label="Loading status" />
                 </div>
               ) : !statusData ? (
-                <p className="py-6 text-center text-sm text-slate-500">
+                <p className="py-6 text-center text-sm text-zinc-500">
                   Status unavailable — the server may be unreachable.
                 </p>
               ) : (
@@ -537,24 +537,24 @@ export default function ServerDetail() {
 
           {/* Containers */}
           {statusData?.containers && statusData.containers.length > 0 && (
-            <div className="rounded-xl border border-slate-700 bg-slate-800">
-              <div className="border-b border-slate-700 px-5 py-3">
-                <h2 className="text-sm font-semibold text-slate-200">
+            <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+              <div className="border-b border-zinc-700 px-5 py-3">
+                <h2 className="text-sm font-semibold text-zinc-200">
                   Running Containers ({statusData.containers.length})
                 </h2>
               </div>
-              <div className="divide-y divide-slate-700/40">
+              <div className="divide-y divide-zinc-700/40">
                 {statusData.containers.map((c) => (
                   <div
                     key={c.id}
                     className="flex items-center justify-between px-5 py-3"
                   >
                     <div>
-                      <p className="text-sm font-medium text-slate-200">
+                      <p className="text-sm font-medium text-zinc-200">
                         {c.name}
                       </p>
                       {c.image && (
-                        <p className="mt-0.5 font-mono text-xs text-slate-500">
+                        <p className="mt-0.5 font-mono text-xs text-zinc-500">
                           {c.image}
                         </p>
                       )}
@@ -567,15 +567,15 @@ export default function ServerDetail() {
           )}
 
           {/* 24h Metrics History */}
-          <div className="rounded-xl border border-slate-700 bg-slate-800">
-            <div className="border-b border-slate-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+            <div className="border-b border-zinc-700 px-5 py-3">
+              <h2 className="text-sm font-semibold text-zinc-200">
                 24h Metrics History
               </h2>
             </div>
             <div className="space-y-4 p-5">
               {metrics.length === 0 ? (
-                <p className="text-center text-sm text-slate-500">
+                <p className="text-center text-sm text-zinc-500">
                   No metrics yet — data will appear after the server status is fetched.
                 </p>
               ) : (
@@ -613,20 +613,20 @@ export default function ServerDetail() {
           </div>
 
           {/* Apps on server */}
-          <div className="rounded-xl border border-slate-700 bg-slate-800">
-            <div className="border-b border-slate-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+            <div className="border-b border-zinc-700 px-5 py-3">
+              <h2 className="text-sm font-semibold text-zinc-200">
                 Apps on this Server
               </h2>
             </div>
 
             {apps.length === 0 ? (
-              <div className="flex items-center gap-3 px-5 py-8 text-sm text-slate-500">
+              <div className="flex items-center gap-3 px-5 py-8 text-sm text-zinc-500">
                 <Box size={16} aria-hidden="true" />
                 No apps deployed to this server yet.
               </div>
             ) : (
-              <div className="divide-y divide-slate-700/40">
+              <div className="divide-y divide-zinc-700/40">
                 {apps.map((app) => (
                   <div
                     key={app.id}
@@ -635,12 +635,12 @@ export default function ServerDetail() {
                     <div>
                       <Link
                         to={`/apps/${encodeURIComponent(app.name)}`}
-                        className="text-sm font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                        className="text-sm font-medium text-orange-400 hover:text-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                       >
                         {app.name}
                       </Link>
                       {app.domain && (
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-0.5 text-xs text-zinc-500">
                           {app.domain}
                         </p>
                       )}
@@ -659,7 +659,7 @@ export default function ServerDetail() {
         <Modal title="Edit Server" onClose={() => setShowEditModal(false)}>
           <form onSubmit={handleEditSubmit} className="space-y-4" noValidate>
             <div>
-              <label htmlFor="edit-host" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-host" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Host / IP
               </label>
               <input
@@ -668,13 +668,13 @@ export default function ServerDetail() {
                 type="text"
                 value={editForm.host ?? ""}
                 onChange={handleEditChange}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="edit-user" className="mb-1.5 block text-xs font-medium text-slate-300">
+                <label htmlFor="edit-user" className="mb-1.5 block text-xs font-medium text-zinc-300">
                   SSH User
                 </label>
                 <input
@@ -683,11 +683,11 @@ export default function ServerDetail() {
                   type="text"
                   value={editForm.user ?? ""}
                   onChange={handleEditChange}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
               <div>
-                <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-slate-300">
+                <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
                   SSH Port
                 </label>
                 <input
@@ -698,13 +698,13 @@ export default function ServerDetail() {
                   max={65535}
                   value={editForm.port ?? ""}
                   onChange={handleEditChange}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="edit-key" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-key" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 SSH Key Path
               </label>
               <input
@@ -713,12 +713,12 @@ export default function ServerDetail() {
                 type="text"
                 value={editForm.ssh_key_path ?? ""}
                 onChange={handleEditChange}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div>
-              <label htmlFor="edit-provider" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="edit-provider" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Provider
               </label>
               <select
@@ -726,7 +726,7 @@ export default function ServerDetail() {
                 name="provider"
                 value={editForm.provider ?? ""}
                 onChange={handleEditChange}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               >
                 {PROVIDERS.map((p) => (
                   <option key={p} value={p}>
@@ -740,14 +740,14 @@ export default function ServerDetail() {
               <button
                 type="button"
                 onClick={() => setShowEditModal(false)}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={updateServer.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {updateServer.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

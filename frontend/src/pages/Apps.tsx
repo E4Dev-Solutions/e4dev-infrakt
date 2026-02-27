@@ -219,14 +219,14 @@ export default function Apps() {
       {/* Header */}
       <div className="mb-7 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Apps</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-zinc-100">Apps</h1>
+          <p className="mt-1 text-sm text-zinc-400">
             Deploy and manage your applications
           </p>
         </div>
         <button
           onClick={handleOpenModal}
-          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
         >
           <Plus size={16} aria-hidden="true" />
           Create App
@@ -236,7 +236,7 @@ export default function Apps() {
       {/* Loading */}
       {isLoading && (
         <div className="flex items-center justify-center py-24">
-          <Loader2 size={28} className="animate-spin text-indigo-400" aria-label="Loading apps" />
+          <Loader2 size={28} className="animate-spin text-orange-400" aria-label="Loading apps" />
         </div>
       )}
 
@@ -262,16 +262,16 @@ export default function Apps() {
 
       {/* Table */}
       {apps.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-slate-700">
+        <div className="overflow-hidden rounded-xl border border-zinc-700">
           <table className="w-full text-sm" role="table">
             <thead>
-              <tr className="border-b border-slate-700 bg-slate-800/60">
+              <tr className="border-b border-zinc-700 bg-zinc-800/60">
                 {["Name", "Server", "Domain", "Type", "Replicas", "Status", "Actions"].map(
                   (h) => (
                     <th
                       key={h}
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                     >
                       {h}
                     </th>
@@ -279,24 +279,24 @@ export default function Apps() {
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/40">
+            <tbody className="divide-y divide-zinc-700/40">
               {apps.map((app) => (
                 <tr
                   key={app.id}
-                  className="bg-slate-800/30 transition-colors hover:bg-slate-800/70"
+                  className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/70"
                 >
                   {/* Name */}
                   <td className="px-4 py-3">
                     <div>
                       <Link
                         to={`/apps/${encodeURIComponent(app.name)}`}
-                        className="flex items-center gap-1 font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                        className="flex items-center gap-1 font-medium text-orange-400 hover:text-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                       >
                         {app.name}
                         <ChevronRight size={13} aria-hidden="true" />
                       </Link>
                       {app.git_repo && (
-                        <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                        <div className="mt-0.5 flex items-center gap-1 text-xs text-zinc-500">
                           <GitBranch size={11} aria-hidden="true" />
                           {app.branch ?? "main"}
                         </div>
@@ -304,7 +304,7 @@ export default function Apps() {
                     </div>
                   </td>
                   {/* Server */}
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-zinc-300">
                     {app.server_name}
                   </td>
                   {/* Domain */}
@@ -312,28 +312,28 @@ export default function Apps() {
                     {app.domains && Object.keys(app.domains).length > 1 ? (
                       <div className="flex flex-col gap-1">
                         {Object.entries(app.domains).map(([svc, d]) => (
-                          <div key={svc} className="flex items-center gap-1.5 text-xs text-slate-300">
+                          <div key={svc} className="flex items-center gap-1.5 text-xs text-zinc-300">
                             <Globe size={12} className="shrink-0" aria-hidden="true" />
-                            <span className="text-slate-500">{svc}:</span>
+                            <span className="text-zinc-500">{svc}:</span>
                             {d}
                           </div>
                         ))}
                       </div>
                     ) : app.domain ? (
-                      <div className="flex items-center gap-1.5 text-xs text-slate-300">
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-300">
                         <Globe size={12} aria-hidden="true" />
                         {app.domain}
                       </div>
                     ) : (
-                      <span className="text-slate-500">—</span>
+                      <span className="text-zinc-500">—</span>
                     )}
                   </td>
                   {/* Type */}
-                  <td className="px-4 py-3 text-slate-400">
+                  <td className="px-4 py-3 text-zinc-400">
                     {app.app_type ?? "—"}
                   </td>
                   {/* Replicas */}
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-zinc-300">
                     {app.replicas ?? 1}
                   </td>
                   {/* Status */}
@@ -348,7 +348,7 @@ export default function Apps() {
                         onClick={() => handleDeploy(app.name)}
                         disabled={!!actionPending}
                         title="Deploy"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Deploy ${app.name}`}
                       >
                         {isActionPending(`deploy-${app.name}`) ? (
@@ -362,7 +362,7 @@ export default function Apps() {
                         onClick={() => handleRestart(app.name)}
                         disabled={!!actionPending}
                         title="Restart"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Restart ${app.name}`}
                       >
                         {isActionPending(`restart-${app.name}`) ? (
@@ -376,7 +376,7 @@ export default function Apps() {
                         onClick={() => handleStop(app.name)}
                         disabled={!!actionPending}
                         title="Stop"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Stop ${app.name}`}
                       >
                         {isActionPending(`stop-${app.name}`) ? (
@@ -390,7 +390,7 @@ export default function Apps() {
                         onClick={() => handleDestroy(app.name)}
                         disabled={!!actionPending}
                         title="Destroy"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Destroy ${app.name}`}
                       >
                         {isActionPending(`destroy-${app.name}`) ? (
@@ -415,7 +415,7 @@ export default function Apps() {
             {/* Name + Server row */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="app-name" className="mb-1.5 block text-xs font-medium text-slate-300">
+                <label htmlFor="app-name" className="mb-1.5 block text-xs font-medium text-zinc-300">
                   App Name <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -426,11 +426,11 @@ export default function Apps() {
                   value={form.name}
                   onChange={handleChange}
                   placeholder="my-app"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
               <div>
-                <label htmlFor="app-server" className="mb-1.5 block text-xs font-medium text-slate-300">
+                <label htmlFor="app-server" className="mb-1.5 block text-xs font-medium text-zinc-300">
                   Server <span className="text-red-400">*</span>
                 </label>
                 <select
@@ -439,7 +439,7 @@ export default function Apps() {
                   required
                   value={form.server_name}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 >
                   <option value="">Select…</option>
                   {servers.map((s) => (
@@ -453,12 +453,12 @@ export default function Apps() {
 
             {/* Source type toggle */}
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-300">Source</label>
-              <div className="flex rounded-lg border border-slate-600 bg-slate-800/60 p-0.5">
+              <label className="mb-1.5 block text-xs font-medium text-zinc-300">Source</label>
+              <div className="flex rounded-lg border border-zinc-600 bg-zinc-800/60 p-0.5">
                 <button
                   type="button"
                   onClick={() => { setSourceType("template"); setForm((prev) => ({ ...prev, image: "", git_repo: "", branch: "main" })); }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "template" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "template" ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
                 >
                   <Box size={13} aria-hidden="true" />
                   Template
@@ -466,7 +466,7 @@ export default function Apps() {
                 <button
                   type="button"
                   onClick={() => { setSourceType("github"); setSelectedTemplate(null); setForm((prev) => ({ ...prev, image: "", template: undefined })); }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "github" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "github" ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
                 >
                   <Github size={13} aria-hidden="true" />
                   GitHub
@@ -474,7 +474,7 @@ export default function Apps() {
                 <button
                   type="button"
                   onClick={() => { setSourceType("image"); setSelectedTemplate(null); setForm((prev) => ({ ...prev, git_repo: "", branch: "main", template: undefined })); }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "image" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "image" ? "bg-orange-600 text-white" : "text-zinc-400 hover:text-zinc-200"}`}
                 >
                   <Container size={13} aria-hidden="true" />
                   Image
@@ -490,13 +490,13 @@ export default function Apps() {
                     key={tmpl.name}
                     type="button"
                     onClick={() => handleTemplateSelect(tmpl)}
-                    className={`rounded-lg border p-3 text-left transition-colors ${selectedTemplate?.name === tmpl.name ? "border-indigo-500 bg-indigo-500/10" : "border-slate-700 bg-slate-800/40 hover:border-slate-500"}`}
+                    className={`rounded-lg border p-3 text-left transition-colors ${selectedTemplate?.name === tmpl.name ? "border-orange-500 bg-orange-500/10" : "border-zinc-700 bg-zinc-800/40 hover:border-zinc-500"}`}
                   >
-                    <div className="text-sm font-medium text-slate-200">{tmpl.name}</div>
-                    <div className="mt-0.5 text-xs text-slate-400">{tmpl.description}</div>
+                    <div className="text-sm font-medium text-zinc-200">{tmpl.name}</div>
+                    <div className="mt-0.5 text-xs text-zinc-400">{tmpl.description}</div>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {tmpl.services.map((svc) => (
-                        <span key={svc} className="rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
+                        <span key={svc} className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[10px] text-zinc-400">
                           {svc}
                         </span>
                       ))}
@@ -510,29 +510,29 @@ export default function Apps() {
             {sourceType === "github" && (
               <>
                 {githubConnected ? (
-                  <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-800/40 p-3">
+                  <div className="space-y-2 rounded-lg border border-zinc-700 bg-zinc-800/40 p-3">
                     <div className="relative">
-                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                      <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" aria-hidden="true" />
                       <input
                         type="text"
                         value={repoSearch}
                         onChange={(e) => setRepoSearch(e.target.value)}
                         placeholder="Search repositories…"
                         aria-label="Filter GitHub repositories"
-                        className="w-full rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-3 text-xs text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                        className="w-full rounded-md border border-zinc-600 bg-zinc-700 py-1.5 pl-8 pr-3 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                       />
                     </div>
                     <div className="relative">
                       {reposFetching && (
                         <div className="absolute inset-y-0 right-8 flex items-center">
-                          <Loader2 size={12} className="animate-spin text-indigo-400" aria-hidden="true" />
+                          <Loader2 size={12} className="animate-spin text-orange-400" aria-hidden="true" />
                         </div>
                       )}
                       <select
                         aria-label="Select a GitHub repository"
                         onChange={handleRepoSelect}
                         defaultValue=""
-                        className="w-full rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                        className="w-full rounded-md border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                       >
                         <option value="">Select a repository…</option>
                         {filteredRepos.map((repo) => (
@@ -543,17 +543,17 @@ export default function Apps() {
                       </select>
                     </div>
                     {filteredRepos.length === 0 && !reposFetching && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-zinc-500">
                         {repoSearch ? "No match." : "No repositories found."}
                       </p>
                     )}
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-3">
-                    <p className="text-xs text-slate-500">
+                  <div className="rounded-lg border border-zinc-700 bg-zinc-800/40 p-3">
+                    <p className="text-xs text-zinc-500">
                       <Lock size={11} className="mr-1 inline-block" aria-hidden="true" />
                       Connect GitHub in{" "}
-                      <a href="/settings" className="text-indigo-400 hover:text-indigo-300">Settings</a>{" "}
+                      <a href="/settings" className="text-orange-400 hover:text-orange-300">Settings</a>{" "}
                       to browse repos, or enter a URL manually.
                     </p>
                   </div>
@@ -561,7 +561,7 @@ export default function Apps() {
                 {/* Manual URL + Branch (collapsed if repo was selected) */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2">
-                    <label htmlFor="app-git-repo" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    <label htmlFor="app-git-repo" className="mb-1.5 block text-xs font-medium text-zinc-300">
                       Git URL
                     </label>
                     <input
@@ -571,11 +571,11 @@ export default function Apps() {
                       value={form.git_repo ?? ""}
                       onChange={handleChange}
                       placeholder="https://github.com/org/repo"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                     />
                   </div>
                   <div>
-                    <label htmlFor="app-branch" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    <label htmlFor="app-branch" className="mb-1.5 block text-xs font-medium text-zinc-300">
                       Branch
                     </label>
                     <input
@@ -585,7 +585,7 @@ export default function Apps() {
                       value={form.branch ?? ""}
                       onChange={handleChange}
                       placeholder="main"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                     />
                   </div>
                 </div>
@@ -595,7 +595,7 @@ export default function Apps() {
             {/* Docker image source */}
             {sourceType === "image" && (
               <div>
-                <label htmlFor="app-image" className="mb-1.5 block text-xs font-medium text-slate-300">
+                <label htmlFor="app-image" className="mb-1.5 block text-xs font-medium text-zinc-300">
                   Image
                 </label>
                 <input
@@ -605,7 +605,7 @@ export default function Apps() {
                   value={form.image ?? ""}
                   onChange={handleChange}
                   placeholder="nginx:alpine"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
             )}
@@ -616,7 +616,7 @@ export default function Apps() {
               <div className="space-y-2">
                 {Object.entries(selectedTemplate.domain_map).map(([svc]) => (
                   <div key={svc}>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-300 capitalize">
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-300 capitalize">
                       {svc} domain
                     </label>
                     <input
@@ -629,7 +629,7 @@ export default function Apps() {
                         }))
                       }
                       placeholder={`${svc}.example.com`}
-                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                     />
                   </div>
                 ))}
@@ -637,7 +637,7 @@ export default function Apps() {
             ) : (
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <label htmlFor="app-domain" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  <label htmlFor="app-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
                     Domain
                   </label>
                   <input
@@ -647,11 +647,11 @@ export default function Apps() {
                     value={form.domain ?? ""}
                     onChange={handleChange}
                     placeholder="app.example.com"
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                   />
                 </div>
                 <div>
-                  <label htmlFor="app-port" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  <label htmlFor="app-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
                     Port
                   </label>
                   <input
@@ -663,7 +663,7 @@ export default function Apps() {
                     value={form.port ?? ""}
                     onChange={handleChange}
                     placeholder="3000"
-                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                   />
                 </div>
               </div>
@@ -673,7 +673,7 @@ export default function Apps() {
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-slate-200"
+              className="flex items-center gap-1 text-xs text-zinc-400 transition-colors hover:text-zinc-200"
             >
               <ChevronDown size={13} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} aria-hidden="true" />
               Advanced options
@@ -682,16 +682,16 @@ export default function Apps() {
             {showAdvanced && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="app-cpu-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  <label htmlFor="app-cpu-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
                     CPU Limit
                   </label>
-                  <input id="app-cpu-limit" name="cpu_limit" type="text" value={form.cpu_limit ?? ""} onChange={handleChange} placeholder="0.5" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
+                  <input id="app-cpu-limit" name="cpu_limit" type="text" value={form.cpu_limit ?? ""} onChange={handleChange} placeholder="0.5" className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none" />
                 </div>
                 <div>
-                  <label htmlFor="app-memory-limit" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  <label htmlFor="app-memory-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
                     Memory Limit
                   </label>
-                  <input id="app-memory-limit" name="memory_limit" type="text" value={form.memory_limit ?? ""} onChange={handleChange} placeholder="512M" className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none" />
+                  <input id="app-memory-limit" name="memory_limit" type="text" value={form.memory_limit ?? ""} onChange={handleChange} placeholder="512M" className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none" />
                 </div>
               </div>
             )}
@@ -701,14 +701,14 @@ export default function Apps() {
               <button
                 type="button"
                 onClick={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); setSelectedTemplate(null); }}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={createApp.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {createApp.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

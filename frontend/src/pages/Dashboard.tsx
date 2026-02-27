@@ -23,18 +23,18 @@ interface StatCardProps {
   label: string;
   value: number | string;
   icon: ReactNode;
-  accent: string; // tailwind color token, e.g. "indigo"
+  accent: string; // tailwind color token, e.g. "orange"
   subLabel?: string;
   href?: string;
 }
 
 function StatCard({ label, value, icon, accent, subLabel, href }: StatCardProps) {
   const accentMap: Record<string, { border: string; bg: string; text: string; glow: string }> = {
-    indigo: {
-      border: "border-indigo-500/40",
-      bg: "bg-indigo-500/10",
-      text: "text-indigo-400",
-      glow: "shadow-indigo-500/5",
+    orange: {
+      border: "border-orange-500/40",
+      bg: "bg-orange-500/10",
+      text: "text-orange-400",
+      glow: "shadow-orange-500/5",
     },
     emerald: {
       border: "border-emerald-500/40",
@@ -56,14 +56,14 @@ function StatCard({ label, value, icon, accent, subLabel, href }: StatCardProps)
     },
   };
 
-  const a = accentMap[accent] ?? accentMap.indigo;
+  const a = accentMap[accent] ?? accentMap.orange;
 
   const card = (
     <div
       className={[
-        "group relative overflow-hidden rounded-xl border bg-slate-800/80 p-5 transition-all duration-200",
+        "group relative overflow-hidden rounded-xl border bg-zinc-800/80 p-5 transition-all duration-200",
         a.border,
-        href ? "hover:bg-slate-800 hover:shadow-lg cursor-pointer" : "",
+        href ? "hover:bg-zinc-800 hover:shadow-lg cursor-pointer" : "",
         a.glow,
       ].join(" ")}
     >
@@ -72,12 +72,12 @@ function StatCard({ label, value, icon, accent, subLabel, href }: StatCardProps)
 
       <div className="relative flex items-start justify-between">
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
             {label}
           </p>
-          <p className="text-3xl font-bold tabular-nums text-slate-100">{value}</p>
+          <p className="text-3xl font-bold tabular-nums text-zinc-100">{value}</p>
           {subLabel && (
-            <p className="mt-1.5 text-xs text-slate-500">{subLabel}</p>
+            <p className="mt-1.5 text-xs text-zinc-500">{subLabel}</p>
           )}
         </div>
         <div
@@ -94,7 +94,7 @@ function StatCard({ label, value, icon, accent, subLabel, href }: StatCardProps)
       {href && (
         <ArrowUpRight
           size={14}
-          className="absolute right-3 top-3 text-slate-600 opacity-0 transition-opacity group-hover:opacity-100"
+          className="absolute right-3 top-3 text-zinc-600 opacity-0 transition-opacity group-hover:opacity-100"
         />
       )}
     </div>
@@ -114,7 +114,7 @@ function DeploymentStatusIcon({ status }: { status: string }) {
     return <CheckCircle2 size={15} className="text-emerald-400" />;
   if (s === "failed" || s === "error")
     return <XCircle size={15} className="text-red-400" />;
-  return <Loader2 size={15} className="animate-spin text-indigo-400" />;
+  return <Loader2 size={15} className="animate-spin text-sky-400" />;
 }
 
 function formatDate(iso: string): string {
@@ -143,11 +143,11 @@ function formatDuration(start: string, end?: string): string {
 
 function DeploymentRow({ dep }: { dep: RecentDeployment }) {
   return (
-    <tr className="group transition-colors hover:bg-slate-700/20">
+    <tr className="group transition-colors hover:bg-zinc-700/20">
       <td className="py-3 pl-5 pr-3">
         <div className="flex items-center gap-2.5">
           <DeploymentStatusIcon status={dep.status} />
-          <span className="font-medium text-slate-200">
+          <span className="font-medium text-zinc-200">
             {dep.app_name || "—"}
           </span>
         </div>
@@ -155,18 +155,18 @@ function DeploymentRow({ dep }: { dep: RecentDeployment }) {
       <td className="px-3 py-3">
         <StatusBadge status={dep.status} />
       </td>
-      <td className="px-3 py-3 font-mono text-xs text-slate-500">
+      <td className="px-3 py-3 font-mono text-xs text-zinc-500">
         {dep.commit_hash ? dep.commit_hash.slice(0, 7) : "—"}
       </td>
       <td className="px-3 py-3">
-        <div className="flex items-center gap-1.5 text-slate-500">
+        <div className="flex items-center gap-1.5 text-zinc-500">
           <Timer size={12} className="shrink-0" />
           <span className="text-xs">
             {formatDuration(dep.started_at, dep.finished_at)}
           </span>
         </div>
       </td>
-      <td className="py-3 pl-3 pr-5 text-right text-xs text-slate-500">
+      <td className="py-3 pl-3 pr-5 text-right text-xs text-zinc-500">
         {formatDate(dep.started_at)}
       </td>
     </tr>
@@ -181,7 +181,7 @@ export default function Dashboard() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <Loader2 size={24} className="animate-spin text-slate-500" />
+        <Loader2 size={24} className="animate-spin text-zinc-500" />
       </div>
     );
   }
@@ -210,10 +210,10 @@ export default function Dashboard() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-100">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
           Dashboard
         </h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-zinc-500">
           Platform overview and recent activity
         </p>
       </div>
@@ -224,7 +224,7 @@ export default function Dashboard() {
           label="Servers"
           value={stats.total_servers}
           icon={<Server size={20} />}
-          accent="indigo"
+          accent="orange"
           subLabel={`${stats.active_servers} active`}
           href="/servers"
         />
@@ -254,18 +254,18 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Deployments */}
-      <div className="overflow-hidden rounded-xl border border-slate-700/60 bg-slate-800/50">
-        <div className="flex items-center justify-between border-b border-slate-700/40 px-5 py-4">
+      <div className="overflow-hidden rounded-xl border border-zinc-700/60 bg-zinc-800/50">
+        <div className="flex items-center justify-between border-b border-zinc-700/40 px-5 py-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-700/50">
-              <Rocket size={14} className="text-slate-400" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-700/50">
+              <Rocket size={14} className="text-zinc-400" />
             </div>
-            <h2 className="text-sm font-semibold text-slate-200">
+            <h2 className="text-sm font-semibold text-zinc-200">
               Recent Deployments
             </h2>
           </div>
           {stats.recent_deployments.length > 0 && (
-            <span className="rounded-full bg-slate-700/40 px-2.5 py-0.5 text-[11px] font-medium text-slate-400">
+            <span className="rounded-full bg-zinc-700/40 px-2.5 py-0.5 text-[11px] font-medium text-zinc-400">
               {stats.recent_deployments.length}
             </span>
           )}
@@ -273,13 +273,13 @@ export default function Dashboard() {
 
         {stats.recent_deployments.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-700/30">
-              <Clock size={20} className="text-slate-600" />
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-zinc-700/30">
+              <Clock size={20} className="text-zinc-600" />
             </div>
-            <p className="text-sm font-medium text-slate-500">
+            <p className="text-sm font-medium text-zinc-500">
               No deployments yet
             </p>
-            <p className="mt-1 text-xs text-slate-600">
+            <p className="mt-1 text-xs text-zinc-600">
               Deploy an app to see activity here
             </p>
           </div>
@@ -287,14 +287,14 @@ export default function Dashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700/30">
+                <tr className="border-b border-zinc-700/30">
                   {["App", "Status", "Commit", "Duration", "Started"].map(
                     (h, i) => (
                       <th
                         key={h}
                         scope="col"
                         className={[
-                          "py-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-600",
+                          "py-2.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-600",
                           i === 0 ? "pl-5 pr-3 text-left" : "px-3 text-left",
                           i === 4 ? "pr-5 text-right" : "",
                         ].join(" ")}
@@ -305,7 +305,7 @@ export default function Dashboard() {
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/20">
+              <tbody className="divide-y divide-zinc-700/20">
                 {stats.recent_deployments.map((dep) => (
                   <DeploymentRow key={dep.id} dep={dep} />
                 ))}

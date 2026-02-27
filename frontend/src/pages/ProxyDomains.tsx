@@ -87,8 +87,8 @@ export default function ProxyDomains() {
       {/* Header */}
       <div className="mb-7 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Proxy Domains</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-zinc-100">Proxy Domains</h1>
+          <p className="mt-1 text-sm text-zinc-400">
             Manage Traefik reverse proxy routes
           </p>
         </div>
@@ -98,7 +98,7 @@ export default function ProxyDomains() {
               <button
                 onClick={handleReload}
                 disabled={reloadProxy.isPending}
-                className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {reloadProxy.isPending ? (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -109,7 +109,7 @@ export default function ProxyDomains() {
               </button>
               <button
                 onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 <Plus size={16} aria-hidden="true" />
                 Add Route
@@ -123,7 +123,7 @@ export default function ProxyDomains() {
       <div className="mb-6">
         <label
           htmlFor="proxy-server"
-          className="mb-1.5 block text-xs font-medium text-slate-300"
+          className="mb-1.5 block text-xs font-medium text-zinc-300"
         >
           Server
         </label>
@@ -131,7 +131,7 @@ export default function ProxyDomains() {
           id="proxy-server"
           value={selectedServer}
           onChange={(e) => setSelectedServer(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+          className="w-full max-w-xs rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
         >
           <option value="">Select a server</option>
           {servers.map((s) => (
@@ -154,7 +154,7 @@ export default function ProxyDomains() {
       {/* Loading */}
       {selectedServer && isLoading && (
         <div className="flex items-center justify-center py-24">
-          <Loader2 size={28} className="animate-spin text-indigo-400" aria-label="Loading domains" />
+          <Loader2 size={28} className="animate-spin text-orange-400" aria-label="Loading domains" />
         </div>
       )}
 
@@ -170,31 +170,31 @@ export default function ProxyDomains() {
 
       {/* Table */}
       {selectedServer && domains.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-slate-700">
+        <div className="overflow-hidden rounded-xl border border-zinc-700">
           <table className="w-full text-sm" role="table">
             <thead>
-              <tr className="border-b border-slate-700 bg-slate-800/60">
+              <tr className="border-b border-zinc-700 bg-zinc-800/60">
                 {["Domain", "Port", "Actions"].map((h) => (
                   <th
                     key={h}
                     scope="col"
-                    className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                    className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                   >
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/40">
+            <tbody className="divide-y divide-zinc-700/40">
               {domains.map((d) => (
                 <tr
                   key={d.domain}
-                  className="bg-slate-800/30 transition-colors hover:bg-slate-800/70"
+                  className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/70"
                 >
-                  <td className="px-4 py-3 font-medium text-slate-200">
+                  <td className="px-4 py-3 font-medium text-zinc-200">
                     {d.domain}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">
                     :{d.port}
                   </td>
                   <td className="px-4 py-3">
@@ -202,7 +202,7 @@ export default function ProxyDomains() {
                       onClick={() => handleDelete(d.domain)}
                       disabled={deletingDomain === d.domain}
                       title="Remove route"
-                      className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                      className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                       aria-label={`Remove ${d.domain}`}
                     >
                       {deletingDomain === d.domain ? (
@@ -226,7 +226,7 @@ export default function ProxyDomains() {
             <div>
               <label
                 htmlFor="route-domain"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Domain <span className="text-red-400">*</span>
               </label>
@@ -238,14 +238,14 @@ export default function ProxyDomains() {
                 value={form.domain}
                 onChange={handleChange}
                 placeholder="app.example.com"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
             <div>
               <label
                 htmlFor="route-port"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Target Port <span className="text-red-400">*</span>
               </label>
@@ -259,7 +259,7 @@ export default function ProxyDomains() {
                 value={form.port}
                 onChange={handleChange}
                 placeholder="3000"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
@@ -267,14 +267,14 @@ export default function ProxyDomains() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={addRoute.isPending || !form.domain.trim()}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {addRoute.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

@@ -41,7 +41,7 @@ function eventBadgeClass(event: string): string {
     case "deploy.failure":
       return "bg-red-500/15 text-red-300 ring-1 ring-red-500/30";
     case "backup.complete":
-      return "bg-blue-500/15 text-blue-300 ring-1 ring-blue-500/30";
+      return "bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/30";
     case "backup.restore":
       return "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30";
     case "health.down":
@@ -49,7 +49,7 @@ function eventBadgeClass(event: string): string {
     case "health.up":
       return "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30";
     default:
-      return "bg-slate-700 text-slate-300";
+      return "bg-zinc-700 text-zinc-300";
   }
 }
 
@@ -305,12 +305,12 @@ export default function Settings() {
 
       {/* Page header */}
       <div className="mb-7 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-700">
-          <SettingsIcon size={20} className="text-indigo-400" aria-hidden="true" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-700">
+          <SettingsIcon size={20} className="text-orange-400" aria-hidden="true" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Settings</h1>
-          <p className="mt-0.5 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-zinc-100">Settings</h1>
+          <p className="mt-0.5 text-sm text-zinc-400">
             Platform configuration and integrations
           </p>
         </div>
@@ -320,16 +320,16 @@ export default function Settings() {
       <section aria-labelledby="ssh-keys-heading" className="mb-10">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h2 id="ssh-keys-heading" className="text-base font-semibold text-slate-100">
+            <h2 id="ssh-keys-heading" className="text-base font-semibold text-zinc-100">
               SSH Keys
             </h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-zinc-400">
               Generate and manage SSH key pairs for server access. Deploy keys to servers to enable passwordless authentication.
             </p>
           </div>
           <button
             onClick={() => setShowGenerateKeyModal(true)}
-            className="flex shrink-0 items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
           >
             <Plus size={16} aria-hidden="true" />
             Generate Key
@@ -338,7 +338,7 @@ export default function Settings() {
 
         {keysLoading && (
           <div className="flex items-center justify-center py-20">
-            <Loader2 size={28} className="animate-spin text-indigo-400" aria-label="Loading SSH keys" />
+            <Loader2 size={28} className="animate-spin text-orange-400" aria-label="Loading SSH keys" />
           </div>
         )}
 
@@ -352,34 +352,34 @@ export default function Settings() {
         )}
 
         {sshKeys.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-slate-700">
+          <div className="overflow-hidden rounded-xl border border-zinc-700">
             <table className="w-full text-sm" role="table">
               <thead>
-                <tr className="border-b border-slate-700 bg-slate-800/60">
+                <tr className="border-b border-zinc-700 bg-zinc-800/60">
                   {["Name", "Type", "Fingerprint", "Created", "Actions"].map((h) => (
                     <th
                       key={h}
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/40">
+              <tbody className="divide-y divide-zinc-700/40">
                 {sshKeys.map((key) => (
-                  <tr key={key.id} className="bg-slate-800/30 transition-colors hover:bg-slate-800/70">
-                    <td className="px-4 py-3 font-medium text-slate-200">{key.name}</td>
+                  <tr key={key.id} className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/70">
+                    <td className="px-4 py-3 font-medium text-zinc-200">{key.name}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center rounded-md bg-slate-700 px-2 py-0.5 font-mono text-xs text-slate-300">
+                      <span className="inline-flex items-center rounded-md bg-zinc-700 px-2 py-0.5 font-mono text-xs text-zinc-300">
                         {key.key_type}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-400" title={key.fingerprint}>
+                    <td className="px-4 py-3 font-mono text-xs text-zinc-400" title={key.fingerprint}>
                       {key.fingerprint.length > 32 ? `${key.fingerprint.slice(0, 32)}…` : key.fingerprint}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-400">
                       {relativeTime(key.created_at)}
                     </td>
                     <td className="px-4 py-3">
@@ -388,7 +388,7 @@ export default function Settings() {
                           onClick={() => openDeployKeyModal(key.name)}
                           title="Deploy to server"
                           aria-label={`Deploy ${key.name} to server`}
-                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                          className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                         >
                           <ServerIcon size={15} aria-hidden="true" />
                         </button>
@@ -397,7 +397,7 @@ export default function Settings() {
                           disabled={deletingKeyName === key.name}
                           title="Delete key"
                           aria-label={`Delete ${key.name}`}
-                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                          className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         >
                           {deletingKeyName === key.name ? (
                             <Loader2 size={15} className="animate-spin" aria-hidden="true" />
@@ -418,45 +418,45 @@ export default function Settings() {
       {/* GitHub section */}
       <section aria-labelledby="github-heading" className="mb-10">
         <div className="mb-4">
-          <h2 id="github-heading" className="text-base font-semibold text-slate-100">
+          <h2 id="github-heading" className="text-base font-semibold text-zinc-100">
             GitHub
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-zinc-400">
             Connect your GitHub account to deploy private repositories.
           </p>
         </div>
 
         {githubLoading && (
           <div className="flex items-center justify-center py-10">
-            <Loader2 size={24} className="animate-spin text-indigo-400" aria-label="Loading GitHub status" />
+            <Loader2 size={24} className="animate-spin text-orange-400" aria-label="Loading GitHub status" />
           </div>
         )}
 
         {!githubLoading && githubStatus && (
           githubStatus.connected ? (
             /* Connected state */
-            <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/30">
+            <div className="overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/30">
               <div className="flex items-center justify-between px-4 py-4">
                 <div className="flex items-center gap-3">
-                  <Github size={20} className="shrink-0 text-slate-300" aria-hidden="true" />
+                  <Github size={20} className="shrink-0 text-zinc-300" aria-hidden="true" />
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-200">
+                      <span className="text-sm font-medium text-zinc-200">
                         Connected as{" "}
-                        <span className="text-indigo-300">{githubStatus.username}</span>
+                        <span className="text-orange-300">{githubStatus.username}</span>
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/30">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
                         Connected
                       </span>
                     </div>
-                    <p className="mt-0.5 text-xs text-slate-500">Your token is encrypted at rest.</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">Your token is encrypted at rest.</p>
                   </div>
                 </div>
                 <button
                   onClick={() => void handleDisconnectGitHub()}
                   disabled={disconnectGitHub.isPending}
-                  className="flex shrink-0 items-center gap-2 rounded-lg border border-slate-600 bg-slate-700 px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                  className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-300 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
                 >
                   {disconnectGitHub.isPending && (
                     <Loader2 size={13} className="animate-spin" aria-hidden="true" />
@@ -467,16 +467,16 @@ export default function Settings() {
             </div>
           ) : (
             /* Disconnected state */
-            <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/30">
+            <div className="overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/30">
               <form onSubmit={(e) => void handleConnectGitHub(e)} className="p-4 space-y-4" noValidate>
                 <div className="flex items-start gap-3">
-                  <Github size={20} className="mt-0.5 shrink-0 text-slate-400" aria-hidden="true" />
-                  <p className="text-sm text-slate-400">
+                  <Github size={20} className="mt-0.5 shrink-0 text-zinc-400" aria-hidden="true" />
+                  <p className="text-sm text-zinc-400">
                     Connect your GitHub account to browse and deploy private repositories directly from the Create App dialog.
                   </p>
                 </div>
                 <div>
-                  <label htmlFor="github-token" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  <label htmlFor="github-token" className="mb-1.5 block text-xs font-medium text-zinc-300">
                     Personal Access Token <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
@@ -487,26 +487,26 @@ export default function Settings() {
                       value={githubToken}
                       onChange={(e) => setGithubToken(e.target.value)}
                       placeholder="ghp_••••••••••••••••••••••••••••••••••••••"
-                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 pr-10 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 pr-10 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => setShowGithubToken((v) => !v)}
                       title={showGithubToken ? "Hide token" : "Show token"}
-                      className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-200"
+                      className="absolute inset-y-0 right-0 flex items-center px-3 text-zinc-400 hover:text-zinc-200"
                     >
                       {showGithubToken ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
                     </button>
                   </div>
-                  <p className="mt-1.5 text-xs text-slate-500">
-                    Required scopes: <code className="font-mono text-slate-400">repo</code>,{" "}
-                    <code className="font-mono text-slate-400">admin:repo_hook</code>
+                  <p className="mt-1.5 text-xs text-zinc-500">
+                    Required scopes: <code className="font-mono text-zinc-400">repo</code>,{" "}
+                    <code className="font-mono text-zinc-400">admin:repo_hook</code>
                   </p>
                   <a
                     href="https://github.com/settings/tokens/new?scopes=repo,admin:repo_hook&description=infrakt"
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+                    className="mt-1 inline-flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300"
                   >
                     <LinkIcon size={11} aria-hidden="true" />
                     Generate a token
@@ -516,7 +516,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={connectGitHub.isPending || !githubToken.trim()}
-                    className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                    className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
                   >
                     {connectGitHub.isPending && (
                       <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -534,26 +534,26 @@ export default function Settings() {
       {selfUpdateConfig && (
         <section aria-labelledby="self-update-heading" className="mb-10">
           <div className="mb-4">
-            <h2 id="self-update-heading" className="text-base font-semibold text-slate-100">
+            <h2 id="self-update-heading" className="text-base font-semibold text-zinc-100">
               Auto-Deploy Webhook
             </h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-zinc-400">
               Configure a GitHub webhook to automatically update infrakt when you push to main.
             </p>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-800/30">
-            <div className="divide-y divide-slate-700/40">
+          <div className="overflow-hidden rounded-xl border border-zinc-700 bg-zinc-800/30">
+            <div className="divide-y divide-zinc-700/40">
               {/* Webhook URL */}
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Payload URL</p>
-                  <p className="mt-1 truncate font-mono text-sm text-slate-200">{selfUpdateConfig.webhook_url}</p>
+                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">Payload URL</p>
+                  <p className="mt-1 truncate font-mono text-sm text-zinc-200">{selfUpdateConfig.webhook_url}</p>
                 </div>
                 <button
                   onClick={() => copyToClipboard(selfUpdateConfig.webhook_url, "url")}
                   title="Copy URL"
-                  className="ml-3 shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                  className="ml-3 shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
                 >
                   {copiedField === "url" ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
                 </button>
@@ -562,8 +562,8 @@ export default function Settings() {
               {/* Webhook Secret */}
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Secret</p>
-                  <p className="mt-1 truncate font-mono text-sm text-slate-200">
+                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">Secret</p>
+                  <p className="mt-1 truncate font-mono text-sm text-zinc-200">
                     {showSecret ? selfUpdateConfig.webhook_secret : "••••••••••••••••••••••••••••••••"}
                   </p>
                 </div>
@@ -571,14 +571,14 @@ export default function Settings() {
                   <button
                     onClick={() => setShowSecret(!showSecret)}
                     title={showSecret ? "Hide secret" : "Show secret"}
-                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                    className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
                   >
                     {showSecret ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                   <button
                     onClick={() => copyToClipboard(selfUpdateConfig.webhook_secret, "secret")}
                     title="Copy secret"
-                    className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200"
+                    className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200"
                   >
                     {copiedField === "secret" ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
                   </button>
@@ -588,12 +588,12 @@ export default function Settings() {
               {/* Content Type & Events */}
               <div className="flex items-center gap-8 px-4 py-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Content Type</p>
-                  <p className="mt-1 font-mono text-sm text-slate-200">application/json</p>
+                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">Content Type</p>
+                  <p className="mt-1 font-mono text-sm text-zinc-200">application/json</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-400">Events</p>
-                  <span className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-indigo-500/15 px-2 py-0.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30">
+                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-400">Events</p>
+                  <span className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-300 ring-1 ring-orange-500/30">
                     <GitBranch size={12} />
                     push
                   </span>
@@ -602,7 +602,7 @@ export default function Settings() {
             </div>
           </div>
 
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-zinc-500">
             Add these values in your GitHub repo: Settings &rarr; Webhooks &rarr; Add webhook
           </p>
         </section>
@@ -614,18 +614,18 @@ export default function Settings() {
           <div>
             <h2
               id="webhooks-heading"
-              className="text-base font-semibold text-slate-100"
+              className="text-base font-semibold text-zinc-100"
             >
               Notification Webhooks
             </h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-zinc-400">
               Send HTTP POST payloads to external URLs when deployment and backup
               events occur.
             </p>
           </div>
           <button
             onClick={() => setShowModal(true)}
-            className="flex shrink-0 items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
           >
             <Plus size={16} aria-hidden="true" />
             Add Webhook
@@ -637,7 +637,7 @@ export default function Settings() {
           <div className="flex items-center justify-center py-20">
             <Loader2
               size={28}
-              className="animate-spin text-indigo-400"
+              className="animate-spin text-orange-400"
               aria-label="Loading webhooks"
             />
           </div>
@@ -668,31 +668,31 @@ export default function Settings() {
 
         {/* Webhooks table */}
         {webhooks.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-slate-700">
+          <div className="overflow-hidden rounded-xl border border-zinc-700">
             <table className="w-full text-sm" role="table">
               <thead>
-                <tr className="border-b border-slate-700 bg-slate-800/60">
+                <tr className="border-b border-zinc-700 bg-zinc-800/60">
                   {["URL", "Events", "Created", "Actions"].map((h) => (
                     <th
                       key={h}
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                     >
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/40">
+              <tbody className="divide-y divide-zinc-700/40">
                 {webhooks.map((webhook) => (
                   <tr
                     key={webhook.id}
-                    className="bg-slate-800/30 transition-colors hover:bg-slate-800/70"
+                    className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/70"
                   >
                     {/* URL */}
                     <td className="max-w-xs px-4 py-3">
                       <span
-                        className="block truncate font-mono text-xs text-slate-200"
+                        className="block truncate font-mono text-xs text-zinc-200"
                         title={webhook.url}
                       >
                         {webhook.url.length > 50
@@ -719,7 +719,7 @@ export default function Settings() {
                     </td>
 
                     {/* Created */}
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-zinc-400">
                       {relativeTime(webhook.created_at)}
                     </td>
 
@@ -731,7 +731,7 @@ export default function Settings() {
                           disabled={testingId === webhook.id}
                           title="Send test delivery"
                           aria-label={`Send test delivery to ${webhook.url}`}
-                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                          className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         >
                           {testingId === webhook.id ? (
                             <Loader2
@@ -750,7 +750,7 @@ export default function Settings() {
                           disabled={deletingId === webhook.id}
                           title="Remove webhook"
                           aria-label={`Remove webhook for ${webhook.url}`}
-                          className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                          className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         >
                           {deletingId === webhook.id ? (
                             <Loader2
@@ -777,7 +777,7 @@ export default function Settings() {
         <Modal title="Generate SSH Key" onClose={() => { setShowGenerateKeyModal(false); setNewKeyName(""); }}>
           <form onSubmit={(e) => void handleGenerateKey(e)} className="space-y-4" noValidate>
             <div>
-              <label htmlFor="key-name" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="key-name" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Key Name <span className="text-red-400">*</span>
               </label>
               <input
@@ -787,21 +787,21 @@ export default function Settings() {
                 value={newKeyName}
                 onChange={(e) => setNewKeyName(e.target.value)}
                 placeholder="my-server-key"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
             <div className="flex justify-end gap-3 pt-1">
               <button
                 type="button"
                 onClick={() => { setShowGenerateKeyModal(false); setNewKeyName(""); }}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={generateKey.isPending || !newKeyName.trim()}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {generateKey.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -817,11 +817,11 @@ export default function Settings() {
       {showDeployKeyModal && (
         <Modal title="Deploy Key to Server" onClose={() => { setShowDeployKeyModal(false); setDeployKeyName(null); }}>
           <form onSubmit={(e) => void handleDeployKey(e)} className="space-y-4" noValidate>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-zinc-400">
               Copy this SSH key to the authorized_keys file on the selected server.
             </p>
             <div>
-              <label htmlFor="deploy-server" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="deploy-server" className="mb-1.5 block text-xs font-medium text-zinc-300">
                 Server <span className="text-red-400">*</span>
               </label>
               <select
@@ -829,7 +829,7 @@ export default function Settings() {
                 required
                 value={deployServerName}
                 onChange={(e) => setDeployServerName(e.target.value)}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               >
                 <option value="">Select a server</option>
                 {servers.map((s) => (
@@ -843,14 +843,14 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => { setShowDeployKeyModal(false); setDeployKeyName(null); }}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={deployKey.isPending || !deployServerName}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {deployKey.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -870,7 +870,7 @@ export default function Settings() {
             <div>
               <label
                 htmlFor="webhook-url"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Endpoint URL <span className="text-red-400">*</span>
               </label>
@@ -882,10 +882,10 @@ export default function Settings() {
                 onChange={handleUrlChange}
                 placeholder="https://hooks.slack.com/..."
                 className={[
-                  "w-full rounded-lg border bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:ring-1 focus-visible:outline-none",
+                  "w-full rounded-lg border bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:ring-1 focus-visible:outline-none",
                   form.urlError
                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                    : "border-slate-600 focus:border-indigo-500 focus:ring-indigo-500",
+                    : "border-zinc-600 focus:border-orange-500 focus:ring-orange-500",
                 ].join(" ")}
                 aria-describedby={form.urlError ? "webhook-url-error" : undefined}
                 aria-invalid={Boolean(form.urlError)}
@@ -903,7 +903,7 @@ export default function Settings() {
 
             {/* Events */}
             <fieldset>
-              <legend className="mb-2 text-xs font-medium text-slate-300">
+              <legend className="mb-2 text-xs font-medium text-zinc-300">
                 Events <span className="text-red-400">*</span>
               </legend>
               <div className="grid grid-cols-2 gap-2">
@@ -915,15 +915,15 @@ export default function Settings() {
                       className={[
                         "flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition-colors",
                         checked
-                          ? "border-indigo-500/60 bg-indigo-500/10 text-slate-200"
-                          : "border-slate-600 bg-slate-700/50 text-slate-400 hover:border-slate-500 hover:text-slate-300",
+                          ? "border-orange-500/60 bg-orange-500/10 text-zinc-200"
+                          : "border-zinc-600 bg-zinc-700/50 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300",
                       ].join(" ")}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => handleEventToggle(value)}
-                        className="h-3.5 w-3.5 rounded border-slate-500 bg-slate-600 accent-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                        className="h-3.5 w-3.5 rounded border-zinc-500 bg-zinc-600 accent-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                       />
                       <span>{label}</span>
                     </label>
@@ -936,10 +936,10 @@ export default function Settings() {
             <div>
               <label
                 htmlFor="webhook-secret"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Signing Secret{" "}
-                <span className="font-normal text-slate-500">(optional)</span>
+                <span className="font-normal text-zinc-500">(optional)</span>
               </label>
               <input
                 id="webhook-secret"
@@ -947,9 +947,9 @@ export default function Settings() {
                 value={form.secret ?? ""}
                 onChange={handleSecretChange}
                 placeholder="Optional HMAC signing secret"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-zinc-500">
                 Used to sign the X-Infrakt-Signature header sent with each
                 delivery.
               </p>
@@ -960,14 +960,14 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={createWebhook.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {createWebhook.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

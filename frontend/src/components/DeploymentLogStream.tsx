@@ -31,10 +31,10 @@ export default function DeploymentLogStream({
             <>
               <Loader2
                 size={14}
-                className="animate-spin text-indigo-400"
+                className="animate-spin text-sky-400"
                 aria-hidden="true"
               />
-              <span className="text-sm font-medium text-indigo-400">
+              <span className="text-sm font-medium text-sky-400">
                 Deploying&hellip;
               </span>
             </>
@@ -65,7 +65,7 @@ export default function DeploymentLogStream({
         {onClose && !isStreaming && (
           <button
             onClick={onClose}
-            className="rounded-md border border-slate-600 bg-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+            className="rounded-md border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
           >
             Close
           </button>
@@ -74,13 +74,13 @@ export default function DeploymentLogStream({
 
       {/* Log terminal */}
       <div
-        className="h-[400px] overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-300"
+        className="h-[400px] overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950 p-4 font-mono text-xs leading-relaxed text-zinc-300"
         aria-label="Deployment logs"
         role="log"
         aria-live="polite"
       >
         {lines.length === 0 && isStreaming && (
-          <span className="text-slate-500">Waiting for logs&hellip;</span>
+          <span className="text-zinc-500">Waiting for logs&hellip;</span>
         )}
         {lines.map((line, i) => (
           <div

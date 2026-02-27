@@ -55,25 +55,30 @@ interface LayoutProps {
 
 export default function Layout({ onLogout }: LayoutProps) {
   return (
-    <div className="flex h-full min-h-screen bg-slate-900">
+    <div className="flex h-full min-h-screen bg-zinc-950">
       {/* Sidebar */}
       <aside
-        className="flex w-64 shrink-0 flex-col border-r border-slate-700 bg-slate-900"
+        className="flex w-60 shrink-0 flex-col border-r border-zinc-800/80 bg-zinc-900/50"
         aria-label="Main navigation"
       >
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2.5 border-b border-slate-700 px-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600">
-            <Zap size={16} className="text-white" aria-hidden="true" />
+        <div className="flex h-16 items-center gap-3 border-b border-zinc-800/80 px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 shadow-lg shadow-orange-500/15">
+            <Zap size={17} className="text-white" aria-hidden="true" />
           </div>
-          <span className="text-lg font-bold tracking-tight text-slate-100">
-            infrakt
-          </span>
+          <div>
+            <span className="text-lg font-bold tracking-tight text-zinc-100">
+              infrakt
+            </span>
+            <span className="ml-1.5 font-mono text-[10px] text-zinc-600">
+              v0.1
+            </span>
+          </div>
         </div>
 
         {/* Nav links */}
         <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Sidebar navigation">
-          <ul className="space-y-1" role="list">
+          <ul className="space-y-0.5" role="list">
             {navItems.map(({ to, label, icon }) => (
               <li key={to}>
                 <NavLink
@@ -81,10 +86,10 @@ export default function Layout({ onLogout }: LayoutProps) {
                   end={to === "/"}
                   className={({ isActive }) =>
                     [
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150",
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
                       isActive
-                        ? "bg-indigo-600/20 text-indigo-400"
-                        : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
+                        ? "bg-orange-500/10 text-orange-400 shadow-sm shadow-orange-500/5"
+                        : "text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-200",
                     ].join(" ")
                   }
                 >
@@ -97,12 +102,12 @@ export default function Layout({ onLogout }: LayoutProps) {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-slate-700 px-5 py-4 flex items-center justify-between">
-          <p className="text-xs text-slate-500">infrakt v0.1.0</p>
+        <div className="border-t border-zinc-800/80 px-5 py-4 flex items-center justify-between">
+          <p className="font-mono text-[11px] text-zinc-600">infrakt</p>
           {onLogout && (
             <button
               onClick={onLogout}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
+              className="rounded-md p-1.5 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-400 transition-colors"
               title="Sign out"
             >
               <LogOut size={14} />
@@ -112,8 +117,8 @@ export default function Layout({ onLogout }: LayoutProps) {
       </aside>
 
       {/* Main content */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <main className="flex-1 overflow-y-auto p-6" id="main-content">
+      <div className="flex min-w-0 flex-1 flex-col bg-zinc-950">
+        <main className="flex-1 overflow-y-auto p-8" id="main-content">
           <Outlet />
         </main>
       </div>

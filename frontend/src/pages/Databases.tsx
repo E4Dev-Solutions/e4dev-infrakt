@@ -189,14 +189,14 @@ export default function Databases() {
       {/* Header */}
       <div className="mb-7 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Databases</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-zinc-100">Databases</h1>
+          <p className="mt-1 text-sm text-zinc-400">
             Manage database instances across your servers
           </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
         >
           <Plus size={16} aria-hidden="true" />
           Create Database
@@ -206,7 +206,7 @@ export default function Databases() {
       {/* Loading */}
       {isLoading && (
         <div className="flex items-center justify-center py-24">
-          <Loader2 size={28} className="animate-spin text-indigo-400" aria-label="Loading databases" />
+          <Loader2 size={28} className="animate-spin text-orange-400" aria-label="Loading databases" />
         </div>
       )}
 
@@ -235,16 +235,16 @@ export default function Databases() {
 
       {/* Table */}
       {databases.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-slate-700">
+        <div className="overflow-hidden rounded-xl border border-zinc-700">
           <table className="w-full text-sm" role="table">
             <thead>
-              <tr className="border-b border-slate-700 bg-slate-800/60">
+              <tr className="border-b border-zinc-700 bg-zinc-800/60">
                 {["Name", "Server", "Type", "Port", "Status", "Actions"].map(
                   (h) => (
                     <th
                       key={h}
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                     >
                       {h}
                     </th>
@@ -252,40 +252,40 @@ export default function Databases() {
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/40">
+            <tbody className="divide-y divide-zinc-700/40">
               {databases.map((db) => (
                 <tr
                   key={db.id}
-                  className="bg-slate-800/30 transition-colors hover:bg-slate-800/70"
+                  className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/70"
                 >
                   {/* Name */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <Database
                         size={14}
-                        className="shrink-0 text-slate-500"
+                        className="shrink-0 text-zinc-500"
                         aria-hidden="true"
                       />
                       <Link
                         to={`/databases/${encodeURIComponent(db.name)}`}
-                        className="font-medium text-slate-200 hover:text-indigo-400 transition-colors"
+                        className="font-medium text-zinc-200 hover:text-orange-400 transition-colors"
                       >
                         {db.name}
                       </Link>
                     </div>
                   </td>
                   {/* Server */}
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-zinc-300">
                     {db.server_name}
                   </td>
                   {/* Type */}
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center rounded-md bg-slate-700 px-2.5 py-0.5 text-xs font-medium text-slate-300">
+                    <span className="inline-flex items-center rounded-md bg-zinc-700 px-2.5 py-0.5 text-xs font-medium text-zinc-300">
                       {getDbTypeLabel(db.db_type)}
                     </span>
                   </td>
                   {/* Port */}
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-400">
                     {db.port ?? "—"}
                   </td>
                   {/* Status */}
@@ -299,7 +299,7 @@ export default function Databases() {
                         onClick={() => handleBackup(db.name, db.server_name)}
                         disabled={backingUpName === db.name}
                         title="Backup database"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Backup ${db.name}`}
                       >
                         {backingUpName === db.name ? (
@@ -311,7 +311,7 @@ export default function Databases() {
                       <button
                         onClick={() => setShowRestoreModal({ name: db.name, server: db.server_name })}
                         title="Restore database"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                         aria-label={`Restore ${db.name}`}
                       >
                         <Upload size={15} aria-hidden="true" />
@@ -320,8 +320,8 @@ export default function Databases() {
                         onClick={() => openScheduleModal(db)}
                         title={db.backup_schedule ? `Edit schedule (${db.backup_schedule})` : "Schedule backups"}
                         className={[
-                          "rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500",
-                          db.backup_schedule ? "text-indigo-400 hover:text-indigo-300" : "hover:text-indigo-400",
+                          "rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500",
+                          db.backup_schedule ? "text-orange-400 hover:text-orange-300" : "hover:text-orange-400",
                         ].join(" ")}
                         aria-label={`Schedule backups for ${db.name}`}
                         aria-pressed={Boolean(db.backup_schedule)}
@@ -332,7 +332,7 @@ export default function Databases() {
                         onClick={() => handleDelete(db.name, db.server_name)}
                         disabled={deletingName === db.name}
                         title="Delete database"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Delete ${db.name}`}
                       >
                         {deletingName === db.name ? (
@@ -358,14 +358,14 @@ export default function Databases() {
           onClose={() => { setShowRestoreModal(null); setRestoreFilename(""); }}
         >
           <form onSubmit={handleRestore} className="space-y-4" noValidate>
-            <p className="text-sm text-slate-400">
-              Restore <span className="font-medium text-slate-200">{showRestoreModal.name}</span> from
+            <p className="text-sm text-zinc-400">
+              Restore <span className="font-medium text-zinc-200">{showRestoreModal.name}</span> from
               a backup file on the server.
             </p>
             <div>
               <label
                 htmlFor="restore-filename"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Backup Filename <span className="text-red-400">*</span>
               </label>
@@ -376,9 +376,9 @@ export default function Databases() {
                 value={restoreFilename}
                 onChange={(e) => setRestoreFilename(e.target.value)}
                 placeholder="main-pg_20260224_120000.sql.gz"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-zinc-500">
                 File must exist in /opt/infrakt/backups/ on the server.
               </p>
             </div>
@@ -386,14 +386,14 @@ export default function Databases() {
               <button
                 type="button"
                 onClick={() => { setShowRestoreModal(null); setRestoreFilename(""); }}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={restoreDatabase.isPending || !restoreFilename}
-                className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {restoreDatabase.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -412,15 +412,15 @@ export default function Databases() {
           onClose={closeScheduleModal}
         >
           <form onSubmit={handleSetSchedule} className="space-y-4" noValidate>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-zinc-400">
               Configure automated backups for{" "}
-              <span className="font-medium text-slate-200">{scheduleDb.name}</span>.
+              <span className="font-medium text-zinc-200">{scheduleDb.name}</span>.
             </p>
 
             {/* Current schedule indicator */}
             {scheduleDb.currentSchedule && (
-              <div className="flex items-center justify-between rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2.5">
-                <div className="flex items-center gap-2 text-sm text-indigo-300">
+              <div className="flex items-center justify-between rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm text-orange-300">
                   <Clock size={14} aria-hidden="true" />
                   <span>
                     Current schedule:{" "}
@@ -431,7 +431,7 @@ export default function Databases() {
                   type="button"
                   onClick={() => void handleUnschedule()}
                   disabled={unscheduleBackup.isPending}
-                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
                 >
                   {unscheduleBackup.isPending && (
                     <Loader2 size={12} className="animate-spin" aria-hidden="true" />
@@ -445,7 +445,7 @@ export default function Databases() {
             <div>
               <label
                 htmlFor="schedule-cron"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Cron Expression <span className="text-red-400">*</span>
               </label>
@@ -456,16 +456,16 @@ export default function Databases() {
                 value={cronExpression}
                 onChange={(e) => setCronExpression(e.target.value)}
                 placeholder="0 2 * * *"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-zinc-500">
                 Standard 5-field cron syntax (minute hour day month weekday).
               </p>
             </div>
 
             {/* Preset buttons */}
             <div>
-              <p className="mb-2 text-xs font-medium text-slate-400">Presets</p>
+              <p className="mb-2 text-xs font-medium text-zinc-400">Presets</p>
               <div className="flex flex-wrap gap-2">
                 {[
                   { label: "Daily 2am", value: "0 2 * * *" },
@@ -477,14 +477,14 @@ export default function Databases() {
                     type="button"
                     onClick={() => setCronExpression(value)}
                     className={[
-                      "rounded-md border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500",
+                      "rounded-md border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500",
                       cronExpression === value
-                        ? "border-indigo-500 bg-indigo-500/20 text-indigo-300"
-                        : "border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600",
+                        ? "border-orange-500 bg-orange-500/20 text-orange-300"
+                        : "border-zinc-600 bg-zinc-700 text-zinc-300 hover:bg-zinc-600",
                     ].join(" ")}
                   >
                     {label}
-                    <span className="ml-1.5 font-mono text-slate-400">{value}</span>
+                    <span className="ml-1.5 font-mono text-zinc-400">{value}</span>
                   </button>
                 ))}
               </div>
@@ -494,7 +494,7 @@ export default function Databases() {
             <div>
               <label
                 htmlFor="schedule-retention"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Retention Days
               </label>
@@ -505,9 +505,9 @@ export default function Databases() {
                 max={365}
                 value={retentionDays}
                 onChange={(e) => setRetentionDays(Math.max(1, Number(e.target.value)))}
-                className="w-32 rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-32 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-zinc-500">
                 Backups older than this many days will be automatically removed.
               </p>
             </div>
@@ -517,14 +517,14 @@ export default function Databases() {
               <button
                 type="button"
                 onClick={closeScheduleModal}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={scheduleBackup.isPending || !cronExpression.trim()}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {scheduleBackup.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -547,7 +547,7 @@ export default function Databases() {
             <div>
               <label
                 htmlFor="db-server"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Server <span className="text-red-400">*</span>
               </label>
@@ -557,7 +557,7 @@ export default function Databases() {
                 required
                 value={form.server_name}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               >
                 <option value="">Select a server</option>
                 {servers.map((s) => (
@@ -572,7 +572,7 @@ export default function Databases() {
             <div>
               <label
                 htmlFor="db-name"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Database Name <span className="text-red-400">*</span>
               </label>
@@ -584,7 +584,7 @@ export default function Databases() {
                 value={form.name}
                 onChange={handleChange}
                 placeholder="my-database"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
@@ -593,7 +593,7 @@ export default function Databases() {
               <div>
                 <label
                   htmlFor="db-type"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
+                  className="mb-1.5 block text-xs font-medium text-zinc-300"
                 >
                   Database Type <span className="text-red-400">*</span>
                 </label>
@@ -603,7 +603,7 @@ export default function Databases() {
                   required
                   value={form.db_type}
                   onChange={handleChange}
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 >
                   {DB_TYPES.map((t) => (
                     <option key={t.value} value={t.value}>
@@ -615,7 +615,7 @@ export default function Databases() {
               <div>
                 <label
                   htmlFor="db-version"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
+                  className="mb-1.5 block text-xs font-medium text-zinc-300"
                 >
                   Version
                 </label>
@@ -626,7 +626,7 @@ export default function Databases() {
                   value={form.version ?? ""}
                   onChange={handleChange}
                   placeholder="15 / 8.0 / 7.2 / 7"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
             </div>
@@ -636,14 +636,14 @@ export default function Databases() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={createDatabase.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {createDatabase.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

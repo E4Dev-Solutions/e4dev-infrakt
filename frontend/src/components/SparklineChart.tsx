@@ -30,11 +30,11 @@ export default function SparklineChart({
     return (
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">{label}</span>
-          <span className="text-xs text-slate-600">No data</span>
+          <span className="text-xs font-medium text-zinc-400">{label}</span>
+          <span className="text-xs text-zinc-600">No data</span>
         </div>
         <div
-          className="w-full rounded bg-slate-700/40"
+          className="w-full rounded bg-zinc-700/40"
           style={{ height }}
           aria-hidden="true"
         />
@@ -62,7 +62,7 @@ export default function SparklineChart({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">{label}</span>
+        <span className="text-xs font-medium text-zinc-400">{label}</span>
         {latestValue !== null && (
           <span className="text-xs font-semibold" style={{ color }}>
             {latestValue.toFixed(1)}%

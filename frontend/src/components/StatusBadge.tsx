@@ -42,8 +42,8 @@ function getVariant(status: string): BadgeVariant {
 
 const variantClasses: Record<BadgeVariant, string> = {
   green: "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30",
-  gray: "bg-slate-600/30 text-slate-400 ring-1 ring-slate-500/30",
-  blue: "bg-indigo-500/15 text-indigo-400 ring-1 ring-indigo-500/30 badge-pulse",
+  gray: "bg-zinc-600/30 text-zinc-400 ring-1 ring-zinc-500/30",
+  blue: "bg-sky-500/15 text-sky-400 ring-1 ring-sky-500/30 badge-pulse",
   red: "bg-red-500/15 text-red-400 ring-1 ring-red-500/30",
   amber: "bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30",
 };

@@ -100,14 +100,14 @@ export default function Servers() {
       {/* Header */}
       <div className="mb-7 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Servers</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-zinc-100">Servers</h1>
+          <p className="mt-1 text-sm text-zinc-400">
             Manage your infrastructure hosts
           </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
         >
           <Plus size={16} aria-hidden="true" />
           Add Server
@@ -117,7 +117,7 @@ export default function Servers() {
       {/* Loading */}
       {isLoading && (
         <div className="flex items-center justify-center py-24">
-          <Loader2 size={28} className="animate-spin text-indigo-400" aria-label="Loading servers" />
+          <Loader2 size={28} className="animate-spin text-orange-400" aria-label="Loading servers" />
         </div>
       )}
 
@@ -143,16 +143,16 @@ export default function Servers() {
 
       {/* Table */}
       {servers.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-slate-700">
+        <div className="overflow-hidden rounded-xl border border-zinc-700">
           <table className="w-full text-sm" role="table">
             <thead>
-              <tr className="border-b border-slate-700 bg-slate-800/60">
+              <tr className="border-b border-zinc-700 bg-zinc-800/60">
                 {["Name", "Host", "Status", "Provider", "Tags", "Apps", "Actions"].map(
                   (h) => (
                     <th
                       key={h}
                       scope="col"
-                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                      className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
                     >
                       {h}
                     </th>
@@ -160,28 +160,28 @@ export default function Servers() {
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700/40">
+            <tbody className="divide-y divide-zinc-700/40">
               {servers.map((server) => (
                 <tr
                   key={server.id}
-                  className="bg-slate-800/30 transition-colors hover:bg-slate-800/70"
+                  className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/70"
                 >
                   <td className="px-4 py-3">
                     <Link
                       to={`/servers/${encodeURIComponent(server.name)}`}
-                      className="flex items-center gap-1.5 font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                      className="flex items-center gap-1.5 font-medium text-orange-400 hover:text-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                     >
                       {server.name}
                       <ChevronRight size={14} aria-hidden="true" />
                     </Link>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">
                     {server.user}@{server.host}:{server.port}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={server.status} />
                   </td>
-                  <td className="px-4 py-3 text-slate-400">
+                  <td className="px-4 py-3 text-zinc-400">
                     {server.provider ?? "—"}
                   </td>
                   <td className="px-4 py-3">
@@ -190,17 +190,17 @@ export default function Servers() {
                         server.tags!.map((tag) => (
                           <span
                             key={tag}
-                            className="inline-flex items-center rounded-md bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-300"
+                            className="inline-flex items-center rounded-md bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-300"
                           >
                             {tag}
                           </span>
                         ))
                       ) : (
-                        <span className="text-slate-500">—</span>
+                        <span className="text-zinc-500">—</span>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-300">
+                  <td className="px-4 py-3 text-zinc-300">
                     {server.app_count}
                   </td>
                   <td className="px-4 py-3">
@@ -209,7 +209,7 @@ export default function Servers() {
                         onClick={() => handleProvision(server.name)}
                         disabled={provisionServer.isPending}
                         title="Provision server"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Provision ${server.name}`}
                       >
                         <Settings size={15} aria-hidden="true" />
@@ -218,7 +218,7 @@ export default function Servers() {
                         onClick={() => handleDelete(server.name)}
                         disabled={deletingName === server.name}
                         title="Delete server"
-                        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-40"
+                        className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Delete ${server.name}`}
                       >
                         {deletingName === server.name ? (
@@ -244,7 +244,7 @@ export default function Servers() {
             <div>
               <label
                 htmlFor="server-name"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Name <span className="text-red-400">*</span>
               </label>
@@ -256,7 +256,7 @@ export default function Servers() {
                 value={form.name}
                 onChange={handleChange}
                 placeholder="my-server"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
@@ -264,7 +264,7 @@ export default function Servers() {
             <div>
               <label
                 htmlFor="server-host"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Host / IP <span className="text-red-400">*</span>
               </label>
@@ -276,7 +276,7 @@ export default function Servers() {
                 value={form.host}
                 onChange={handleChange}
                 placeholder="203.0.113.1"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
@@ -285,7 +285,7 @@ export default function Servers() {
               <div>
                 <label
                   htmlFor="server-user"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
+                  className="mb-1.5 block text-xs font-medium text-zinc-300"
                 >
                   SSH User <span className="text-red-400">*</span>
                 </label>
@@ -297,13 +297,13 @@ export default function Servers() {
                   value={form.user}
                   onChange={handleChange}
                   placeholder="root"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
               <div>
                 <label
                   htmlFor="server-port"
-                  className="mb-1.5 block text-xs font-medium text-slate-300"
+                  className="mb-1.5 block text-xs font-medium text-zinc-300"
                 >
                   SSH Port
                 </label>
@@ -316,7 +316,7 @@ export default function Servers() {
                   value={form.port ?? ""}
                   onChange={handleChange}
                   placeholder="22"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 />
               </div>
             </div>
@@ -325,7 +325,7 @@ export default function Servers() {
             <div>
               <label
                 htmlFor="server-key"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 SSH Key Path
               </label>
@@ -336,7 +336,7 @@ export default function Servers() {
                 value={form.ssh_key_path ?? ""}
                 onChange={handleChange}
                 placeholder="~/.ssh/id_rsa"
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               />
             </div>
 
@@ -344,7 +344,7 @@ export default function Servers() {
             <div>
               <label
                 htmlFor="server-provider"
-                className="mb-1.5 block text-xs font-medium text-slate-300"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
                 Provider
               </label>
@@ -353,7 +353,7 @@ export default function Servers() {
                 name="provider"
                 value={form.provider ?? ""}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               >
                 {PROVIDERS.map((p) => (
                   <option key={p} value={p}>
@@ -368,14 +368,14 @@ export default function Servers() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={addServer.isPending}
-                className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {addServer.isPending && (
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />

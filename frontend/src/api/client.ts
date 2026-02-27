@@ -333,8 +333,17 @@ async function request<T>(
   if (!res.ok) {
     let message = `Request failed: ${res.status} ${res.statusText}`;
     try {
-      const body = (await res.json()) as { detail?: string; message?: string };
-      message = body.detail ?? body.message ?? message;
+      const body = (await res.json()) as {
+        detail?: string | Array<{ msg?: string; loc?: string[] }>;
+        message?: string;
+      };
+      if (typeof body.detail === "string") {
+        message = body.detail;
+      } else if (Array.isArray(body.detail)) {
+        message = body.detail.map((e) => e.msg ?? JSON.stringify(e)).join("; ");
+      } else if (body.message) {
+        message = body.message;
+      }
     } catch {
       // ignore JSON parse errors — keep default message
     }

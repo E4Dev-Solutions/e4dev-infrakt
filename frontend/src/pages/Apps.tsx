@@ -116,6 +116,9 @@ export default function Apps() {
       port: tmpl.port,
       image: "",
       git_repo: "",
+      domains: Object.keys(tmpl.domain_map).length > 1
+        ? Object.fromEntries(Object.keys(tmpl.domain_map).map((k) => [k, ""]))
+        : undefined,
     }));
   }
 
@@ -132,9 +135,14 @@ export default function Apps() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
+      // For multi-domain templates, send domains dict instead of domain string
+      const hasMultiDomain = form.domains && Object.values(form.domains).some(Boolean);
       const payload: CreateAppInput = {
         ...form,
-        domain: form.domain || undefined,
+        domain: hasMultiDomain ? undefined : (form.domain || undefined),
+        domains: hasMultiDomain
+          ? Object.fromEntries(Object.entries(form.domains!).filter(([, v]) => v))
+          : undefined,
         git_repo: form.git_repo || undefined,
         branch: form.branch || undefined,
         image: form.image || undefined,
@@ -593,38 +601,63 @@ export default function Apps() {
             )}
 
             {/* Domain + Port */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <label htmlFor="app-domain" className="mb-1.5 block text-xs font-medium text-slate-300">
-                  Domain
-                </label>
-                <input
-                  id="app-domain"
-                  name="domain"
-                  type="text"
-                  value={form.domain ?? ""}
-                  onChange={handleChange}
-                  placeholder="app.example.com"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-                />
+            {selectedTemplate && Object.keys(selectedTemplate.domain_map).length > 1 ? (
+              /* Multi-domain template: one field per service */
+              <div className="space-y-2">
+                {Object.entries(selectedTemplate.domain_map).map(([svc]) => (
+                  <div key={svc}>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-300 capitalize">
+                      {svc} domain
+                    </label>
+                    <input
+                      type="text"
+                      value={form.domains?.[svc] ?? ""}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          domains: { ...prev.domains, [svc]: e.target.value },
+                        }))
+                      }
+                      placeholder={`${svc}.example.com`}
+                      className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                    />
+                  </div>
+                ))}
               </div>
-              <div>
-                <label htmlFor="app-port" className="mb-1.5 block text-xs font-medium text-slate-300">
-                  Port
-                </label>
-                <input
-                  id="app-port"
-                  name="port"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={form.port ?? ""}
-                  onChange={handleChange}
-                  placeholder="3000"
-                  className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
-                />
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label htmlFor="app-domain" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    Domain
+                  </label>
+                  <input
+                    id="app-domain"
+                    name="domain"
+                    type="text"
+                    value={form.domain ?? ""}
+                    onChange={handleChange}
+                    placeholder="app.example.com"
+                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="app-port" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    Port
+                  </label>
+                  <input
+                    id="app-port"
+                    name="port"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={form.port ?? ""}
+                    onChange={handleChange}
+                    placeholder="3000"
+                    className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Advanced toggle */}
             <button

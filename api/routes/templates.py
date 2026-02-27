@@ -19,6 +19,7 @@ def get_templates() -> list[dict]:
             "services": t["services"],
             "port": t["port"],
             "domains": t.get("domains", 1),
+            "domain_map": t.get("domain_map", {}),
         }
         for t in list_templates()
     ]

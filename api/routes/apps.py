@@ -72,12 +72,24 @@ def _app_out(a: App, session: object | None = None) -> AppOut:
             dep_app = session.query(App).filter(App.id == d.depends_on_app_id).first()  # type: ignore[attr-defined]
             if dep_app:
                 dep_names.append(dep_app.name)
+    # Parse multi-domain JSON stored in the domain column
+    import json as _json
+    domain_val = a.domain
+    domains_dict: dict[str, str] | None = None
+    if domain_val and domain_val.startswith("{"):
+        try:
+            domains_dict = _json.loads(domain_val)
+            domain_val = next(iter(domains_dict.values()), None)
+        except _json.JSONDecodeError:
+            pass
+
     return AppOut(
         id=a.id,
         name=a.name,
         server_id=a.server_id,
         server_name=a.server.name,
-        domain=a.domain,
+        domain=domain_val,
+        domains=domains_dict,
         port=a.port,
         git_repo=a.git_repo,
         branch=a.branch,
@@ -131,10 +143,18 @@ def create_app(body: AppCreate) -> AppOut:
             app_type = "image" if body.image else "git" if body.git_repo else "compose"
             effective_port = body.port
 
+        # For multi-domain templates, store domains dict as JSON in the
+        # domain column. Single-domain apps use a plain string.
+        if body.domains:
+            import json as _json
+            effective_domain = _json.dumps(body.domains)
+        else:
+            effective_domain = body.domain
+
         new_app = App(
             name=body.name,
             server_id=srv.id,
-            domain=body.domain,
+            domain=effective_domain,
             port=effective_port,
             git_repo=body.git_repo,
             branch=body.branch,
@@ -295,15 +315,30 @@ async def deploy(
                 health_check_interval = app_data.get("health_check_interval")
                 if not isinstance(health_check_interval, (int, type(None))):
                     health_check_interval = None
-                domain = app_data.get("domain")
+                domain_raw = app_data.get("domain")
                 app_type_val = app_data.get("app_type")
+
+                # Parse multi-domain JSON if present (e.g. {"gitea": "git.ex.com"})
+                import json as _json
+                multi_domains: dict[str, str] = {}
+                primary_domain: str | None = None
+                if isinstance(domain_raw, str):
+                    if domain_raw.startswith("{"):
+                        try:
+                            multi_domains = _json.loads(domain_raw)
+                            # Use the first domain as primary for compose rendering
+                            primary_domain = next(iter(multi_domains.values()), None)
+                        except _json.JSONDecodeError:
+                            primary_domain = domain_raw
+                    else:
+                        primary_domain = domain_raw
 
                 # Generate compose override for template-based apps
                 compose_override = None
                 if isinstance(app_type_val, str) and app_type_val.startswith("template:"):
                     tmpl_name = app_type_val.split(":", 1)[1]
                     compose_override = render_template_compose(
-                        tmpl_name, name, domain if isinstance(domain, str) else None
+                        tmpl_name, name, primary_domain
                     )
 
                 result = deploy_app(
@@ -313,7 +348,7 @@ async def deploy(
                     branch=branch,
                     image=image,
                     port=port,
-                    domain=domain if isinstance(domain, str) else None,
+                    domain=primary_domain,
                     env_content=env_content,
                     compose_override=compose_override,
                     log_fn=_on_log,
@@ -324,22 +359,17 @@ async def deploy(
                     health_check_url=health_check_url,
                     health_check_interval=health_check_interval,
                 )
-                if domain:
-                    if not isinstance(domain, str):
-                        domain = str(domain)
-                    # Multi-domain templates need multiple proxy routes
-                    if isinstance(app_type_val, str) and app_type_val.startswith("template:"):
-                        tmpl_name = app_type_val.split(":", 1)[1]
-                        tmpl = get_template(tmpl_name)
-                        if tmpl and "domain_map" in tmpl and "." in domain:
-                            base = domain.split(".", 1)[1]
-                            for prefix, svc_port in tmpl["domain_map"].items():
-                                svc_domain = f"{prefix}.{base}"
-                                add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{prefix}")
-                        else:
-                            add_domain(ssh, domain, port, app_name=name)
-                    else:
-                        add_domain(ssh, domain, port, app_name=name)
+
+                # Set up proxy routes
+                if multi_domains:
+                    # Multi-domain: each service gets its own domain
+                    tmpl = get_template(app_type_val.split(":", 1)[1]) if isinstance(app_type_val, str) and app_type_val.startswith("template:") else None
+                    domain_map = tmpl.get("domain_map", {}) if tmpl else {}
+                    for svc_name, svc_domain in multi_domains.items():
+                        svc_port = domain_map.get(svc_name, port)
+                        add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{svc_name}")
+                elif primary_domain:
+                    add_domain(ssh, primary_domain, port, app_name=name)
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()

@@ -140,6 +140,7 @@ class AppCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     server_name: str
     domain: str | None = None
+    domains: dict[str, str] | None = None  # multi-domain: {"gitea": "git.example.com", ...}
     port: int = Field(default=3000, ge=1, le=65535)
     git_repo: str | None = None
     branch: str = "main"
@@ -162,6 +163,15 @@ class AppCreate(BaseModel):
     def validate_domain(cls, v: str | None) -> str | None:
         if v is not None and not _DOMAIN_PATTERN.match(v):
             raise ValueError("Invalid domain name format")
+        return v
+
+    @field_validator("domains")
+    @classmethod
+    def validate_domains(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is not None:
+            for svc, d in v.items():
+                if not _DOMAIN_PATTERN.match(d):
+                    raise ValueError(f"Invalid domain format for '{svc}': {d}")
         return v
 
     @field_validator("git_repo")
@@ -202,6 +212,7 @@ class AppOut(BaseModel):
     server_id: int
     server_name: str = ""
     domain: str | None
+    domains: dict[str, str] | None = None
     port: int
     git_repo: str | None
     branch: str

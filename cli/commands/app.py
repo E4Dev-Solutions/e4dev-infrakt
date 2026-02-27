@@ -220,20 +220,27 @@ def deploy(name: str, server_name: str | None) -> None:
 
             # Set up reverse proxy if domain is configured
             if app_domain:
-                # Multi-domain templates (e.g. devtools) need multiple routes
-                if app_type and app_type.startswith("template:"):
-                    tmpl_name = app_type.split(":", 1)[1]
-                    tmpl = get_template(tmpl_name)
-                    if tmpl and "domain_map" in tmpl and app_domain and "." in app_domain:
-                        # domain_map routes: prefix -> port
-                        base = app_domain.split(".", 1)[1]
-                        for prefix, svc_port in tmpl["domain_map"].items():
-                            svc_domain = f"{prefix}.{base}"
-                            add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{prefix}")
-                    else:
-                        add_domain(ssh, app_domain, app_port, app_name=name)
+                import json as _json
+                # Check for multi-domain JSON in the domain field
+                multi_domains: dict[str, str] = {}
+                primary_domain: str | None = None
+                if app_domain.startswith("{"):
+                    try:
+                        multi_domains = _json.loads(app_domain)
+                        primary_domain = next(iter(multi_domains.values()), None)
+                    except _json.JSONDecodeError:
+                        primary_domain = app_domain
                 else:
-                    add_domain(ssh, app_domain, app_port, app_name=name)
+                    primary_domain = app_domain
+
+                if multi_domains:
+                    tmpl = get_template(app_type.split(":", 1)[1]) if app_type and app_type.startswith("template:") else None
+                    domain_map = tmpl.get("domain_map", {}) if tmpl else {}
+                    for svc_name, svc_domain in multi_domains.items():
+                        svc_port = domain_map.get(svc_name, app_port)
+                        add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{svc_name}")
+                elif primary_domain:
+                    add_domain(ssh, primary_domain, app_port, app_name=name)
 
         ssh.close()
 

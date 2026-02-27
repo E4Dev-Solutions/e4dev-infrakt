@@ -266,12 +266,22 @@ export default function Databases() {
                         className="shrink-0 text-zinc-500"
                         aria-hidden="true"
                       />
-                      <Link
-                        to={`/databases/${encodeURIComponent(db.name)}`}
-                        className="font-medium text-zinc-200 hover:text-orange-400 transition-colors"
-                      >
-                        {db.name}
-                      </Link>
+                      <div>
+                        <Link
+                          to={`/databases/${encodeURIComponent(db.name)}`}
+                          className="font-medium text-zinc-200 hover:text-orange-400 transition-colors"
+                        >
+                          {db.name}
+                        </Link>
+                        {db.parent_app_name && (
+                          <Link
+                            to={`/apps/${encodeURIComponent(db.parent_app_name)}`}
+                            className="mt-0.5 block text-xs text-zinc-500 hover:text-orange-400 transition-colors"
+                          >
+                            Part of {db.parent_app_name}
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </td>
                   {/* Server */}
@@ -330,8 +340,8 @@ export default function Databases() {
                       </button>
                       <button
                         onClick={() => handleDelete(db.name, db.server_name)}
-                        disabled={deletingName === db.name}
-                        title="Delete database"
+                        disabled={deletingName === db.name || !!db.parent_app_name}
+                        title={db.parent_app_name ? `Managed by ${db.parent_app_name} — delete the parent app to remove` : "Delete database"}
                         className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-40"
                         aria-label={`Delete ${db.name}`}
                       >

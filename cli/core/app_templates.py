@@ -19,6 +19,7 @@ class TemplateInfo(TypedDict, total=False):
     port: int
     domains: int
     domain_map: dict[str, int]  # extra domains: prefix -> port
+    db_services: dict[str, str]  # service suffix -> db type (e.g. {"db": "postgres"})
 
 
 def _secret() -> str:
@@ -306,6 +307,7 @@ APP_TEMPLATES: dict[str, TemplateInfo] = {
         "services": ["n8n", "postgres"],
         "port": 5678,
         "domains": 1,
+        "db_services": {"db": "postgres"},
     },
     "docmost": {
         "name": "docmost",
@@ -313,6 +315,7 @@ APP_TEMPLATES: dict[str, TemplateInfo] = {
         "services": ["docmost", "postgres", "redis"],
         "port": 3000,
         "domains": 1,
+        "db_services": {"db": "postgres", "redis": "redis"},
     },
     "devtools": {
         "name": "devtools",
@@ -321,6 +324,7 @@ APP_TEMPLATES: dict[str, TemplateInfo] = {
         "port": 3000,
         "domains": 2,
         "domain_map": {"gitea": 3000, "portainer": 9000},
+        "db_services": {"db": "postgres"},
     },
 }
 

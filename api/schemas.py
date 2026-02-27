@@ -144,6 +144,7 @@ class AppCreate(BaseModel):
     git_repo: str | None = None
     branch: str = "main"
     image: str | None = None
+    template: str | None = None
     cpu_limit: str | None = None
     memory_limit: str | None = None
     health_check_url: str | None = None

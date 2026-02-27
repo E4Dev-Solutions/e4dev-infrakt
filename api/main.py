@@ -20,6 +20,7 @@ from api.routes import (
     proxy,
     self_update,
     servers,
+    templates,
     webhooks,
 )
 from cli.core.database import init_db
@@ -79,6 +80,7 @@ app.include_router(proxy.router, prefix="/api", dependencies=api_deps)
 app.include_router(webhooks.router, prefix="/api", dependencies=api_deps)
 app.include_router(keys.router, prefix="/api", dependencies=api_deps)
 app.include_router(github.router, prefix="/api", dependencies=api_deps)
+app.include_router(templates.router, prefix="/api", dependencies=api_deps)
 app.include_router(deploy.router, prefix="/api")  # uses own auth dependency
 app.include_router(github_webhook.router, prefix="/api")  # uses GitHub HMAC auth
 app.include_router(self_update.router, prefix="/api")  # uses GitHub HMAC auth

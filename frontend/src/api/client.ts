@@ -201,10 +201,19 @@ export interface CreateAppInput {
   git_repo?: string;
   branch?: string;
   image?: string;
+  template?: string;
   cpu_limit?: string;
   memory_limit?: string;
   replicas?: number;
   deploy_strategy?: string;
+}
+
+export interface AppTemplate {
+  name: string;
+  description: string;
+  services: string[];
+  port: number;
+  domains: number;
 }
 
 export interface UpdateAppInput {
@@ -579,6 +588,12 @@ export const keysApi = {
   delete: (name: string): Promise<void> => del(`/keys/${name}`),
   deploy: (name: string, serverName: string): Promise<{ message: string }> =>
     post(`/keys/${name}/deploy`, { server_name: serverName }),
+};
+
+// ─── Templates ───────────────────────────────────────────────────────────────
+
+export const templatesApi = {
+  list: (): Promise<AppTemplate[]> => get("/templates"),
 };
 
 // ─── Config API ───────────────────────────────────────────────────────────────

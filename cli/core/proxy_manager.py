@@ -45,11 +45,17 @@ def _check_dns(domain: str) -> str | None:
         return None
 
 
-def _build_domain_config(domain: str, port: int) -> str:
+def _build_domain_config(
+    domain: str, port: int, *, app_name: str | None = None
+) -> str:
     """Build Traefik dynamic config YAML for a single domain."""
     sanitized = _sanitize_domain(domain)
     router_name = sanitized
     service_name = f"svc-{sanitized}"
+
+    # Route to the app container by name on the shared infrakt network.
+    # Falls back to host.docker.internal for non-app routes (e.g. manual proxy add).
+    backend_host = f"infrakt-{app_name}" if app_name else f"host.docker.internal"
 
     config: dict[str, object] = {
         "http": {
@@ -69,7 +75,7 @@ def _build_domain_config(domain: str, port: int) -> str:
             "services": {
                 service_name: {
                     "loadBalancer": {
-                        "servers": [{"url": f"http://host.docker.internal:{port}"}],
+                        "servers": [{"url": f"http://{backend_host}:{port}"}],
                         "passHostHeader": True,
                     }
                 }
@@ -85,7 +91,9 @@ def _conf_path(domain: str) -> str:
     return f"{CONF_DIR}/{_sanitize_domain(domain)}.yml"
 
 
-def add_domain(ssh: SSHClient, domain: str, port: int) -> None:
+def add_domain(
+    ssh: SSHClient, domain: str, port: int, *, app_name: str | None = None
+) -> None:
     """Add a reverse proxy route for a domain pointing to a local port.
 
     Writes a Traefik file provider config to conf.d/. No reload needed —
@@ -98,7 +106,7 @@ def add_domain(ssh: SSHClient, domain: str, port: int) -> None:
     if ip is None:
         warning(f"DNS for '{domain}' does not resolve yet — proxy will work once DNS propagates")
 
-    content = _build_domain_config(domain, port)
+    content = _build_domain_config(domain, port, app_name=app_name)
     ssh.upload_string(content, _conf_path(domain))
 
 

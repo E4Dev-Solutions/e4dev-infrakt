@@ -129,7 +129,7 @@ def _trigger_deploy(app_name: str) -> None:
             )
             domain = app_data.get("domain")
             if domain:
-                add_domain(ssh, domain, app_data.get("port", 3000))
+                add_domain(ssh, domain, app_data.get("port", 3000), app_name=app_name)
 
         with get_session() as session:
             dep = session.query(Deployment).filter(Deployment.id == dep_id).first()

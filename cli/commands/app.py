@@ -2,6 +2,12 @@ from datetime import datetime
 
 import click
 
+from cli.core.app_templates import (
+    APP_TEMPLATES,
+    get_template,
+    list_templates,
+    render_template_compose,
+)
 from cli.core.console import console, error, info, print_table, status_spinner, success
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
@@ -63,23 +69,39 @@ def app() -> None:
 @click.option("--server", "server_name", required=True, help="Target server name")
 @click.option("--name", required=True, help="App name")
 @click.option("--domain", default=None, help="Domain for the app (e.g. api.example.com)")
-@click.option("--port", default=3000, help="Container port the app listens on")
+@click.option("--port", default=None, type=int, help="Container port the app listens on")
 @click.option("--git", "git_repo", default=None, help="Git repository URL")
 @click.option("--branch", default="main", help="Git branch")
 @click.option("--image", default=None, help="Docker image (e.g. nginx:latest)")
 @click.option("--replicas", default=1, type=int, help="Number of replicas")
+@click.option(
+    "--template",
+    "template_name",
+    default=None,
+    help="Built-in template (nginx, uptime-kuma, n8n, docmost, devtools)",
+)
 def create(
     server_name: str,
     name: str,
     domain: str | None,
-    port: int,
+    port: int | None,
     git_repo: str | None,
     branch: str,
     image: str | None,
     replicas: int,
+    template_name: str | None,
 ) -> None:
     """Create a new app on a server."""
     init_db()
+
+    # Validate template if provided
+    tmpl = None
+    if template_name:
+        tmpl = get_template(template_name)
+        if not tmpl:
+            error(f"Unknown template '{template_name}'. Use 'infrakt app templates' to list.")
+            raise SystemExit(1)
+
     with get_session() as session:
         srv = session.query(Server).filter(Server.name == server_name).first()
         if not srv:
@@ -91,12 +113,18 @@ def create(
             error(f"App '{name}' already exists on server '{server_name}'")
             raise SystemExit(1)
 
-        app_type = "image" if image else "git" if git_repo else "compose"
+        if tmpl:
+            app_type = f"template:{template_name}"
+            effective_port = port or tmpl["port"]
+        else:
+            app_type = "image" if image else "git" if git_repo else "compose"
+            effective_port = port or 3000
+
         new_app = App(
             name=name,
             server_id=srv.id,
             domain=domain,
-            port=port,
+            port=effective_port,
             git_repo=git_repo,
             branch=branch,
             image=image,
@@ -144,6 +172,7 @@ def deploy(name: str, server_name: str | None) -> None:
         app_deploy_strategy = app_obj.deploy_strategy
         app_health_check_url = app_obj.health_check_url
         app_health_check_interval = app_obj.health_check_interval
+        app_type = app_obj.app_type
 
         # Check dependencies are running
         dep_names = []
@@ -160,6 +189,12 @@ def deploy(name: str, server_name: str | None) -> None:
         ssh = _ssh_for_server(srv)
 
     try:
+        # Generate compose override for template-based apps
+        compose_override = None
+        if app_type and app_type.startswith("template:"):
+            tmpl_name = app_type.split(":", 1)[1]
+            compose_override = render_template_compose(tmpl_name, name, app_domain)
+
         with status_spinner(f"Deploying '{name}'"):
             # Ensure infrakt network exists
             ssh.connect()
@@ -172,7 +207,9 @@ def deploy(name: str, server_name: str | None) -> None:
                 branch=app_branch,
                 image=app_image,
                 port=app_port,
+                domain=app_domain,
                 env_content=env_content,
+                compose_override=compose_override,
                 cpu_limit=app_cpu_limit,
                 memory_limit=app_memory_limit,
                 replicas=app_replicas,
@@ -183,7 +220,20 @@ def deploy(name: str, server_name: str | None) -> None:
 
             # Set up reverse proxy if domain is configured
             if app_domain:
-                add_domain(ssh, app_domain, app_port)
+                # Multi-domain templates (e.g. devtools) need multiple routes
+                if app_type and app_type.startswith("template:"):
+                    tmpl_name = app_type.split(":", 1)[1]
+                    tmpl = get_template(tmpl_name)
+                    if tmpl and "domain_map" in tmpl and app_domain and "." in app_domain:
+                        # domain_map routes: prefix -> port
+                        base = app_domain.split(".", 1)[1]
+                        for prefix, svc_port in tmpl["domain_map"].items():
+                            svc_domain = f"{prefix}.{base}"
+                            add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{prefix}")
+                    else:
+                        add_domain(ssh, app_domain, app_port, app_name=name)
+                else:
+                    add_domain(ssh, app_domain, app_port, app_name=name)
 
         ssh.close()
 
@@ -493,7 +543,7 @@ def rollback(name: str, dep_id: int | None, server_name: str | None) -> None:
             )
 
             if app_domain:
-                add_domain(ssh, app_domain, app_port)
+                add_domain(ssh, app_domain, app_port, app_name=name)
 
         ssh.close()
 
@@ -710,6 +760,20 @@ def list_deps(name: str, server_name: str | None) -> None:
             if dep_app:
                 rows.append((dep_app.name, dep_app.status, dep_app.server.name))
     print_table(f"Dependencies: {name}", ["App", "Status", "Server"], rows)
+
+
+@app.command("templates")
+def list_app_templates() -> None:
+    """List available app templates."""
+    templates = list_templates()
+    if not templates:
+        info("No templates available.")
+        return
+    rows = [
+        (t["name"], t["description"], ", ".join(t["services"]), t["port"], t.get("domains", 1))
+        for t in templates
+    ]
+    print_table("App Templates", ["Name", "Description", "Services", "Port", "Domains"], rows)
 
 
 def _would_create_cycle(session: object, app_id: int, depends_on_id: int) -> bool:

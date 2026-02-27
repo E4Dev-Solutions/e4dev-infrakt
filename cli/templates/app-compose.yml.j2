@@ -12,8 +12,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+{% if expose_port %}
     ports:
       - "127.0.0.1:${{ '{' }}{{ port_var }}:-{{ port }}{{ '}' }}:{{ port }}"
+{% endif %}
+    expose:
+      - "{{ port }}"
 {% if replicas > 1 or deploy_strategy == "rolling" or cpu_limit or memory_limit %}
     deploy:
 {% if replicas > 1 %}

@@ -28,6 +28,7 @@ def render_app_compose(
     deploy_strategy: str = "restart",
     health_check_url: str | None = None,
     health_check_interval: int | None = None,
+    expose_port: bool = True,
 ) -> str:
     """Render app-compose.yml.j2 with the given parameters."""
     port_var = app_name.upper().replace("-", "_") + "_PORT"
@@ -44,6 +45,7 @@ def render_app_compose(
         deploy_strategy=deploy_strategy,
         health_check_url=health_check_url,
         health_check_interval=health_check_interval,
+        expose_port=expose_port,
     )
 
 

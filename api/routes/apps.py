@@ -28,6 +28,7 @@ from api.schemas import (
     DeploymentOut,
     ScaleInput,
 )
+from cli.core.app_templates import get_template, render_template_compose
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
 from cli.core.deployer import (
@@ -119,12 +120,22 @@ def create_app(body: AppCreate) -> AppOut:
         if existing:
             raise HTTPException(400, f"App '{body.name}' already exists on '{body.server_name}'")
 
-        app_type = "image" if body.image else "git" if body.git_repo else "compose"
+        # Handle template-based apps
+        if body.template:
+            tmpl = get_template(body.template)
+            if not tmpl:
+                raise HTTPException(400, f"Unknown template: '{body.template}'")
+            app_type = f"template:{body.template}"
+            effective_port = body.port if body.port != 3000 else tmpl["port"]
+        else:
+            app_type = "image" if body.image else "git" if body.git_repo else "compose"
+            effective_port = body.port
+
         new_app = App(
             name=body.name,
             server_id=srv.id,
             domain=body.domain,
-            port=body.port,
+            port=effective_port,
             git_repo=body.git_repo,
             branch=body.branch,
             image=body.image,
@@ -221,6 +232,7 @@ async def deploy(
             "branch": app_obj.branch,
             "image": app_obj.image,
             "domain": app_obj.domain,
+            "app_type": app_obj.app_type,
             "cpu_limit": app_obj.cpu_limit,
             "memory_limit": app_obj.memory_limit,
             "replicas": app_obj.replicas,
@@ -283,6 +295,17 @@ async def deploy(
                 health_check_interval = app_data.get("health_check_interval")
                 if not isinstance(health_check_interval, (int, type(None))):
                     health_check_interval = None
+                domain = app_data.get("domain")
+                app_type_val = app_data.get("app_type")
+
+                # Generate compose override for template-based apps
+                compose_override = None
+                if isinstance(app_type_val, str) and app_type_val.startswith("template:"):
+                    tmpl_name = app_type_val.split(":", 1)[1]
+                    compose_override = render_template_compose(
+                        tmpl_name, name, domain if isinstance(domain, str) else None
+                    )
+
                 result = deploy_app(
                     ssh,
                     name,
@@ -290,7 +313,9 @@ async def deploy(
                     branch=branch,
                     image=image,
                     port=port,
+                    domain=domain if isinstance(domain, str) else None,
                     env_content=env_content,
+                    compose_override=compose_override,
                     log_fn=_on_log,
                     cpu_limit=cpu_limit,
                     memory_limit=memory_limit,
@@ -299,11 +324,22 @@ async def deploy(
                     health_check_url=health_check_url,
                     health_check_interval=health_check_interval,
                 )
-                domain = app_data.get("domain")
                 if domain:
                     if not isinstance(domain, str):
                         domain = str(domain)
-                    add_domain(ssh, domain, port)
+                    # Multi-domain templates need multiple proxy routes
+                    if isinstance(app_type_val, str) and app_type_val.startswith("template:"):
+                        tmpl_name = app_type_val.split(":", 1)[1]
+                        tmpl = get_template(tmpl_name)
+                        if tmpl and "domain_map" in tmpl and "." in domain:
+                            base = domain.split(".", 1)[1]
+                            for prefix, svc_port in tmpl["domain_map"].items():
+                                svc_domain = f"{prefix}.{base}"
+                                add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{prefix}")
+                        else:
+                            add_domain(ssh, domain, port, app_name=name)
+                    else:
+                        add_domain(ssh, domain, port, app_name=name)
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
@@ -508,6 +544,7 @@ async def rollback(
                 port = app_data.get("port")
                 if not isinstance(port, int):
                     port = 3000
+                domain = app_data.get("domain")
                 result = deploy_app(
                     ssh,
                     name,
@@ -515,15 +552,15 @@ async def rollback(
                     branch=branch,
                     image=image,
                     port=port,
+                    domain=domain if isinstance(domain, str) else None,
                     env_content=env_content,
                     log_fn=_on_log,
                     pinned_commit=pinned_commit,
                 )
-                domain = app_data.get("domain")
                 if domain:
                     if not isinstance(domain, str):
                         domain = str(domain)
-                    add_domain(ssh, domain, port)
+                    add_domain(ssh, domain, port, app_name=name)
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()

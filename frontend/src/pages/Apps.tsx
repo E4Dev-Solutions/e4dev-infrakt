@@ -27,13 +27,14 @@ import {
   useDestroyApp,
   useGitHubStatus,
   useGitHubRepos,
+  useTemplates,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
 import Modal from "@/components/Modal";
 import EmptyState from "@/components/EmptyState";
-import type { CreateAppInput } from "@/api/client";
+import type { CreateAppInput, AppTemplate } from "@/api/client";
 
 const defaultForm: CreateAppInput = {
   name: "",
@@ -43,6 +44,7 @@ const defaultForm: CreateAppInput = {
   git_repo: "",
   branch: "main",
   image: "",
+  template: undefined,
   cpu_limit: "",
   memory_limit: "",
 };
@@ -61,8 +63,12 @@ export default function Apps() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<CreateAppInput>(defaultForm);
   const [actionPending, setActionPending] = useState<string | null>(null);
-  const [sourceType, setSourceType] = useState<"github" | "image">("github");
+  const [sourceType, setSourceType] = useState<"template" | "github" | "image">("template");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<AppTemplate | null>(null);
+
+  // Templates
+  const { data: templates = [] } = useTemplates();
 
   // GitHub repo picker
   const { data: githubStatus } = useGitHubStatus();
@@ -93,11 +99,23 @@ export default function Apps() {
 
   function handleOpenModal() {
     setShowModal(true);
-    setSourceType("github");
+    setSourceType("template");
+    setSelectedTemplate(null);
     setShowAdvanced(false);
     if (githubConnected && githubRepos.length === 0) {
       void refetchRepos();
     }
+  }
+
+  function handleTemplateSelect(tmpl: AppTemplate) {
+    setSelectedTemplate(tmpl);
+    setForm((prev) => ({
+      ...prev,
+      template: tmpl.name,
+      port: tmpl.port,
+      image: "",
+      git_repo: "",
+    }));
   }
 
   function handleChange(
@@ -119,6 +137,7 @@ export default function Apps() {
         git_repo: form.git_repo || undefined,
         branch: form.branch || undefined,
         image: form.image || undefined,
+        template: form.template || undefined,
         cpu_limit: form.cpu_limit || undefined,
         memory_limit: form.memory_limit || undefined,
       };
@@ -372,7 +391,7 @@ export default function Apps() {
 
       {/* Create App Modal */}
       {showModal && (
-        <Modal title="Create App" onClose={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); }}>
+        <Modal title="Create App" onClose={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); setSelectedTemplate(null); }}>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Name + Server row */}
             <div className="grid grid-cols-2 gap-3">
@@ -419,22 +438,54 @@ export default function Apps() {
               <div className="flex rounded-lg border border-slate-600 bg-slate-800/60 p-0.5">
                 <button
                   type="button"
-                  onClick={() => { setSourceType("github"); setForm((prev) => ({ ...prev, image: "" })); }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "github" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                  onClick={() => { setSourceType("template"); setForm((prev) => ({ ...prev, image: "", git_repo: "", branch: "main" })); }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "template" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
                 >
-                  <Github size={13} aria-hidden="true" />
-                  GitHub Repo
+                  <Box size={13} aria-hidden="true" />
+                  Template
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setSourceType("image"); setForm((prev) => ({ ...prev, git_repo: "", branch: "main" })); }}
+                  onClick={() => { setSourceType("github"); setSelectedTemplate(null); setForm((prev) => ({ ...prev, image: "", template: undefined })); }}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "github" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
+                >
+                  <Github size={13} aria-hidden="true" />
+                  GitHub
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSourceType("image"); setSelectedTemplate(null); setForm((prev) => ({ ...prev, git_repo: "", branch: "main", template: undefined })); }}
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${sourceType === "image" ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"}`}
                 >
                   <Container size={13} aria-hidden="true" />
-                  Docker Image
+                  Image
                 </button>
               </div>
             </div>
+
+            {/* Template picker */}
+            {sourceType === "template" && (
+              <div className="grid grid-cols-2 gap-2">
+                {templates.map((tmpl) => (
+                  <button
+                    key={tmpl.name}
+                    type="button"
+                    onClick={() => handleTemplateSelect(tmpl)}
+                    className={`rounded-lg border p-3 text-left transition-colors ${selectedTemplate?.name === tmpl.name ? "border-indigo-500 bg-indigo-500/10" : "border-slate-700 bg-slate-800/40 hover:border-slate-500"}`}
+                  >
+                    <div className="text-sm font-medium text-slate-200">{tmpl.name}</div>
+                    <div className="mt-0.5 text-xs text-slate-400">{tmpl.description}</div>
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {tmpl.services.map((svc) => (
+                        <span key={svc} className="rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400">
+                          {svc}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* GitHub source */}
             {sourceType === "github" && (
@@ -605,7 +656,7 @@ export default function Apps() {
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); }}
+                onClick={() => { setShowModal(false); setForm(defaultForm); setRepoSearch(""); setSelectedTemplate(null); }}
                 className="rounded-lg border border-slate-600 bg-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500"
               >
                 Cancel

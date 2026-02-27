@@ -8,6 +8,7 @@ import {
   dashboardApi,
   serversApi,
   appsApi,
+  templatesApi,
   databasesApi,
   proxyApi,
   webhooksApi,
@@ -39,6 +40,7 @@ import {
   type SelfUpdateConfig,
   type GitHubStatus,
   type GitHubRepo,
+  type AppTemplate,
 } from "@/api/client";
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
@@ -64,6 +66,7 @@ export const queryKeys = {
   selfUpdateConfig: ["config", "self-update"] as const,
   githubStatus: ["github", "status"] as const,
   githubRepos: ["github", "repos"] as const,
+  templates: ["templates"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -149,6 +152,17 @@ export function useProvisionServer() {
 export function useTestServer() {
   return useMutation({
     mutationFn: (name: string) => serversApi.test(name),
+  });
+}
+
+// ─── Templates ────────────────────────────────────────────────────────────────
+
+export function useTemplates(options?: Partial<UseQueryOptions<AppTemplate[]>>) {
+  return useQuery({
+    queryKey: queryKeys.templates,
+    queryFn: templatesApi.list,
+    staleTime: Infinity,
+    ...options,
   });
 }
 

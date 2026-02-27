@@ -52,6 +52,7 @@ def deploy_app(
     branch: str = "main",
     image: str | None = None,
     port: int = 3000,
+    domain: str | None = None,
     env_content: str = "",
     compose_override: str | None = None,
     log_fn: Callable[[str], None] | None = None,
@@ -155,6 +156,7 @@ def deploy_app(
                 deploy_strategy=deploy_strategy,
                 health_check_url=health_check_url,
                 health_check_interval=health_check_interval,
+                domain=domain,
             )
             ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
             _log("Generated docker-compose.yml")
@@ -176,6 +178,7 @@ def deploy_app(
             deploy_strategy=deploy_strategy,
             health_check_url=health_check_url,
             health_check_interval=health_check_interval,
+            domain=domain,
         )
         ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
         _log(f"Deploying image: {image}")
@@ -301,6 +304,7 @@ def _generate_compose(
     deploy_strategy: str = "restart",
     health_check_url: str | None = None,
     health_check_interval: int | None = None,
+    domain: str | None = None,
 ) -> str:
     """Generate a minimal docker-compose.yml for an app."""
     _validate_name(app_name, "app name")
@@ -317,6 +321,7 @@ def _generate_compose(
         deploy_strategy=deploy_strategy,
         health_check_url=health_check_url,
         health_check_interval=health_check_interval,
+        expose_port=not domain,
     )
 
 

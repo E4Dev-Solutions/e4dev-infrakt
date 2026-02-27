@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   Server,
   Activity,
@@ -8,15 +8,19 @@ import {
   Box,
   Play,
   Wifi,
-  Pencil,
   ArrowLeft,
   Loader2,
   RefreshCw,
   CheckCircle2,
   XCircle,
-  Tag,
   Plus,
   X,
+  Settings,
+  MoreVertical,
+  Trash2,
+  ChevronRight,
+  ChevronDown,
+  GitBranch,
 } from "lucide-react";
 import {
   useServers,
@@ -25,6 +29,7 @@ import {
   useProvisionServer,
   useTestServer,
   useUpdateServer,
+  useDeleteServer,
   useServerMetrics,
   useAddServerTag,
   useRemoveServerTag,
@@ -33,9 +38,20 @@ import { useToast } from "@/hooks/useToast";
 import { useProvisionStream } from "@/hooks/useProvisionStream";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
-import Modal from "@/components/Modal";
 import SparklineChart from "@/components/SparklineChart";
-import type { UpdateServerInput } from "@/api/client";
+import type {
+  Server as ServerType,
+  ServerStatusData,
+  ServerMetric,
+  App,
+  UpdateServerInput,
+} from "@/api/client";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type ActiveTab = "overview" | "apps" | "settings";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 interface InfoRowProps {
   label: string;
@@ -97,6 +113,42 @@ function UsageBar({ label, used, total, percent, icon }: UsageBarProps) {
   );
 }
 
+// ─── TabButton ────────────────────────────────────────────────────────────────
+
+function TabButton({
+  id,
+  label,
+  icon,
+  isActive,
+  onClick,
+}: {
+  id: ActiveTab;
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+  onClick: (id: ActiveTab) => void;
+}) {
+  return (
+    <button
+      role="tab"
+      aria-selected={isActive}
+      aria-controls={`tabpanel-${id}`}
+      onClick={() => onClick(id)}
+      className={[
+        "flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors",
+        isActive
+          ? "border-orange-500 text-orange-400"
+          : "border-transparent text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+      ].join(" ")}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+// ─── Provision Progress ───────────────────────────────────────────────────────
+
 interface ProvisionProgressProps {
   lines: string[];
   isStreaming: boolean;
@@ -126,7 +178,7 @@ function ProvisionProgress({ lines, isStreaming, status, error }: ProvisionProgr
         ) : null}
         <h2 className="text-sm font-semibold text-zinc-200">
           {isStreaming
-            ? "Provisioning…"
+            ? "Provisioning..."
             : status === "active"
               ? "Provisioning Complete"
               : status === "inactive"
@@ -137,7 +189,7 @@ function ProvisionProgress({ lines, isStreaming, status, error }: ProvisionProgr
 
       <div className="max-h-64 overflow-y-auto px-5 py-3 font-mono text-xs leading-relaxed text-zinc-300">
         {lines.length === 0 && isStreaming && (
-          <p className="text-zinc-500">Waiting for progress…</p>
+          <p className="text-zinc-500">Waiting for progress...</p>
         )}
         {lines.map((line, i) => (
           <p key={i}>{line}</p>
@@ -149,9 +201,563 @@ function ProvisionProgress({ lines, isStreaming, status, error }: ProvisionProgr
   );
 }
 
+// ─── Overview Tab ─────────────────────────────────────────────────────────────
+
+function OverviewTab({
+  server,
+  statusData,
+  statusLoading,
+  refetchStatus,
+  metrics,
+}: {
+  server: ServerType;
+  statusData: ServerStatusData | undefined;
+  statusLoading: boolean;
+  refetchStatus: () => void;
+  metrics: ServerMetric[];
+}) {
+  return (
+    <div className="space-y-6">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <p className="mb-1 text-xs font-medium text-zinc-500">Status</p>
+          <StatusBadge status={server.status} />
+        </div>
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <p className="mb-1 text-xs font-medium text-zinc-500">Uptime</p>
+          <p className="text-sm font-semibold text-zinc-200">
+            {statusData?.uptime ?? "N/A"}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <p className="mb-1 text-xs font-medium text-zinc-500">Apps</p>
+          <p className="text-sm font-semibold text-zinc-200">
+            {server.app_count}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <p className="mb-1 text-xs font-medium text-zinc-500">Containers</p>
+          <p className="text-sm font-semibold text-zinc-200">
+            {statusData?.containers?.length ?? 0}
+          </p>
+        </div>
+      </div>
+
+      {/* 2-column: resource usage + quick info */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Resource Usage */}
+        <div className="space-y-4 lg:col-span-2">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+            <div className="flex items-center justify-between border-b border-zinc-700 px-5 py-3">
+              <h2 className="text-sm font-semibold text-zinc-200">
+                Resource Usage
+              </h2>
+              <button
+                onClick={() => refetchStatus()}
+                className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+                aria-label="Refresh status"
+              >
+                <RefreshCw
+                  size={13}
+                  className={statusLoading ? "animate-spin" : ""}
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+            <div className="p-5">
+              {statusLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 size={24} className="animate-spin text-zinc-500" aria-label="Loading status" />
+                </div>
+              ) : !statusData ? (
+                <p className="py-6 text-center text-sm text-zinc-500">
+                  Status unavailable -- the server may be unreachable.
+                </p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {statusData.cpu != null && (
+                    <UsageBar
+                      label="CPU"
+                      used={`${statusData.cpu}%`}
+                      total="100%"
+                      percent={statusData.cpu}
+                      icon={<Cpu size={13} aria-hidden="true" />}
+                    />
+                  )}
+                  {statusData.memory && (
+                    <UsageBar
+                      label="Memory"
+                      used={statusData.memory.used}
+                      total={statusData.memory.total}
+                      percent={statusData.memory.percent}
+                      icon={<Cpu size={13} aria-hidden="true" />}
+                    />
+                  )}
+                  {statusData.disk && (
+                    <UsageBar
+                      label="Disk"
+                      used={statusData.disk.used}
+                      total={statusData.disk.total}
+                      percent={statusData.disk.percent}
+                      icon={<HardDrive size={13} aria-hidden="true" />}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Info */}
+        <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+          <div className="border-b border-zinc-700 px-5 py-3">
+            <h2 className="text-sm font-semibold text-zinc-200">Quick Info</h2>
+          </div>
+          <div className="divide-y divide-zinc-700/50 px-5">
+            <InfoRow label="Host" value={server.host} />
+            <InfoRow label="Port" value={server.port} />
+            <InfoRow label="User" value={server.user} />
+            <InfoRow label="Provider" value={server.provider ?? "--"} />
+            <InfoRow
+              label="SSH Key"
+              value={
+                server.ssh_key_path ? (
+                  <span className="font-mono text-xs">{server.ssh_key_path}</span>
+                ) : (
+                  "--"
+                )
+              }
+            />
+            <InfoRow label="Apps" value={server.app_count} />
+          </div>
+        </div>
+      </div>
+
+      {/* 24h Metrics History */}
+      <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+        <div className="border-b border-zinc-700 px-5 py-3">
+          <h2 className="text-sm font-semibold text-zinc-200">
+            24h Metrics History
+          </h2>
+        </div>
+        <div className="space-y-4 p-5">
+          {metrics.length === 0 ? (
+            <p className="text-center text-sm text-zinc-500">
+              No metrics yet -- data will appear after the server status is fetched.
+            </p>
+          ) : (
+            <>
+              <SparklineChart
+                data={metrics.map((m) => ({
+                  time: m.recorded_at,
+                  value: m.cpu_percent ?? 0,
+                }))}
+                color="#10b981"
+                fillColor="rgba(16,185,129,0.15)"
+                label="CPU"
+              />
+              <SparklineChart
+                data={metrics.map((m) => ({
+                  time: m.recorded_at,
+                  value: m.mem_percent ?? 0,
+                }))}
+                color="#6366f1"
+                fillColor="rgba(99,102,241,0.15)"
+                label="Memory"
+              />
+              <SparklineChart
+                data={metrics.map((m) => ({
+                  time: m.recorded_at,
+                  value: m.disk_percent ?? 0,
+                }))}
+                color="#f59e0b"
+                fillColor="rgba(245,158,11,0.15)"
+                label="Disk"
+              />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Running Containers */}
+      {statusData?.containers && statusData.containers.length > 0 && (
+        <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+          <div className="border-b border-zinc-700 px-5 py-3">
+            <h2 className="text-sm font-semibold text-zinc-200">
+              Running Containers ({statusData.containers.length})
+            </h2>
+          </div>
+          <div className="divide-y divide-zinc-700/40">
+            {statusData.containers.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between px-5 py-3"
+              >
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">{c.name}</p>
+                  {c.image && (
+                    <p className="mt-0.5 font-mono text-xs text-zinc-500">{c.image}</p>
+                  )}
+                </div>
+                <StatusBadge status={c.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Apps Tab ─────────────────────────────────────────────────────────────────
+
+function AppsTab({ apps, serverName: _serverName }: { apps: App[]; serverName: string }) {
+  if (apps.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-12 text-center">
+        <Box size={28} className="text-zinc-500" aria-hidden="true" />
+        <p className="text-sm text-zinc-400">
+          No apps deployed to this server yet.
+        </p>
+        <Link
+          to="/apps"
+          className="text-sm font-medium text-orange-400 hover:text-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+        >
+          Go to Apps
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-zinc-700/40">
+      {apps.map((app) => (
+        <Link
+          key={app.id}
+          to={`/apps/${encodeURIComponent(app.name)}`}
+          className="flex items-center justify-between px-1 py-3 transition-colors hover:bg-zinc-700/20"
+        >
+          <div className="flex items-center gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-orange-400">
+                  {app.name}
+                </span>
+                <StatusBadge status={app.status} />
+                {app.app_type && (
+                  <span className="rounded bg-zinc-700 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400">
+                    {app.app_type}
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5 flex items-center gap-3 text-xs text-zinc-500">
+                {app.branch && (
+                  <span className="flex items-center gap-1">
+                    <GitBranch size={11} aria-hidden="true" />
+                    {app.branch}
+                  </span>
+                )}
+                {app.image && (
+                  <span className="font-mono">{app.image}</span>
+                )}
+                {app.domain && (
+                  <span>{app.domain}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <ChevronRight size={16} className="text-zinc-500" aria-hidden="true" />
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+
+function SettingsTab({ server }: { server: ServerType }) {
+  const updateServer = useUpdateServer();
+  const deleteServer = useDeleteServer();
+  const addServerTag = useAddServerTag();
+  const removeServerTag = useRemoveServerTag();
+  const navigate = useNavigate();
+  const toast = useToast();
+
+  const PROVIDERS = ["", "hetzner", "digitalocean", "linode", "vultr", "aws", "gcp", "azure", "bare-metal", "other"];
+
+  const [form, setForm] = useState<UpdateServerInput>({
+    host: server.host,
+    user: server.user,
+    port: server.port,
+    ssh_key_path: server.ssh_key_path ?? "",
+    provider: server.provider ?? "",
+  });
+
+  const [newTag, setNewTag] = useState("");
+  const [showDanger, setShowDanger] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+
+  // Dirty detection
+  const isDirty =
+    form.host !== server.host ||
+    form.user !== server.user ||
+    form.port !== server.port ||
+    form.ssh_key_path !== (server.ssh_key_path ?? "") ||
+    form.provider !== (server.provider ?? "");
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: name === "port" ? (value === "" ? undefined : Number(value)) : value,
+    }));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await updateServer.mutateAsync({ name: server.name, input: form });
+      toast.success("Server configuration updated.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update server.");
+    }
+  }
+
+  async function handleAddTag(e: React.FormEvent) {
+    e.preventDefault();
+    const tag = newTag.trim();
+    if (!tag) return;
+    try {
+      await addServerTag.mutateAsync({ name: server.name, tag });
+      setNewTag("");
+      toast.success(`Tag "${tag}" added.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add tag.");
+    }
+  }
+
+  async function handleRemoveTag(tag: string) {
+    try {
+      await removeServerTag.mutateAsync({ name: server.name, tag });
+      toast.success(`Tag "${tag}" removed.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove tag.");
+    }
+  }
+
+  async function handleDelete() {
+    if (deleteConfirm !== server.name) return;
+    try {
+      await deleteServer.mutateAsync(server.name);
+      toast.success(`Server "${server.name}" deleted.`);
+      void navigate("/servers");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed.");
+    }
+  }
+
+  const inputClass =
+    "w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none";
+
+  return (
+    <div className="space-y-6">
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
+
+      <form onSubmit={handleSave} className="space-y-6" noValidate>
+        {/* Save button */}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={!isDirty || updateServer.isPending}
+            className={[
+              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50",
+              isDirty
+                ? "bg-orange-600 hover:bg-orange-500"
+                : "cursor-not-allowed bg-zinc-600",
+            ].join(" ")}
+          >
+            {updateServer.isPending && (
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+            )}
+            Save Changes
+          </button>
+        </div>
+
+        {/* General */}
+        <div className="rounded-xl border border-zinc-700 bg-zinc-800/50 p-5">
+          <h3 className="mb-4 text-sm font-semibold text-zinc-200">General</h3>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="settings-host" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Host / IP
+              </label>
+              <input
+                id="settings-host"
+                name="host"
+                type="text"
+                value={form.host ?? ""}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="settings-user" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  SSH User
+                </label>
+                <input
+                  id="settings-user"
+                  name="user"
+                  type="text"
+                  value={form.user ?? ""}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="settings-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  SSH Port
+                </label>
+                <input
+                  id="settings-port"
+                  name="port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={form.port ?? ""}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="settings-key" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                SSH Key Path
+              </label>
+              <input
+                id="settings-key"
+                name="ssh_key_path"
+                type="text"
+                value={form.ssh_key_path ?? ""}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="settings-provider" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Provider
+              </label>
+              <select
+                id="settings-provider"
+                name="provider"
+                value={form.provider ?? ""}
+                onChange={handleChange}
+                className={inputClass}
+              >
+                {PROVIDERS.map((p) => (
+                  <option key={p} value={p}>
+                    {p === "" ? "Select provider (optional)" : p}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {/* Tags */}
+      <div className="rounded-xl border border-zinc-700 bg-zinc-800/50 p-5">
+        <h3 className="mb-4 text-sm font-semibold text-zinc-200">Tags</h3>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {(server.tags ?? []).length > 0 ? (
+            server.tags!.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-md bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-300 ring-1 ring-orange-500/30"
+              >
+                {tag}
+                <button
+                  onClick={() => void handleRemoveTag(tag)}
+                  className="ml-0.5 rounded hover:text-red-400"
+                  aria-label={`Remove tag ${tag}`}
+                >
+                  <X size={11} aria-hidden="true" />
+                </button>
+              </span>
+            ))
+          ) : (
+            <span className="text-xs text-zinc-500">No tags</span>
+          )}
+        </div>
+        <form onSubmit={(e) => void handleAddTag(e)} className="flex gap-2">
+          <input
+            type="text"
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            placeholder="Add tag..."
+            className="flex-1 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!newTag.trim() || addServerTag.isPending}
+            className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
+          >
+            <Plus size={12} aria-hidden="true" />
+          </button>
+        </form>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="rounded-xl border border-red-500/20 bg-zinc-800/50">
+        <button
+          onClick={() => setShowDanger(!showDanger)}
+          className="flex w-full items-center justify-between px-5 py-4 text-left"
+        >
+          <span className="text-sm font-semibold text-red-400">Danger Zone</span>
+          {showDanger ? (
+            <ChevronDown size={16} className="text-zinc-400" aria-hidden="true" />
+          ) : (
+            <ChevronRight size={16} className="text-zinc-400" aria-hidden="true" />
+          )}
+        </button>
+        {showDanger && (
+          <div className="border-t border-red-500/20 px-5 py-4">
+            <p className="mb-3 text-sm text-zinc-400">
+              Type <span className="font-mono font-semibold text-red-400">{server.name}</span> to confirm deletion.
+              This action is irreversible.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder={server.name}
+              className="mb-3 w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-red-500 focus:ring-1 focus:ring-red-500 focus-visible:outline-none"
+            />
+            <button
+              onClick={() => void handleDelete()}
+              disabled={deleteConfirm !== server.name || deleteServer.isPending}
+              className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-50"
+            >
+              {deleteServer.isPending && (
+                <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              )}
+              <Trash2 size={14} aria-hidden="true" />
+              Delete Server
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function ServerDetail() {
   const { name = "" } = useParams<{ name: string }>();
   const decodedName = decodeURIComponent(name);
+  const navigate = useNavigate();
 
   const { data: servers = [] } = useServers();
   const server = servers.find((s) => s.name === decodedName);
@@ -167,26 +773,33 @@ export default function ServerDetail() {
 
   const provisionServer = useProvisionServer();
   const testServer = useTestServer();
-  const updateServer = useUpdateServer();
-  const addServerTag = useAddServerTag();
-  const removeServerTag = useRemoveServerTag();
+  const deleteServer = useDeleteServer();
   const toast = useToast();
 
-  const [newTag, setNewTag] = useState("");
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState<UpdateServerInput>({
-    host: "",
-    user: "",
-    port: 22,
-    ssh_key_path: "",
-    provider: "",
-  });
+  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [provisionKey, setProvisionKey] = useState<number | null>(null);
   const [provisionResult, setProvisionResult] = useState<{
     lines: string[];
     status: string;
   } | null>(null);
   const provStream = useProvisionStream(decodedName, provisionKey);
+
+  // Kebab menu
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      setShowMenu(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showMenu, handleClickOutside]);
 
   // When provisioning finishes, snapshot result and clear key
   useEffect(() => {
@@ -225,58 +838,15 @@ export default function ServerDetail() {
     }
   }
 
-  const PROVIDERS = ["", "hetzner", "digitalocean", "linode", "vultr", "aws", "gcp", "azure", "bare-metal", "other"];
-
-  function openEditModal() {
-    if (!server) return;
-    setEditForm({
-      host: server.host,
-      user: server.user,
-      port: server.port,
-      ssh_key_path: server.ssh_key_path ?? "",
-      provider: server.provider ?? "",
-    });
-    setShowEditModal(true);
-  }
-
-  function handleEditChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
-    const { name, value } = e.target;
-    setEditForm((prev) => ({
-      ...prev,
-      [name]: name === "port" ? (value === "" ? undefined : Number(value)) : value,
-    }));
-  }
-
-  async function handleEditSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleKebabDelete() {
+    if (!window.confirm(`Delete server "${decodedName}"? This cannot be undone.`)) return;
+    setShowMenu(false);
     try {
-      await updateServer.mutateAsync({ name: decodedName, input: editForm });
-      toast.success("Server updated.");
-      setShowEditModal(false);
+      await deleteServer.mutateAsync(decodedName);
+      toast.success(`Server "${decodedName}" deleted.`);
+      void navigate("/servers");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update server.");
-    }
-  }
-
-  async function handleAddTag(e: React.FormEvent) {
-    e.preventDefault();
-    const tag = newTag.trim();
-    if (!tag) return;
-    try {
-      await addServerTag.mutateAsync({ name: decodedName, tag });
-      setNewTag("");
-      toast.success(`Tag "${tag}" added.`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add tag.");
-    }
-  }
-
-  async function handleRemoveTag(tag: string) {
-    try {
-      await removeServerTag.mutateAsync({ name: decodedName, tag });
-      toast.success(`Tag "${tag}" removed.`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove tag.");
+      toast.error(err instanceof Error ? err.message : "Failed to delete server.");
     }
   }
 
@@ -294,36 +864,41 @@ export default function ServerDetail() {
       </Link>
 
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-700">
             <Server size={22} className="text-orange-400" aria-hidden="true" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-zinc-100">
-              {decodedName}
-            </h1>
+            <h1 className="text-2xl font-bold text-zinc-100">{decodedName}</h1>
             {server && (
-              <p className="mt-0.5 text-sm text-zinc-400">
-                {server.user}@{server.host}:{server.port}
-                {server.provider ? ` · ${server.provider}` : ""}
-              </p>
+              <div className="mt-0.5 flex items-center gap-3 text-xs text-zinc-400">
+                <StatusBadge status={server.status} />
+                {server.provider && <span>{server.provider}</span>}
+                <span className="font-mono">
+                  {server.user}@{server.host}:{server.port}
+                </span>
+              </div>
             )}
           </div>
-          {server && (
-            <StatusBadge status={server.status} className="ml-2" />
-          )}
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2">
+        {/* Action buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Provision CTA */}
           <button
-            onClick={openEditModal}
-            className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+            onClick={handleProvision}
+            disabled={provisionServer.isPending}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
           >
-            <Pencil size={14} aria-hidden="true" />
-            Edit
+            {provisionServer.isPending ? (
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Play size={14} aria-hidden="true" />
+            )}
+            Provision
           </button>
+          {/* Test Connection */}
           <button
             onClick={handleTest}
             disabled={testServer.isPending}
@@ -336,18 +911,27 @@ export default function ServerDetail() {
             )}
             Test Connection
           </button>
-          <button
-            onClick={handleProvision}
-            disabled={provisionServer.isPending}
-            className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
-          >
-            {provisionServer.isPending ? (
-              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Play size={14} aria-hidden="true" />
+          {/* Kebab menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="flex items-center justify-center rounded-lg border border-zinc-600 bg-zinc-700 p-2 text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+              aria-label="More actions"
+            >
+              <MoreVertical size={16} aria-hidden="true" />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-zinc-600 bg-zinc-800 py-1 shadow-xl">
+                <button
+                  onClick={() => void handleKebabDelete()}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 transition-colors hover:bg-red-500/10"
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  Delete Server
+                </button>
+              </div>
             )}
-            Provision
-          </button>
+          </div>
         </div>
       </div>
 
@@ -369,395 +953,77 @@ export default function ServerDetail() {
         />
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left column: server info */}
-        <div className="space-y-6">
-          {/* Info card */}
-          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
-            <div className="border-b border-zinc-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-zinc-200">
-                Server Info
-              </h2>
-            </div>
-            <div className="divide-y divide-zinc-700/50 px-5">
-              {server ? (
-                <>
-                  <InfoRow label="Host" value={server.host} />
-                  <InfoRow label="Port" value={server.port} />
-                  <InfoRow label="User" value={server.user} />
-                  <InfoRow label="Provider" value={server.provider ?? "—"} />
-                  <InfoRow
-                    label="SSH Key"
-                    value={
-                      server.ssh_key_path ? (
-                        <span className="font-mono text-xs">
-                          {server.ssh_key_path}
-                        </span>
-                      ) : (
-                        "—"
-                      )
-                    }
-                  />
-                  <InfoRow label="Apps" value={server.app_count} />
-                </>
-              ) : (
-                <p className="py-6 text-center text-sm text-zinc-500">
-                  Server not found
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Tags card */}
-          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
-            <div className="border-b border-zinc-700 px-5 py-3">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
-                <Tag size={14} className="text-orange-400" aria-hidden="true" />
-                Tags
-              </h2>
-            </div>
-            <div className="px-5 py-4">
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {(server?.tags ?? []).length > 0 ? (
-                  server!.tags!.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-md bg-orange-500/15 px-2 py-0.5 text-xs font-medium text-orange-300 ring-1 ring-orange-500/30"
-                    >
-                      {tag}
-                      <button
-                        onClick={() => void handleRemoveTag(tag)}
-                        className="ml-0.5 rounded hover:text-red-400"
-                        aria-label={`Remove tag ${tag}`}
-                      >
-                        <X size={11} aria-hidden="true" />
-                      </button>
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs text-zinc-500">No tags</span>
-                )}
-              </div>
-              <form onSubmit={(e) => void handleAddTag(e)} className="flex gap-2">
-                <input
-                  type="text"
-                  value={newTag}
-                  onChange={(e) => setNewTag(e.target.value)}
-                  placeholder="Add tag…"
-                  className="flex-1 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={!newTag.trim() || addServerTag.isPending}
-                  className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
-                >
-                  <Plus size={12} aria-hidden="true" />
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* Uptime card */}
-          {statusData?.uptime && (
-            <div className="rounded-xl border border-zinc-700 bg-zinc-800 px-5 py-4">
-              <div className="flex items-center gap-2 text-sm">
-                <Activity size={16} className="text-emerald-400" aria-hidden="true" />
-                <span className="font-medium text-zinc-200">Uptime</span>
-                <span className="ml-auto font-mono text-xs text-zinc-400">
-                  {statusData.uptime}
-                </span>
-              </div>
-            </div>
-          )}
+      {/* Tabs */}
+      <div className="rounded-xl border border-zinc-700 bg-zinc-800">
+        {/* Tab list */}
+        <div
+          role="tablist"
+          aria-label="Server details"
+          className="flex border-b border-zinc-700"
+        >
+          <TabButton
+            id="overview"
+            label="Overview"
+            icon={<Activity size={14} aria-hidden="true" />}
+            isActive={activeTab === "overview"}
+            onClick={setActiveTab}
+          />
+          <TabButton
+            id="apps"
+            label="Apps"
+            icon={<Box size={14} aria-hidden="true" />}
+            isActive={activeTab === "apps"}
+            onClick={setActiveTab}
+          />
+          <TabButton
+            id="settings"
+            label="Settings"
+            icon={<Settings size={14} aria-hidden="true" />}
+            isActive={activeTab === "settings"}
+            onClick={setActiveTab}
+          />
         </div>
 
-        {/* Right column: status */}
-        <div className="space-y-6 lg:col-span-2">
-          {/* Resource usage */}
-          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
-            <div className="flex items-center justify-between border-b border-zinc-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-zinc-200">
-                Resource Usage
-              </h2>
-              <button
-                onClick={() => void refetchStatus()}
-                className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
-                aria-label="Refresh status"
-              >
-                <RefreshCw
-                  size={13}
-                  className={statusLoading ? "animate-spin" : ""}
-                  aria-hidden="true"
-                />
-              </button>
-            </div>
-
-            <div className="p-5">
-              {statusLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 size={24} className="animate-spin text-zinc-500" aria-label="Loading status" />
-                </div>
-              ) : !statusData ? (
-                <p className="py-6 text-center text-sm text-zinc-500">
-                  Status unavailable — the server may be unreachable.
-                </p>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {statusData.cpu != null && (
-                    <UsageBar
-                      label="CPU"
-                      used={`${statusData.cpu}%`}
-                      total="100%"
-                      percent={statusData.cpu}
-                      icon={<Cpu size={13} aria-hidden="true" />}
-                    />
-                  )}
-                  {statusData.memory && (
-                    <UsageBar
-                      label="Memory"
-                      used={statusData.memory.used}
-                      total={statusData.memory.total}
-                      percent={statusData.memory.percent}
-                      icon={<Cpu size={13} aria-hidden="true" />}
-                    />
-                  )}
-                  {statusData.disk && (
-                    <UsageBar
-                      label="Disk"
-                      used={statusData.disk.used}
-                      total={statusData.disk.total}
-                      percent={statusData.disk.percent}
-                      icon={<HardDrive size={13} aria-hidden="true" />}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
+        {/* Tab panels */}
+        <div className="p-5">
+          <div
+            id="tabpanel-overview"
+            role="tabpanel"
+            aria-label="Overview"
+            hidden={activeTab !== "overview"}
+          >
+            {activeTab === "overview" && server && (
+              <OverviewTab
+                server={server}
+                statusData={statusData}
+                statusLoading={statusLoading}
+                refetchStatus={() => void refetchStatus()}
+                metrics={metrics}
+              />
+            )}
           </div>
-
-          {/* Containers */}
-          {statusData?.containers && statusData.containers.length > 0 && (
-            <div className="rounded-xl border border-zinc-700 bg-zinc-800">
-              <div className="border-b border-zinc-700 px-5 py-3">
-                <h2 className="text-sm font-semibold text-zinc-200">
-                  Running Containers ({statusData.containers.length})
-                </h2>
-              </div>
-              <div className="divide-y divide-zinc-700/40">
-                {statusData.containers.map((c) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between px-5 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-zinc-200">
-                        {c.name}
-                      </p>
-                      {c.image && (
-                        <p className="mt-0.5 font-mono text-xs text-zinc-500">
-                          {c.image}
-                        </p>
-                      )}
-                    </div>
-                    <StatusBadge status={c.status} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 24h Metrics History */}
-          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
-            <div className="border-b border-zinc-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-zinc-200">
-                24h Metrics History
-              </h2>
-            </div>
-            <div className="space-y-4 p-5">
-              {metrics.length === 0 ? (
-                <p className="text-center text-sm text-zinc-500">
-                  No metrics yet — data will appear after the server status is fetched.
-                </p>
-              ) : (
-                <>
-                  <SparklineChart
-                    data={metrics.map((m) => ({
-                      time: m.recorded_at,
-                      value: m.cpu_percent ?? 0,
-                    }))}
-                    color="#10b981"
-                    fillColor="rgba(16,185,129,0.15)"
-                    label="CPU"
-                  />
-                  <SparklineChart
-                    data={metrics.map((m) => ({
-                      time: m.recorded_at,
-                      value: m.mem_percent ?? 0,
-                    }))}
-                    color="#6366f1"
-                    fillColor="rgba(99,102,241,0.15)"
-                    label="Memory"
-                  />
-                  <SparklineChart
-                    data={metrics.map((m) => ({
-                      time: m.recorded_at,
-                      value: m.disk_percent ?? 0,
-                    }))}
-                    color="#f59e0b"
-                    fillColor="rgba(245,158,11,0.15)"
-                    label="Disk"
-                  />
-                </>
-              )}
-            </div>
+          <div
+            id="tabpanel-apps"
+            role="tabpanel"
+            aria-label="Apps"
+            hidden={activeTab !== "apps"}
+          >
+            {activeTab === "apps" && (
+              <AppsTab apps={apps} serverName={decodedName} />
+            )}
           </div>
-
-          {/* Apps on server */}
-          <div className="rounded-xl border border-zinc-700 bg-zinc-800">
-            <div className="border-b border-zinc-700 px-5 py-3">
-              <h2 className="text-sm font-semibold text-zinc-200">
-                Apps on this Server
-              </h2>
-            </div>
-
-            {apps.length === 0 ? (
-              <div className="flex items-center gap-3 px-5 py-8 text-sm text-zinc-500">
-                <Box size={16} aria-hidden="true" />
-                No apps deployed to this server yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-zinc-700/40">
-                {apps.map((app) => (
-                  <div
-                    key={app.id}
-                    className="flex items-center justify-between px-5 py-3"
-                  >
-                    <div>
-                      <Link
-                        to={`/apps/${encodeURIComponent(app.name)}`}
-                        className="text-sm font-medium text-orange-400 hover:text-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
-                      >
-                        {app.name}
-                      </Link>
-                      {app.domain && (
-                        <p className="mt-0.5 text-xs text-zinc-500">
-                          {app.domain}
-                        </p>
-                      )}
-                    </div>
-                    <StatusBadge status={app.status} />
-                  </div>
-                ))}
-              </div>
+          <div
+            id="tabpanel-settings"
+            role="tabpanel"
+            aria-label="Settings"
+            hidden={activeTab !== "settings"}
+          >
+            {activeTab === "settings" && server && (
+              <SettingsTab server={server} />
             )}
           </div>
         </div>
       </div>
-
-      {/* Edit Server Modal */}
-      {showEditModal && (
-        <Modal title="Edit Server" onClose={() => setShowEditModal(false)}>
-          <form onSubmit={handleEditSubmit} className="space-y-4" noValidate>
-            <div>
-              <label htmlFor="edit-host" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Host / IP
-              </label>
-              <input
-                id="edit-host"
-                name="host"
-                type="text"
-                value={editForm.host ?? ""}
-                onChange={handleEditChange}
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="edit-user" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                  SSH User
-                </label>
-                <input
-                  id="edit-user"
-                  name="user"
-                  type="text"
-                  value={editForm.user ?? ""}
-                  onChange={handleEditChange}
-                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                  SSH Port
-                </label>
-                <input
-                  id="edit-port"
-                  name="port"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={editForm.port ?? ""}
-                  onChange={handleEditChange}
-                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="edit-key" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                SSH Key Path
-              </label>
-              <input
-                id="edit-key"
-                name="ssh_key_path"
-                type="text"
-                value={editForm.ssh_key_path ?? ""}
-                onChange={handleEditChange}
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="edit-provider" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Provider
-              </label>
-              <select
-                id="edit-provider"
-                name="provider"
-                value={editForm.provider ?? ""}
-                onChange={handleEditChange}
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              >
-                {PROVIDERS.map((p) => (
-                  <option key={p} value={p}>
-                    {p === "" ? "Select provider (optional)" : p}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowEditModal(false)}
-                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={updateServer.isPending}
-                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
-              >
-                {updateServer.isPending && (
-                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                )}
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }

@@ -176,6 +176,8 @@ function OverviewTab({ app }: { app: App }) {
           <div className="flex items-center justify-center py-6">
             <Loader2 size={18} className="animate-spin text-zinc-500" aria-label="Loading container metrics" />
           </div>
+        ) : healthData && healthData.containers.length === 0 ? (
+          <p className="py-4 text-center text-sm text-zinc-500">No containers found.</p>
         ) : healthData?.containers && healthData.containers.length > 0 ? (
           <div className="overflow-hidden rounded-lg border border-zinc-700">
             <table className="w-full text-sm" role="table">

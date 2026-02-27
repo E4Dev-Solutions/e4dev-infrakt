@@ -131,7 +131,7 @@ async def trigger_deploy(
                     memory_limit=app_mem,
                 )
                 if app_domain:
-                    add_domain(ssh, app_domain, app_port, app_name=name)
+                    add_domain(ssh, app_domain, app_port, app_name=app_name)
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()

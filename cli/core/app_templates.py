@@ -8,6 +8,7 @@ in cli/commands/db.py — a static registry keyed by template name.
 from __future__ import annotations
 
 import secrets
+from collections.abc import Callable
 from typing import TypedDict
 
 
@@ -208,6 +209,7 @@ def _devtools_compose(name: str, domain: str | None) -> str:
     git_domain = domain
     if domain and domain.startswith("{"):
         import json
+
         try:
             domains = json.loads(domain)
             git_domain = domains.get("gitea", domain)
@@ -323,7 +325,7 @@ APP_TEMPLATES: dict[str, TemplateInfo] = {
 }
 
 # Map template name → compose generator function
-_COMPOSE_GENERATORS: dict[str, callable] = {
+_COMPOSE_GENERATORS: dict[str, Callable[..., str]] = {
     "nginx": _nginx_compose,
     "uptime-kuma": _uptime_kuma_compose,
     "n8n": _n8n_compose,
@@ -342,9 +344,7 @@ def list_templates() -> list[TemplateInfo]:
     return list(APP_TEMPLATES.values())
 
 
-def render_template_compose(
-    template_name: str, app_name: str, domain: str | None = None
-) -> str:
+def render_template_compose(template_name: str, app_name: str, domain: str | None = None) -> str:
     """Render the docker-compose.yml for a template.
 
     Raises KeyError if template_name is not found.

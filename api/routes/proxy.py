@@ -41,7 +41,11 @@ def add_route(body: ProxyRouteCreate) -> dict[str, str]:
             add_domain(ssh, body.domain, body.port, app_name=body.app_name)
     except SSHConnectionError as exc:
         raise HTTPException(502, str(exc))
-    target = f"infrakt-{body.app_name}:{body.port}" if body.app_name else f"host.docker.internal:{body.port}"
+    target = (
+        f"infrakt-{body.app_name}:{body.port}"
+        if body.app_name
+        else f"host.docker.internal:{body.port}"
+    )
     return {"message": f"Added {body.domain} -> {target}"}
 
 

@@ -74,6 +74,7 @@ def _app_out(a: App, session: object | None = None) -> AppOut:
                 dep_names.append(dep_app.name)
     # Parse multi-domain JSON stored in the domain column
     import json as _json
+
     domain_val = a.domain
     domains_dict: dict[str, str] | None = None
     if domain_val and domain_val.startswith("{"):
@@ -147,6 +148,7 @@ def create_app(body: AppCreate) -> AppOut:
         # domain column. Single-domain apps use a plain string.
         if body.domains:
             import json as _json
+
             effective_domain = _json.dumps(body.domains)
         else:
             effective_domain = body.domain
@@ -320,6 +322,7 @@ async def deploy(
 
                 # Parse multi-domain JSON if present (e.g. {"gitea": "git.ex.com"})
                 import json as _json
+
                 multi_domains: dict[str, str] = {}
                 primary_domain: str | None = None
                 if isinstance(domain_raw, str):
@@ -337,9 +340,7 @@ async def deploy(
                 compose_override = None
                 if isinstance(app_type_val, str) and app_type_val.startswith("template:"):
                     tmpl_name = app_type_val.split(":", 1)[1]
-                    compose_override = render_template_compose(
-                        tmpl_name, name, primary_domain
-                    )
+                    compose_override = render_template_compose(tmpl_name, name, primary_domain)
 
                 result = deploy_app(
                     ssh,
@@ -363,7 +364,11 @@ async def deploy(
                 # Set up proxy routes
                 if multi_domains:
                     # Multi-domain: each service gets its own domain
-                    tmpl = get_template(app_type_val.split(":", 1)[1]) if isinstance(app_type_val, str) and app_type_val.startswith("template:") else None
+                    tmpl = (
+                        get_template(app_type_val.split(":", 1)[1])
+                        if isinstance(app_type_val, str) and app_type_val.startswith("template:")
+                        else None
+                    )
                     domain_map = tmpl.get("domain_map", {}) if tmpl else {}
                     for svc_name, svc_domain in multi_domains.items():
                         svc_port = domain_map.get(svc_name, port)

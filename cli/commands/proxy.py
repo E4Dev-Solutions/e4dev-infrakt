@@ -48,7 +48,7 @@ def setup(server_name: str) -> None:
 @click.argument("domain")
 @click.option("--server", "server_name", required=True)
 @click.option("--port", required=True, type=int, help="Local port to proxy to")
-@click.option("--app-name", default=None, help="App name to route to its container (infrakt-<app-name>)")
+@click.option("--app-name", default=None, help="Route to container (infrakt-<name>)")
 def add_route(domain: str, server_name: str, port: int, app_name: str | None) -> None:
     """Add a domain reverse proxy route."""
     ssh = _get_ssh(server_name)

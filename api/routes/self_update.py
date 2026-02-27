@@ -60,12 +60,20 @@ def _do_update() -> None:
         logger.info("Spawning updater sidecar to restart container...")
         subprocess.run(
             [
-                "docker", "run", "--rm", "-d",
-                "--name", "infrakt-updater",
-                "--entrypoint", "sh",
-                "-v", "/var/run/docker.sock:/var/run/docker.sock",
-                "-v", f"{_COMPOSE_DIR}:{_COMPOSE_DIR}:ro",
-                "-w", _COMPOSE_DIR,
+                "docker",
+                "run",
+                "--rm",
+                "-d",
+                "--name",
+                "infrakt-updater",
+                "--entrypoint",
+                "sh",
+                "-v",
+                "/var/run/docker.sock:/var/run/docker.sock",
+                "-v",
+                f"{_COMPOSE_DIR}:{_COMPOSE_DIR}:ro",
+                "-w",
+                _COMPOSE_DIR,
                 _IMAGE,
                 "-c",
                 "sleep 3 && docker compose -f "

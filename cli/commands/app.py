@@ -3,7 +3,6 @@ from datetime import datetime
 import click
 
 from cli.core.app_templates import (
-    APP_TEMPLATES,
     get_template,
     list_templates,
     render_template_compose,
@@ -119,6 +118,7 @@ def create(
             # Convert comma-separated domains to JSON for multi-domain templates
             if domain and "," in domain and "domain_map" in tmpl:
                 import json as _json
+
                 svc_names = list(tmpl["domain_map"].keys())
                 domain_parts = [d.strip() for d in domain.split(",")]
                 if len(domain_parts) == len(svc_names):
@@ -228,6 +228,7 @@ def deploy(name: str, server_name: str | None) -> None:
             # Set up reverse proxy if domain is configured
             if app_domain:
                 import json as _json
+
                 # Check for multi-domain JSON in the domain field
                 multi_domains: dict[str, str] = {}
                 primary_domain: str | None = None
@@ -241,7 +242,11 @@ def deploy(name: str, server_name: str | None) -> None:
                     primary_domain = app_domain
 
                 if multi_domains:
-                    tmpl = get_template(app_type.split(":", 1)[1]) if app_type and app_type.startswith("template:") else None
+                    tmpl = (
+                        get_template(app_type.split(":", 1)[1])
+                        if app_type and app_type.startswith("template:")
+                        else None
+                    )
                     domain_map = tmpl.get("domain_map", {}) if tmpl else {}
                     for svc_name, svc_domain in multi_domains.items():
                         svc_port = domain_map.get(svc_name, app_port)

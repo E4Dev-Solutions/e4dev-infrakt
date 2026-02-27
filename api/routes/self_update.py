@@ -16,6 +16,8 @@ logger = logging.getLogger("infrakt.self_update")
 # The compose file path inside the container — matches the mount in
 # docker-compose.prod.yml on the host at /opt/infrakt/.
 _COMPOSE_FILE = os.environ.get("COMPOSE_FILE", "/opt/infrakt/docker-compose.prod.yml")
+_COMPOSE_DIR = os.path.dirname(_COMPOSE_FILE) or "/opt/infrakt"
+_IMAGE = os.environ.get("INFRAKT_IMAGE", "ghcr.io/e4dev-solutions/e4dev-infrakt:latest")
 
 
 def _verify_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -25,7 +27,16 @@ def _verify_signature(payload: bytes, signature: str, secret: str) -> bool:
 
 
 def _do_update() -> None:
-    """Pull the latest image and restart the container."""
+    """Pull the latest image and restart via a sidecar container.
+
+    We cannot run ``docker compose up -d`` from inside the very container
+    being replaced — Docker stops this container first, killing the process
+    before it can start the new one (leaving it stuck in ``Created`` state).
+
+    Instead we: 1) pull the new image, then 2) spawn a short-lived sidecar
+    container that waits a few seconds and runs ``docker compose up -d``.
+    The sidecar is independent and survives the main container's restart.
+    """
     try:
         logger.info("Pulling latest image...")
         subprocess.run(
@@ -35,15 +46,34 @@ def _do_update() -> None:
             text=True,
             timeout=300,
         )
-        logger.info("Restarting container...")
+
+        # Remove any leftover updater container from a previous run.
         subprocess.run(
-            ["docker", "compose", "-f", _COMPOSE_FILE, "up", "-d"],
+            ["docker", "rm", "-f", "infrakt-updater"],
+            capture_output=True,
+            text=True,
+        )
+
+        logger.info("Spawning updater sidecar to restart container...")
+        subprocess.run(
+            [
+                "docker", "run", "--rm", "-d",
+                "--name", "infrakt-updater",
+                "--entrypoint", "sh",
+                "-v", "/var/run/docker.sock:/var/run/docker.sock",
+                "-v", f"{_COMPOSE_DIR}:{_COMPOSE_DIR}:ro",
+                "-w", _COMPOSE_DIR,
+                _IMAGE,
+                "-c",
+                "sleep 3 && docker compose -f "
+                f"{_COMPOSE_FILE} up -d --force-recreate --remove-orphans",
+            ],
             check=True,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=30,
         )
-        logger.info("Self-update complete.")
+        logger.info("Updater sidecar launched — container will restart shortly.")
     except subprocess.CalledProcessError as exc:
         logger.error("Self-update failed: %s\n%s", exc, exc.stderr)
     except Exception as exc:

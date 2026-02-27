@@ -427,39 +427,46 @@ if [[ -n "$WEBHOOK_SECRET" ]]; then
         local SECRET_VALUE="$2"
 
         # Get the repo public key for encrypting secrets
-        KEY_RESPONSE=$(curl -s \
+        local KEY_RESPONSE
+        KEY_RESPONSE=$(curl -sS --max-time 15 \
             -H "Authorization: token ${TOKEN}" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${REPO}/actions/secrets/public-key" 2>/dev/null)
+            "https://api.github.com/repos/${REPO}/actions/secrets/public-key" 2>&1)
 
+        local KEY_ID PUBLIC_KEY
         KEY_ID=$(echo "$KEY_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['key_id'])" 2>/dev/null || echo "")
         PUBLIC_KEY=$(echo "$KEY_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['key'])" 2>/dev/null || echo "")
 
         if [[ -z "$KEY_ID" ]] || [[ -z "$PUBLIC_KEY" ]]; then
-            echo "    WARNING: Could not retrieve repo public key (PAT may need 'repo' scope)"
+            echo "    WARNING: Could not retrieve repo public key"
+            echo "    API response: ${KEY_RESPONSE:0:200}"
             return 1
         fi
 
-        # Encrypt the secret using libsodium sealed box via Python
-        ENCRYPTED=$(python3 -c "
+        # Encrypt the secret using libsodium sealed box via Python.
+        # Pass values via environment to avoid shell quoting issues.
+        local ENCRYPTED
+        ENCRYPTED=$(PUBLIC_KEY="$PUBLIC_KEY" SECRET_VALUE="$SECRET_VALUE" python3 -c "
+import os
 from base64 import b64encode, b64decode
 from nacl.public import SealedBox, PublicKey
-public_key = b64decode('${PUBLIC_KEY}')
+public_key = b64decode(os.environ['PUBLIC_KEY'])
 sealed_box = SealedBox(PublicKey(public_key))
-encrypted = sealed_box.encrypt(b'${SECRET_VALUE}')
+encrypted = sealed_box.encrypt(os.environ['SECRET_VALUE'].encode())
 print(b64encode(encrypted).decode())
-" 2>/dev/null || echo "")
+" 2>&1 || echo "")
 
         if [[ -z "$ENCRYPTED" ]]; then
             echo "    WARNING: Could not encrypt secret (pynacl not available)"
             return 1
         fi
 
-        RESP_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+        local RESP_CODE
+        RESP_CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
             -X PUT "https://api.github.com/repos/${REPO}/actions/secrets/${SECRET_NAME}" \
             -H "Authorization: token ${TOKEN}" \
             -H "Accept: application/vnd.github.v3+json" \
-            -d "{\"encrypted_value\":\"${ENCRYPTED}\",\"key_id\":\"${KEY_ID}\"}" 2>/dev/null)
+            -d "{\"encrypted_value\":\"${ENCRYPTED}\",\"key_id\":\"${KEY_ID}\"}" 2>&1)
 
         if [ "$RESP_CODE" = "201" ] || [ "$RESP_CODE" = "204" ]; then
             echo "    ${SECRET_NAME} set successfully"

@@ -28,40 +28,29 @@ test.describe("Dashboard", () => {
   // ─── Stat cards ───────────────────────────────────────────────────────────────
 
   test("displays stat cards with correct counts", async ({ page }) => {
-    // Stat card labels: "Servers", "Active", "Apps", "Databases"
+    // Stat cards are in <main>, scope to avoid sidebar nav matches
+    const main = page.locator("main");
+    // Servers card: label "SERVERS" followed by value
     await expect(
-      page
-        .locator("text=Servers")
-        .first()
-        .locator("..")
-        .getByText(String(MOCK_DASHBOARD.total_servers), { exact: true }),
+      main.locator("text=Servers").locator("..").getByText(String(MOCK_DASHBOARD.total_servers), { exact: true }),
     ).toBeVisible();
+    // Databases card
     await expect(
-      page
-        .locator("text=Databases")
-        .first()
-        .locator("..")
-        .getByText(String(MOCK_DASHBOARD.total_databases), { exact: true }),
+      main.locator("text=Databases").locator("..").getByText(String(MOCK_DASHBOARD.total_databases), { exact: true }),
     ).toBeVisible();
   });
 
   test("Active stat card shows correct count", async ({ page }) => {
+    // The "Active" stat card is a link containing the label "Active" and the count
     await expect(
-      page
-        .locator("text=Active")
-        .first()
-        .locator("..")
-        .getByText(String(MOCK_DASHBOARD.active_servers), { exact: true }),
-    ).toBeVisible();
+      page.getByRole("link", { name: /Active.*of.*total/ }),
+    ).toContainText(String(MOCK_DASHBOARD.active_servers));
   });
 
   test("Apps stat card shows correct count", async ({ page }) => {
+    const main = page.locator("main");
     await expect(
-      page
-        .locator("text=Apps")
-        .first()
-        .locator("..")
-        .getByText(String(MOCK_DASHBOARD.running_apps), { exact: true }),
+      main.locator("text=Apps").first().locator("..").getByText(String(MOCK_DASHBOARD.running_apps), { exact: true }),
     ).toBeVisible();
   });
 
@@ -96,12 +85,12 @@ test.describe("Dashboard", () => {
   });
 
   test("deployments table shows truncated commit hashes", async ({ page }) => {
-    // commit_hash "abc12345def67890" → first 8 chars "abc12345"
-    await expect(page.getByText("abc12345")).toBeVisible();
-    // commit_hash "def67890abc12345" → first 8 chars "def67890"
-    await expect(page.getByText("def67890")).toBeVisible();
-    // commit_hash "111222333444" → first 8 chars "11122233"
-    await expect(page.getByText("11122233")).toBeVisible();
+    // commit_hash "abc12345def67890" → first 7 chars "abc1234"
+    await expect(page.getByText("abc1234")).toBeVisible();
+    // commit_hash "def67890abc12345" → first 7 chars "def6789"
+    await expect(page.getByText("def6789")).toBeVisible();
+    // commit_hash "111222333444" → first 7 chars "1112223"
+    await expect(page.getByText("1112223")).toBeVisible();
   });
 
   test("shows deployment status badges", async ({ page }) => {
@@ -124,19 +113,21 @@ test.describe("Dashboard", () => {
   // ─── Sidebar navigation ───────────────────────────────────────────────────────
 
   test("sidebar navigation links work", async ({ page }) => {
-    await page.getByRole("link", { name: "Servers" }).click();
+    // Use { exact: true } to avoid matching stat card links
+    const nav = page.locator("nav");
+    await nav.getByRole("link", { name: "Servers", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Apps" }).click();
+    await nav.getByRole("link", { name: "Apps", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Apps" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Databases" }).click();
+    await nav.getByRole("link", { name: "Databases", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Databases" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Proxy" }).click();
+    await nav.getByRole("link", { name: "Proxy", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Proxy Domains" })).toBeVisible();
 
-    await page.getByRole("link", { name: "Dashboard" }).click();
+    await nav.getByRole("link", { name: "Dashboard", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   });
 

@@ -161,11 +161,13 @@ test.describe("Apps — Resource Limits in Create Form", () => {
 
   test("Create App form has CPU Limit field", async ({ page }) => {
     await page.getByRole("button", { name: "Create App" }).click();
+    await page.getByText("Advanced options").click();
     await expect(page.getByLabel(/CPU Limit/)).toBeVisible();
   });
 
   test("Create App form has Memory Limit field", async ({ page }) => {
     await page.getByRole("button", { name: "Create App" }).click();
+    await page.getByText("Advanced options").click();
     await expect(page.getByLabel(/Memory Limit/)).toBeVisible();
   });
 
@@ -173,7 +175,10 @@ test.describe("Apps — Resource Limits in Create Form", () => {
     await page.getByRole("button", { name: "Create App" }).click();
     await page.getByLabel(/App Name/).fill("limited-app");
     await page.getByLabel(/Server/).selectOption("prod-1");
-    await page.getByLabel(/Docker Image/).fill("nginx:latest");
+    // Switch to Image source type to reveal the image field
+    await page.locator("form").getByRole("button", { name: "Image" }).click();
+    await page.getByLabel("Image").fill("nginx:latest");
+    await page.getByText("Advanced options").click();
     await page.getByLabel(/CPU Limit/).fill("0.5");
     await page.getByLabel(/Memory Limit/).fill("256M");
     await page

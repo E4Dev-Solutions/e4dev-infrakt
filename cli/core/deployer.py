@@ -247,15 +247,12 @@ def destroy_app(ssh: SSHClient, app_name: str) -> None:
     ssh.run_checked(f"rm -rf {q}")
 
 
-def get_logs(
-    ssh: SSHClient, app_name: str, lines: int = 100, service: str | None = None
-) -> str:
+def get_logs(ssh: SSHClient, app_name: str, lines: int = 100, service: str | None = None) -> str:
     app_path = _app_dir(app_name)
     lines = max(1, min(lines, 10000))  # clamp to sane range
     svc = f" {shlex.quote(service)}" if service else ""
     ssh_cmd = (
-        f"cd {shlex.quote(app_path)} && docker compose logs"
-        f" --tail={int(lines)} --no-color{svc}"
+        f"cd {shlex.quote(app_path)} && docker compose logs --tail={int(lines)} --no-color{svc}"
     )
     stdout = ssh.run_checked(ssh_cmd, timeout=30)
     return stdout
@@ -273,8 +270,7 @@ def stream_logs(
     lines = max(1, min(lines, 10000))
     svc = f" {shlex.quote(service)}" if service else ""
     cmd = (
-        f"cd {shlex.quote(app_path)} && docker compose logs"
-        f" -f --tail={int(lines)} --no-color{svc}"
+        f"cd {shlex.quote(app_path)} && docker compose logs -f --tail={int(lines)} --no-color{svc}"
     )
     channel = ssh.exec_stream(cmd)
     buf = b""

@@ -111,6 +111,7 @@ export default function Apps() {
     setSelectedTemplate(tmpl);
     setForm((prev) => ({
       ...prev,
+      name: prev.name || tmpl.name,
       template: tmpl.name,
       port: tmpl.port,
       image: "",

@@ -26,7 +26,12 @@ def dashboard_stats() -> DashboardStats:
         recent_deps = (
             session.query(Deployment).order_by(Deployment.started_at.desc()).limit(10).all()
         )
-        deployments = [DeploymentOut.model_validate(d) for d in recent_deps]
+        deployments = []
+        for d in recent_deps:
+            out = DeploymentOut.model_validate(d)
+            if d.app:
+                out.app_name = d.app.name
+            deployments.append(out)
 
     return DashboardStats(
         total_servers=total_servers,

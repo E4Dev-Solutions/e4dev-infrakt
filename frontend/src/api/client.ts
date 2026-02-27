@@ -10,10 +10,12 @@ export interface DashboardData {
 }
 
 export interface RecentDeployment {
-  id: string;
+  id: number;
+  app_id: number;
   app_name: string;
   status: DeploymentStatus;
   commit_hash?: string;
+  image_used?: string;
   started_at: string;
   finished_at?: string;
 }

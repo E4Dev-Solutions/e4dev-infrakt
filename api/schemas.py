@@ -235,6 +235,7 @@ class AppOut(BaseModel):
 class DeploymentOut(BaseModel):
     id: int
     app_id: int
+    app_name: str = ""
     commit_hash: str | None
     image_used: str | None = None
     status: str

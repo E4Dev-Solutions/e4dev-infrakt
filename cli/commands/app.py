@@ -116,6 +116,13 @@ def create(
         if tmpl:
             app_type = f"template:{template_name}"
             effective_port = port or tmpl["port"]
+            # Convert comma-separated domains to JSON for multi-domain templates
+            if domain and "," in domain and "domain_map" in tmpl:
+                import json as _json
+                svc_names = list(tmpl["domain_map"].keys())
+                domain_parts = [d.strip() for d in domain.split(",")]
+                if len(domain_parts) == len(svc_names):
+                    domain = _json.dumps(dict(zip(svc_names, domain_parts)))
         else:
             app_type = "image" if image else "git" if git_repo else "compose"
             effective_port = port or 3000

@@ -204,7 +204,15 @@ networks:
 
 def _devtools_compose(name: str, domain: str | None) -> str:
     db_pass = _secret()
-    git_domain = f"git.{domain.split('.', 1)[1]}" if domain and '.' in domain else domain
+    # domain may be a JSON dict for multi-domain templates
+    git_domain = domain
+    if domain and domain.startswith("{"):
+        import json
+        try:
+            domains = json.loads(domain)
+            git_domain = domains.get("gitea", domain)
+        except json.JSONDecodeError:
+            git_domain = domain
     return f"""\
 services:
   {name}-gitea:

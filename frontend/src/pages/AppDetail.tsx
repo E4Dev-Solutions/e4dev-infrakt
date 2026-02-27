@@ -235,6 +235,9 @@ function EnvTab({ appName }: { appName: string }) {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const editRef = useRef<HTMLInputElement>(null);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -266,6 +269,32 @@ function EnvTab({ appName }: { appName: string }) {
     } finally {
       setDeletingKey(null);
     }
+  }
+
+  function startEdit(key: string, value: string) {
+    setEditingKey(key);
+    setEditValue(value);
+    setTimeout(() => editRef.current?.focus(), 0);
+  }
+
+  async function saveEdit() {
+    if (!editingKey) return;
+    try {
+      await setEnv.mutateAsync({
+        name: appName,
+        vars: [{ key: editingKey, value: editValue }],
+      });
+      toast.success(`Updated "${editingKey}".`);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to save.",
+      );
+    }
+    setEditingKey(null);
+  }
+
+  function cancelEdit() {
+    setEditingKey(null);
   }
 
   // Build unified list: user overrides first, then container vars
@@ -412,8 +441,39 @@ function EnvTab({ appName }: { appName: string }) {
                   <td className="px-4 py-3 font-mono text-xs font-medium text-slate-200">
                     {v.key}
                   </td>
-                  <td className="max-w-xs truncate px-4 py-3 font-mono text-xs text-slate-400">
-                    {v.value}
+                  <td className="max-w-xs px-4 py-3 font-mono text-xs text-slate-400">
+                    {editingKey === v.key ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          void saveEdit();
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <input
+                          ref={editRef}
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") cancelEdit();
+                          }}
+                          onBlur={() => void saveEdit()}
+                          className="w-full rounded border border-indigo-500 bg-slate-700 px-2 py-1 font-mono text-xs text-slate-100 focus:ring-1 focus:ring-indigo-500 focus-visible:outline-none"
+                        />
+                      </form>
+                    ) : (
+                      <button
+                        onClick={() => startEdit(v.key, v.value)}
+                        className="group flex w-full items-center gap-1.5 truncate text-left"
+                        title="Click to edit"
+                      >
+                        <span className="truncate">{v.value}</span>
+                        <Pencil
+                          size={11}
+                          className="shrink-0 text-slate-600 opacity-0 transition-opacity group-hover:opacity-100"
+                        />
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {v.source === "override" ? (

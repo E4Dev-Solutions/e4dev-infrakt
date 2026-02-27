@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -21,6 +21,8 @@ import {
   ChevronDown,
   ChevronRight,
   RotateCcw,
+  MoreVertical,
+  ExternalLink,
 } from "lucide-react";
 import {
   useApps,
@@ -44,11 +46,10 @@ import { useDeploymentStream } from "@/hooks/useDeploymentStream";
 import { useContainerLogStream } from "@/hooks/useContainerLogStream";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
-import Modal from "@/components/Modal";
 import DeploymentLogStream from "@/components/DeploymentLogStream";
-import type { UpdateAppInput } from "@/api/client";
+import type { App, UpdateAppInput } from "@/api/client";
 
-type ActiveTab = "logs" | "env" | "deployments" | "health";
+type ActiveTab = "overview" | "logs" | "env" | "deployments" | "settings";
 
 function formatDate(iso: string): string {
   try {
@@ -59,6 +60,21 @@ function formatDate(iso: string): string {
       minute: "2-digit",
       second: "2-digit",
     }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+function formatRelativeTime(iso: string): string {
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    const minutes = Math.floor(diff / 60_000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
   } catch {
     return iso;
   }
@@ -93,6 +109,210 @@ function TabButton({
       {icon}
       {label}
     </button>
+  );
+}
+
+// ─── Overview Tab ────────────────────────────────────────────────────────────
+
+function OverviewTab({ app }: { app: App }) {
+  const { data: healthData, refetch: refetchHealth, isFetching: healthFetching } = useAppHealth(app.name, { enabled: false });
+  const { data: deployments = [] } = useAppDeployments(app.name);
+
+  const recentDeploys = deployments.slice(0, 5);
+  const lastDeploy = deployments[0];
+
+  return (
+    <div className="space-y-6">
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/* Status */}
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">Status</p>
+          <StatusBadge status={app.status} />
+        </div>
+        {/* Last Deploy */}
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">Last Deploy</p>
+          {lastDeploy ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-zinc-200">{formatRelativeTime(lastDeploy.started_at)}</span>
+              {lastDeploy.commit_hash && (
+                <span className="rounded bg-zinc-700 px-1.5 py-0.5 font-mono text-xs text-zinc-400">
+                  {lastDeploy.commit_hash.slice(0, 7)}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-sm text-zinc-500">Never deployed</span>
+          )}
+        </div>
+        {/* App Type */}
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">App Type</p>
+          <span className="rounded bg-zinc-700 px-2 py-0.5 font-mono text-xs text-zinc-300">
+            {app.app_type || "compose"}
+          </span>
+        </div>
+      </div>
+
+      {/* Container Metrics */}
+      <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-zinc-200">Container Metrics</h3>
+          <button
+            onClick={() => void refetchHealth()}
+            disabled={healthFetching}
+            className="flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
+          >
+            <RefreshCw
+              size={12}
+              className={healthFetching ? "animate-spin" : ""}
+              aria-hidden="true"
+            />
+            {healthFetching ? "Checking..." : "Refresh"}
+          </button>
+        </div>
+        {healthFetching && !healthData ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 size={18} className="animate-spin text-zinc-500" aria-label="Loading container metrics" />
+          </div>
+        ) : healthData?.containers && healthData.containers.length > 0 ? (
+          <div className="overflow-hidden rounded-lg border border-zinc-700">
+            <table className="w-full text-sm" role="table">
+              <thead>
+                <tr className="border-b border-zinc-700 bg-zinc-800/60">
+                  {["Container", "State", "Status", "Image"].map((h) => (
+                    <th
+                      key={h}
+                      scope="col"
+                      className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-700/40">
+                {healthData.containers.map((c) => (
+                  <tr key={c.name} className="bg-zinc-800/30 hover:bg-zinc-800/60">
+                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-200">{c.name}</td>
+                    <td className="px-4 py-2.5">
+                      <StatusBadge status={c.state} />
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-zinc-400">{c.status}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-zinc-500">{c.image || "---"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="py-4 text-center text-sm text-zinc-500">
+            Click &quot;Refresh&quot; to fetch container state from the server.
+          </p>
+        )}
+      </div>
+
+      {/* Recent Deploys */}
+      {recentDeploys.length > 0 && (
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-200">Recent Deploys</h3>
+          <div className="space-y-2">
+            {recentDeploys.map((dep) => (
+              <div key={dep.id} className="flex items-center gap-3 rounded-md bg-zinc-800/40 px-3 py-2">
+                <span
+                  className={[
+                    "inline-block h-2 w-2 shrink-0 rounded-full",
+                    dep.status === "success"
+                      ? "bg-emerald-400"
+                      : dep.status === "failed"
+                        ? "bg-red-400"
+                        : "bg-amber-400",
+                  ].join(" ")}
+                  aria-hidden="true"
+                />
+                <span className="font-mono text-xs text-zinc-400">#{dep.id}</span>
+                <StatusBadge status={dep.status} />
+                {dep.commit_hash && (
+                  <span className="rounded bg-zinc-700 px-1.5 py-0.5 font-mono text-xs text-zinc-400">
+                    {dep.commit_hash.slice(0, 7)}
+                  </span>
+                )}
+                <span className="ml-auto text-xs text-zinc-500">{formatRelativeTime(dep.started_at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Info */}
+      <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-zinc-200">Quick Info</h3>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="text-xs text-zinc-500">Server</dt>
+            <dd className="text-zinc-300">{app.server_name}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500">Domain</dt>
+            <dd className="text-zinc-300">{app.domain || "---"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500">Port</dt>
+            <dd className="text-zinc-300">{app.port || "---"}</dd>
+          </div>
+          {app.branch && (
+            <div>
+              <dt className="text-xs text-zinc-500">Branch</dt>
+              <dd className="text-zinc-300">{app.branch}</dd>
+            </div>
+          )}
+          {app.replicas != null && (
+            <div>
+              <dt className="text-xs text-zinc-500">Replicas</dt>
+              <dd className="text-zinc-300">{app.replicas}</dd>
+            </div>
+          )}
+          {app.deploy_strategy && (
+            <div>
+              <dt className="text-xs text-zinc-500">Deploy Strategy</dt>
+              <dd className="text-zinc-300">{app.deploy_strategy}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+
+      {/* HTTP Health Check */}
+      {healthData?.http_health && (
+        <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-200">HTTP Health Check</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <p className="text-xs text-zinc-500">Status</p>
+              <StatusBadge status={healthData.http_health.healthy ? "healthy" : "unhealthy"} />
+            </div>
+            {healthData.http_health.status_code != null && (
+              <div>
+                <p className="text-xs text-zinc-500">HTTP Code</p>
+                <p className="font-mono text-sm text-zinc-200">{healthData.http_health.status_code}</p>
+              </div>
+            )}
+            {healthData.http_health.response_time_ms != null && (
+              <div>
+                <p className="text-xs text-zinc-500">Response Time</p>
+                <p className="font-mono text-sm text-zinc-200">{healthData.http_health.response_time_ms.toFixed(0)}ms</p>
+              </div>
+            )}
+            {healthData.http_health.error && (
+              <div className="col-span-full">
+                <p className="text-xs text-zinc-500">Error</p>
+                <p className="text-sm text-red-400">{healthData.http_health.error}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -221,7 +441,7 @@ function LogsTab({ appName }: { appName: string }) {
       </div>
 
       <div
-        className="h-[480px] overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950 p-4"
+        className="h-[calc(100vh-340px)] min-h-[300px] overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950 p-4"
         aria-label="Application logs"
       >
         {live ? (
@@ -349,7 +569,7 @@ function EnvTab({ appName }: { appName: string }) {
   for (const v of userVars) {
     unified.push({
       key: v.key,
-      value: v.value ?? "••••••••",
+      value: v.value ?? "--------",
       source: "override",
     });
   }
@@ -582,7 +802,7 @@ function DeploymentsTab({ appName }: { appName: string }) {
   function getRef(dep: { commit_hash?: string; image_used?: string }): string {
     if (dep.commit_hash) return dep.commit_hash.slice(0, 8);
     if (dep.image_used) return dep.image_used;
-    return "—";
+    return "---";
   }
 
   function handleRollback(depId: number) {
@@ -643,7 +863,7 @@ function DeploymentsTab({ appName }: { appName: string }) {
                   {formatDate(dep.started_at)}
                 </td>
                 <td className="px-4 py-3 text-zinc-400">
-                  {dep.finished_at ? formatDate(dep.finished_at) : "—"}
+                  {dep.finished_at ? formatDate(dep.finished_at) : "---"}
                 </td>
                 <td className="px-4 py-3">
                   {dep.status === "success" && idx > 0 ? (
@@ -676,132 +896,340 @@ function DeploymentsTab({ appName }: { appName: string }) {
   );
 }
 
-// ─── Health Tab ──────────────────────────────────────────────────────────────
+// ─── Settings Tab ────────────────────────────────────────────────────────────
 
-function HealthTab({ appName }: { appName: string }) {
-  const { data, isLoading, refetch, isFetching } = useAppHealth(appName);
+function SettingsTab({ app }: { app: App }) {
+  const updateApp = useUpdateApp();
+  const destroyApp = useDestroyApp();
+  const navigate = useNavigate();
+  const toast = useToast();
+
+  const [form, setForm] = useState<UpdateAppInput>({
+    domain: app.domain ?? "",
+    port: app.port ?? 3000,
+    git_repo: app.git_repo ?? "",
+    branch: app.branch ?? "main",
+    image: app.image ?? "",
+    cpu_limit: app.cpu_limit ?? "",
+    memory_limit: app.memory_limit ?? "",
+    health_check_url: app.health_check_url ?? "",
+    health_check_interval: app.health_check_interval,
+    replicas: app.replicas,
+    deploy_strategy: app.deploy_strategy ?? "",
+  });
+
+  const [showDanger, setShowDanger] = useState(false);
+  const [destroyConfirm, setDestroyConfirm] = useState("");
+
+  const isTemplate = app.app_type?.startsWith("template:");
+
+  // Dirty detection
+  const isDirty =
+    form.domain !== (app.domain ?? "") ||
+    form.port !== (app.port ?? 3000) ||
+    form.git_repo !== (app.git_repo ?? "") ||
+    form.branch !== (app.branch ?? "main") ||
+    form.image !== (app.image ?? "") ||
+    form.cpu_limit !== (app.cpu_limit ?? "") ||
+    form.memory_limit !== (app.memory_limit ?? "") ||
+    form.health_check_url !== (app.health_check_url ?? "") ||
+    form.health_check_interval !== app.health_check_interval ||
+    form.replicas !== app.replicas ||
+    form.deploy_strategy !== (app.deploy_strategy ?? "");
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    const { name, value } = e.target;
+    const numericFields = ["port", "health_check_interval", "replicas"];
+    setForm((prev) => ({
+      ...prev,
+      [name]: numericFields.includes(name)
+        ? value === ""
+          ? undefined
+          : Number(value)
+        : value,
+    }));
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await updateApp.mutateAsync({ name: app.name, input: form });
+      toast.success("App configuration updated.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update app.");
+    }
+  }
+
+  async function handleDestroy() {
+    if (destroyConfirm !== app.name) return;
+    try {
+      await destroyApp.mutateAsync(app.name);
+      toast.success(`App "${app.name}" destroyed.`);
+      void navigate("/apps");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Destroy failed.");
+    }
+  }
+
+  const inputClass =
+    "w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none";
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-400">
-          Health checks run on-demand over SSH.
-        </p>
-        <button
-          onClick={() => void refetch()}
-          disabled={isFetching}
-          className="flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
-        >
-          <RefreshCw
-            size={12}
-            className={isFetching ? "animate-spin" : ""}
-            aria-hidden="true"
-          />
-          {isLoading || isFetching ? "Checking..." : "Check Health"}
-        </button>
-      </div>
+    <div className="space-y-6">
+      <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
 
-      {!data && !isLoading && !isFetching ? (
-        <p className="py-10 text-center text-sm text-zinc-500">
-          Click &quot;Check Health&quot; to query real container state from the server.
-        </p>
-      ) : isLoading || isFetching ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 size={20} className="animate-spin text-zinc-500" aria-label="Checking health" />
-        </div>
-      ) : data ? (
-        <>
-          {/* Status summary */}
-          <div className="flex items-center gap-4 rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
-            <div>
-              <p className="mb-1 text-xs text-zinc-400">Actual Status</p>
-              <StatusBadge status={data.actual_status} />
-            </div>
-            {data.status_mismatch && (
-              <p className="ml-4 text-xs text-amber-400">
-                DB was &quot;{data.db_status}&quot; — updated to match actual state.
-              </p>
+      <form onSubmit={handleSave} className="space-y-6" noValidate>
+        {/* Save button */}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={!isDirty || updateApp.isPending}
+            className={[
+              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50",
+              isDirty
+                ? "bg-orange-600 hover:bg-orange-500"
+                : "cursor-not-allowed bg-zinc-600",
+            ].join(" ")}
+          >
+            {updateApp.isPending && (
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
             )}
-          </div>
+            Save Changes
+          </button>
+        </div>
 
-          {/* Container table */}
-          {data.containers.length === 0 ? (
-            <p className="py-6 text-center text-sm text-zinc-500">
-              No containers found. The app may not be deployed.
-            </p>
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-zinc-700">
-              <table className="w-full text-sm" role="table">
-                <thead>
-                  <tr className="border-b border-zinc-700 bg-zinc-800/60">
-                    {["Container", "State", "Status", "Healthcheck", "Image"].map((h) => (
-                      <th
-                        key={h}
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-700/40">
-                  {data.containers.map((c) => (
-                    <tr key={c.name} className="bg-zinc-800/30 hover:bg-zinc-800/60">
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-200">{c.name}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={c.state} />
-                      </td>
-                      <td className="px-4 py-3 text-xs text-zinc-400">{c.status}</td>
-                      <td className="px-4 py-3">
-                        {c.health ? (
-                          <StatusBadge status={c.health} />
-                        ) : (
-                          <span className="text-xs text-zinc-500">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-zinc-500">
-                        {c.image || "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* General */}
+        <fieldset className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <legend className="px-2 text-sm font-semibold text-zinc-200">General</legend>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="settings-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Domain
+              </label>
+              <input
+                id="settings-domain"
+                name="domain"
+                type="text"
+                value={form.domain ?? ""}
+                onChange={handleChange}
+                placeholder="app.example.com"
+                className={inputClass}
+              />
             </div>
-          )}
+            <div>
+              <label htmlFor="settings-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Port
+              </label>
+              <input
+                id="settings-port"
+                name="port"
+                type="number"
+                min={1}
+                max={65535}
+                value={form.port ?? ""}
+                onChange={handleChange}
+                className={inputClass}
+              />
+            </div>
+          </div>
+        </fieldset>
 
-          {/* HTTP Health Check */}
-          {data?.http_health && (
-            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-200">HTTP Health Check</h3>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div>
-                  <p className="text-xs text-zinc-500">Status</p>
-                  <StatusBadge status={data.http_health.healthy ? "healthy" : "unhealthy"} />
-                </div>
-                {data.http_health.status_code != null && (
-                  <div>
-                    <p className="text-xs text-zinc-500">HTTP Code</p>
-                    <p className="font-mono text-sm text-zinc-200">{data.http_health.status_code}</p>
-                  </div>
-                )}
-                {data.http_health.response_time_ms != null && (
-                  <div>
-                    <p className="text-xs text-zinc-500">Response Time</p>
-                    <p className="font-mono text-sm text-zinc-200">{data.http_health.response_time_ms.toFixed(0)}ms</p>
-                  </div>
-                )}
-                {data.http_health.error && (
-                  <div className="col-span-full">
-                    <p className="text-xs text-zinc-500">Error</p>
-                    <p className="text-sm text-red-400">{data.http_health.error}</p>
-                  </div>
-                )}
+        {/* Source (hidden for templates) */}
+        {!isTemplate && (
+          <fieldset className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+            <legend className="px-2 text-sm font-semibold text-zinc-200">Source</legend>
+            <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="settings-git-repo" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Git Repository
+                </label>
+                <input
+                  id="settings-git-repo"
+                  name="git_repo"
+                  type="text"
+                  value={form.git_repo ?? ""}
+                  onChange={handleChange}
+                  placeholder="https://github.com/user/repo.git"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="settings-branch" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Branch
+                </label>
+                <input
+                  id="settings-branch"
+                  name="branch"
+                  type="text"
+                  value={form.branch ?? ""}
+                  onChange={handleChange}
+                  placeholder="main"
+                  className={inputClass}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="settings-image" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Docker Image
+                </label>
+                <input
+                  id="settings-image"
+                  name="image"
+                  type="text"
+                  value={form.image ?? ""}
+                  onChange={handleChange}
+                  placeholder="nginx:latest"
+                  className={inputClass}
+                />
               </div>
             </div>
-          )}
-        </>
-      ) : null}
+          </fieldset>
+        )}
+
+        {/* Resources */}
+        <fieldset className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <legend className="px-2 text-sm font-semibold text-zinc-200">Resources</legend>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <label htmlFor="settings-cpu-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                CPU Limit
+              </label>
+              <input
+                id="settings-cpu-limit"
+                name="cpu_limit"
+                type="text"
+                value={form.cpu_limit ?? ""}
+                onChange={handleChange}
+                placeholder="0.5"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="settings-memory-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Memory Limit
+              </label>
+              <input
+                id="settings-memory-limit"
+                name="memory_limit"
+                type="text"
+                value={form.memory_limit ?? ""}
+                onChange={handleChange}
+                placeholder="512M"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="settings-replicas" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Replicas
+              </label>
+              <input
+                id="settings-replicas"
+                name="replicas"
+                type="number"
+                min={1}
+                value={form.replicas ?? ""}
+                onChange={handleChange}
+                placeholder="1"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="settings-deploy-strategy" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Deploy Strategy
+              </label>
+              <select
+                id="settings-deploy-strategy"
+                name="deploy_strategy"
+                value={form.deploy_strategy ?? ""}
+                onChange={handleChange}
+                className={inputClass}
+              >
+                <option value="">Default</option>
+                <option value="recreate">Recreate</option>
+                <option value="rolling">Rolling</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        {/* Health Check */}
+        <fieldset className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
+          <legend className="px-2 text-sm font-semibold text-zinc-200">Health Check</legend>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="settings-health-check-url" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                URL
+              </label>
+              <input
+                id="settings-health-check-url"
+                name="health_check_url"
+                type="text"
+                value={form.health_check_url ?? ""}
+                onChange={handleChange}
+                placeholder="https://app.example.com/health"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="settings-health-check-interval" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Interval (seconds)
+              </label>
+              <input
+                id="settings-health-check-interval"
+                name="health_check_interval"
+                type="number"
+                min={5}
+                value={form.health_check_interval ?? ""}
+                onChange={handleChange}
+                placeholder="30"
+                className={inputClass}
+              />
+            </div>
+          </div>
+        </fieldset>
+      </form>
+
+      {/* Danger Zone */}
+      <div className="rounded-lg border border-red-500/30 bg-zinc-800/50">
+        <button
+          onClick={() => setShowDanger(!showDanger)}
+          className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/5"
+        >
+          Danger Zone
+          {showDanger ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
+        {showDanger && (
+          <div className="border-t border-red-500/20 px-4 py-4">
+            <p className="mb-3 text-sm text-zinc-400">
+              Permanently destroy this app, its containers, volumes, and proxy routes. This action cannot be undone.
+            </p>
+            <div className="mb-3">
+              <label htmlFor="settings-destroy-confirm" className="mb-1.5 block text-xs font-medium text-zinc-400">
+                Type <span className="font-mono text-red-400">{app.name}</span> to confirm
+              </label>
+              <input
+                id="settings-destroy-confirm"
+                type="text"
+                value={destroyConfirm}
+                onChange={(e) => setDestroyConfirm(e.target.value)}
+                placeholder={app.name}
+                className="w-full rounded-lg border border-red-500/30 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-red-500 focus:ring-1 focus:ring-red-500 focus-visible:outline-none sm:w-80"
+              />
+            </div>
+            <button
+              onClick={handleDestroy}
+              disabled={destroyConfirm !== app.name || destroyApp.isPending}
+              className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 disabled:opacity-50"
+            >
+              {destroyApp.isPending ? (
+                <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 size={14} aria-hidden="true" />
+              )}
+              Destroy App
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -820,29 +1248,32 @@ export default function AppDetail() {
   const restartApp = useRestartApp();
   const stopApp = useStopApp();
   const destroyApp = useDestroyApp();
-  const updateApp = useUpdateApp();
   const toast = useToast();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("logs");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [activeDeploymentId, setActiveDeploymentId] = useState<string | null>(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState<UpdateAppInput>({
-    domain: "",
-    port: 3000,
-    git_repo: "",
-    branch: "",
-    image: "",
-    cpu_limit: "",
-    memory_limit: "",
-    health_check_url: "",
-    health_check_interval: undefined,
-  });
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const stream = useDeploymentStream(
     activeDeploymentId ? decodedName : null,
     activeDeploymentId,
   );
+
+  // Outside-click handler for kebab menu
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      setShowMenu(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showMenu, handleClickOutside]);
 
   async function handleDeploy() {
     setActionPending("deploy");
@@ -884,6 +1315,7 @@ export default function AppDetail() {
 
   async function handleDestroy() {
     if (!window.confirm(`Destroy app "${decodedName}"? This cannot be undone.`)) return;
+    setShowMenu(false);
     setActionPending("destroy");
     try {
       await destroyApp.mutateAsync(decodedName);
@@ -892,46 +1324,6 @@ export default function AppDetail() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Destroy failed.");
       setActionPending(null);
-    }
-  }
-
-  function openEditModal() {
-    if (!app) return;
-    setEditForm({
-      domain: app.domain ?? "",
-      port: app.port ?? 3000,
-      git_repo: app.git_repo ?? "",
-      branch: app.branch ?? "main",
-      image: app.image ?? "",
-      cpu_limit: app.cpu_limit ?? "",
-      memory_limit: app.memory_limit ?? "",
-      health_check_url: app.health_check_url ?? "",
-      health_check_interval: app.health_check_interval,
-    });
-    setShowEditModal(true);
-  }
-
-  function handleEditChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
-    const { name, value } = e.target;
-    const numericFields = ["port", "health_check_interval"];
-    setEditForm((prev) => ({
-      ...prev,
-      [name]: numericFields.includes(name)
-        ? value === ""
-          ? undefined
-          : Number(value)
-        : value,
-    }));
-  }
-
-  async function handleEditSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      await updateApp.mutateAsync({ name: decodedName, input: editForm });
-      toast.success("App configuration updated.");
-      setShowEditModal(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update app.");
     }
   }
 
@@ -957,62 +1349,70 @@ export default function AppDetail() {
           <div>
             <h1 className="text-2xl font-bold text-zinc-100">{decodedName}</h1>
             {app && (
-              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-zinc-400">
-                <span className="flex items-center gap-1">
-                  <Server size={11} aria-hidden="true" />
-                  {app.server_name}
-                </span>
-                {app.domains && Object.keys(app.domains).length > 1 ? (
-                  Object.entries(app.domains).map(([svc, d]) => (
-                    <span key={svc} className="flex items-center gap-1">
+              <div className="mt-1 space-y-0.5 text-xs text-zinc-400">
+                {/* Line 1: Status + Server */}
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={app.status} />
+                  <span className="flex items-center gap-1">
+                    <Server size={11} aria-hidden="true" />
+                    {app.server_name}
+                  </span>
+                </div>
+                {/* Line 2: Domain(s) + Port */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {app.domains && Object.keys(app.domains).length > 1 ? (
+                    Object.entries(app.domains).map(([svc, d]) => (
+                      <a
+                        key={svc}
+                        href={`https://${d}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-zinc-300 hover:text-orange-400"
+                      >
+                        <Globe size={11} aria-hidden="true" />
+                        <span className="text-zinc-500">{svc}:</span>
+                        {d}
+                        <ExternalLink size={9} aria-hidden="true" />
+                      </a>
+                    ))
+                  ) : app.domain ? (
+                    <a
+                      href={`https://${app.domain}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-zinc-300 hover:text-orange-400"
+                    >
                       <Globe size={11} aria-hidden="true" />
-                      <span className="text-zinc-500">{svc}:</span>
-                      {d}
+                      {app.domain}
+                      <ExternalLink size={9} aria-hidden="true" />
+                    </a>
+                  ) : null}
+                  {app.port && (
+                    <span>:{app.port}</span>
+                  )}
+                </div>
+                {/* Line 3: App type + Branch */}
+                <div className="flex items-center gap-3">
+                  {app.app_type && (
+                    <span className="rounded bg-zinc-700 px-1.5 py-0.5 font-mono text-[11px] text-zinc-300">
+                      {app.app_type}
                     </span>
-                  ))
-                ) : app.domain ? (
-                  <span className="flex items-center gap-1">
-                    <Globe size={11} aria-hidden="true" />
-                    {app.domain}
-                  </span>
-                ) : null}
-                {app.port && (
-                  <span>:{app.port}</span>
-                )}
-                {app.app_type && (
-                  <span className="flex items-center gap-1">
-                    <Settings size={11} aria-hidden="true" />
-                    {app.app_type}
-                  </span>
-                )}
-                {app.branch && (
-                  <span className="flex items-center gap-1">
-                    <GitBranch size={11} aria-hidden="true" />
-                    {app.branch}
-                  </span>
-                )}
-                {app.cpu_limit && (
-                  <span className="text-xs text-zinc-400">CPU: {app.cpu_limit}</span>
-                )}
-                {app.memory_limit && (
-                  <span className="text-xs text-zinc-400">Mem: {app.memory_limit}</span>
-                )}
+                  )}
+                  {app.branch && (
+                    <span className="flex items-center gap-1">
+                      <GitBranch size={11} aria-hidden="true" />
+                      {app.branch}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
-          {app && <StatusBadge status={app.status} />}
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — grouped */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={openEditModal}
-            disabled={!!actionPending}
-            className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
-          >
-            <Pencil size={14} aria-hidden="true" />
-            Edit
-          </button>
+          {/* Deploy CTA */}
           <button
             onClick={handleDeploy}
             disabled={!!actionPending}
@@ -1025,6 +1425,7 @@ export default function AppDetail() {
             )}
             Deploy
           </button>
+          {/* Restart */}
           <button
             onClick={handleRestart}
             disabled={!!actionPending}
@@ -1037,6 +1438,7 @@ export default function AppDetail() {
             )}
             Restart
           </button>
+          {/* Stop */}
           <button
             onClick={handleStop}
             disabled={!!actionPending}
@@ -1049,18 +1451,33 @@ export default function AppDetail() {
             )}
             Stop
           </button>
-          <button
-            onClick={handleDestroy}
-            disabled={!!actionPending}
-            className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 disabled:opacity-50"
-          >
-            {actionPending === "destroy" ? (
-              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-            ) : (
-              <Trash2 size={14} aria-hidden="true" />
+          {/* Kebab menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              disabled={!!actionPending}
+              className="flex items-center justify-center rounded-lg border border-zinc-600 bg-zinc-700 p-2 text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
+              aria-label="More actions"
+            >
+              <MoreVertical size={16} aria-hidden="true" />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-zinc-600 bg-zinc-800 py-1 shadow-xl">
+                <button
+                  onClick={handleDestroy}
+                  disabled={!!actionPending}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                >
+                  {actionPending === "destroy" ? (
+                    <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Trash2 size={14} aria-hidden="true" />
+                  )}
+                  Destroy App
+                </button>
+              </div>
             )}
-            Destroy
-          </button>
+          </div>
         </div>
       </div>
 
@@ -1072,6 +1489,13 @@ export default function AppDetail() {
           aria-label="App details"
           className="flex border-b border-zinc-700"
         >
+          <TabButton
+            id="overview"
+            label="Overview"
+            icon={<Activity size={14} aria-hidden="true" />}
+            isActive={activeTab === "overview"}
+            onClick={setActiveTab}
+          />
           <TabButton
             id="logs"
             label="Logs"
@@ -1094,16 +1518,24 @@ export default function AppDetail() {
             onClick={setActiveTab}
           />
           <TabButton
-            id="health"
-            label="Health"
-            icon={<Activity size={14} aria-hidden="true" />}
-            isActive={activeTab === "health"}
+            id="settings"
+            label="Settings"
+            icon={<Settings size={14} aria-hidden="true" />}
+            isActive={activeTab === "settings"}
             onClick={setActiveTab}
           />
         </div>
 
         {/* Tab panels */}
         <div className="p-5">
+          <div
+            id="tabpanel-overview"
+            role="tabpanel"
+            aria-label="Overview"
+            hidden={activeTab !== "overview"}
+          >
+            {activeTab === "overview" && app && <OverviewTab app={app} />}
+          </div>
           <div
             id="tabpanel-logs"
             role="tabpanel"
@@ -1142,181 +1574,15 @@ export default function AppDetail() {
             )}
           </div>
           <div
-            id="tabpanel-health"
+            id="tabpanel-settings"
             role="tabpanel"
-            aria-label="Health"
-            hidden={activeTab !== "health"}
+            aria-label="Settings"
+            hidden={activeTab !== "settings"}
           >
-            {activeTab === "health" && <HealthTab appName={decodedName} />}
+            {activeTab === "settings" && app && <SettingsTab app={app} />}
           </div>
         </div>
       </div>
-
-
-      {/* Edit App Modal */}
-      {showEditModal && (
-        <Modal title="Edit App" onClose={() => setShowEditModal(false)}>
-          <form onSubmit={handleEditSubmit} className="space-y-4" noValidate>
-            <div>
-              <label htmlFor="edit-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Domain
-              </label>
-              <input
-                id="edit-domain"
-                name="domain"
-                type="text"
-                value={editForm.domain ?? ""}
-                onChange={handleEditChange}
-                placeholder="app.example.com"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="edit-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Port
-              </label>
-              <input
-                id="edit-port"
-                name="port"
-                type="number"
-                min={1}
-                max={65535}
-                value={editForm.port ?? ""}
-                onChange={handleEditChange}
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="edit-git-repo" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Git Repository
-              </label>
-              <input
-                id="edit-git-repo"
-                name="git_repo"
-                type="text"
-                value={editForm.git_repo ?? ""}
-                onChange={handleEditChange}
-                placeholder="https://github.com/user/repo.git"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="edit-branch" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Branch
-              </label>
-              <input
-                id="edit-branch"
-                name="branch"
-                type="text"
-                value={editForm.branch ?? ""}
-                onChange={handleEditChange}
-                placeholder="main"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="edit-image" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Docker Image
-              </label>
-              <input
-                id="edit-image"
-                name="image"
-                type="text"
-                value={editForm.image ?? ""}
-                onChange={handleEditChange}
-                placeholder="nginx:latest"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="edit-cpu-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                  CPU Limit
-                </label>
-                <input
-                  id="edit-cpu-limit"
-                  name="cpu_limit"
-                  type="text"
-                  value={editForm.cpu_limit ?? ""}
-                  onChange={handleEditChange}
-                  placeholder="0.5"
-                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-memory-limit" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                  Memory Limit
-                </label>
-                <input
-                  id="edit-memory-limit"
-                  name="memory_limit"
-                  type="text"
-                  value={editForm.memory_limit ?? ""}
-                  onChange={handleEditChange}
-                  placeholder="512M"
-                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="edit-health-check-url" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Health Check URL
-              </label>
-              <input
-                id="edit-health-check-url"
-                name="health_check_url"
-                type="text"
-                value={editForm.health_check_url ?? ""}
-                onChange={handleEditChange}
-                placeholder="https://app.example.com/health"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="edit-health-check-interval" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Health Check Interval (seconds)
-              </label>
-              <input
-                id="edit-health-check-interval"
-                name="health_check_interval"
-                type="number"
-                min={5}
-                value={editForm.health_check_interval ?? ""}
-                onChange={handleEditChange}
-                placeholder="30"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowEditModal(false)}
-                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={updateApp.isPending}
-                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
-              >
-                {updateApp.isPending && (
-                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
-                )}
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }

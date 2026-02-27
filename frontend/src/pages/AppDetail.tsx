@@ -268,6 +268,7 @@ function EnvTab({ appName }: { appName: string }) {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editOriginal, setEditOriginal] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
 
   async function handleAdd(e: React.FormEvent) {
@@ -305,11 +306,17 @@ function EnvTab({ appName }: { appName: string }) {
   function startEdit(key: string, value: string) {
     setEditingKey(key);
     setEditValue(value);
+    setEditOriginal(value);
     setTimeout(() => editRef.current?.focus(), 0);
   }
 
   async function saveEdit() {
     if (!editingKey) return;
+    // Skip save if value unchanged — avoids accidentally promoting compose vars to overrides
+    if (editValue === editOriginal) {
+      setEditingKey(null);
+      return;
+    }
     try {
       await setEnv.mutateAsync({
         name: appName,

@@ -56,6 +56,54 @@ def _apply_migrations(engine: Engine) -> None:
                 conn.rollback()
 
 
+def _backfill_template_dbs() -> None:
+    """Create child DB records for existing template apps that lack them."""
+    from cli.commands.db import DB_TEMPLATES
+    from cli.core.app_templates import APP_TEMPLATES
+    from cli.models.app import App
+
+    session = _get_session_factory()()
+    try:
+        template_apps = session.query(App).filter(App.app_type.like("template:%")).all()
+        for app in template_apps:
+            tmpl_name = app.app_type.split(":", 1)[1]
+            tmpl = APP_TEMPLATES.get(tmpl_name)
+            if not tmpl:
+                continue
+            db_services: dict[str, str] = tmpl.get("db_services", {})
+            if not db_services:
+                continue
+            # Skip if child records already exist
+            existing = session.query(App).filter(App.parent_app_id == app.id).count()
+            if existing:
+                continue
+            for suffix, db_type in db_services.items():
+                db_port = DB_TEMPLATES.get(db_type, {}).get("port", 0)
+                child_name = f"{app.name}-{suffix}"
+                # Avoid duplicates by name+server
+                dup = (
+                    session.query(App)
+                    .filter(App.name == child_name, App.server_id == app.server_id)
+                    .count()
+                )
+                if dup:
+                    continue
+                child = App(
+                    name=child_name,
+                    server_id=app.server_id,
+                    port=db_port,
+                    app_type=f"db:{db_type}",
+                    status="running",
+                    parent_app_id=app.id,
+                )
+                session.add(child)
+        session.commit()
+    except Exception:
+        session.rollback()
+    finally:
+        session.close()
+
+
 def init_db() -> None:
     """Create all tables."""
     # Import models so they register with Base metadata
@@ -64,6 +112,7 @@ def init_db() -> None:
     engine = _get_engine()
     Base.metadata.create_all(engine)
     _apply_migrations(engine)
+    _backfill_template_dbs()
 
 
 @contextmanager

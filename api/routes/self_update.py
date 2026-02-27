@@ -1,4 +1,7 @@
-"""GitHub webhook receiver for self-updating the infrakt container."""
+"""GitHub webhook receiver for self-updating the infrakt container.
+
+Uses a sidecar container pattern to avoid the restart-from-within deadlock.
+"""
 
 import hashlib
 import hmac

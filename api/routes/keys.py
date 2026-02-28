@@ -1,6 +1,10 @@
 """SSH key management API routes."""
 
-from fastapi import APIRouter, HTTPException
+import re
+import tempfile
+from pathlib import Path
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from api.schemas import SSHKeyDeploy, SSHKeyGenerate, SSHKeyOut
 from cli.core.database import get_session, init_db
@@ -58,6 +62,55 @@ def create_key(body: SSHKeyGenerate) -> SSHKeyOut:
     with get_session() as session:
         ssh_key = SSHKey(
             name=body.name,
+            fingerprint=fingerprint,
+            key_type="ed25519",
+            public_key=public_key,
+            key_path=str(private_path),
+        )
+        session.add(ssh_key)
+        session.flush()
+        return _ssh_key_out(ssh_key)
+
+
+@router.post("/upload", response_model=SSHKeyOut, status_code=201)
+async def upload_key(
+    name: str = Form(..., min_length=1, max_length=100),
+    file: UploadFile = File(...),
+) -> SSHKeyOut:
+    """Upload an existing SSH private key file."""
+    from cli.core.key_manager import import_key
+
+    init_db()
+
+    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$", name):
+        raise HTTPException(400, "Invalid key name")
+
+    with get_session() as session:
+        existing = session.query(SSHKey).filter(SSHKey.name == name).first()
+        if existing:
+            raise HTTPException(409, f"SSH key '{name}' already exists")
+
+    content = await file.read()
+    if len(content) > 10_240:
+        raise HTTPException(400, "Key file too large (max 10KB)")
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".key") as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+
+        private_path, fingerprint = import_key(name, tmp_path)
+        public_key = get_public_key(private_path)
+    except Exception as exc:
+        raise HTTPException(400, f"Invalid SSH key file: {exc}")
+    finally:
+        if tmp_path:
+            tmp_path.unlink(missing_ok=True)
+
+    with get_session() as session:
+        ssh_key = SSHKey(
+            name=name,
             fingerprint=fingerprint,
             key_type="ed25519",
             public_key=public_key,

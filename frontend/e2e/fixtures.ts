@@ -681,6 +681,24 @@ export async function mockApi(page: Page): Promise<void> {
     return route.fulfill({ json: { running: true, version: "2.7.6" } });
   });
 
+  // SSH Keys - upload (POST /api/keys/upload)
+  await page.route("**/api/keys/upload", async (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        status: 201,
+        json: {
+          id: 100,
+          name: "uploaded-key",
+          fingerprint: "SHA256:uploadedkey1234567890uploadedkey123456",
+          key_type: "ed25519",
+          public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... uploaded-key",
+          created_at: new Date().toISOString(),
+        },
+      });
+    }
+    return route.continue();
+  });
+
   // SSH Keys - deploy (name-based: POST /api/keys/<name>/deploy)
   await page.route(/\/api\/keys\/[^/]+\/deploy/, (route) => {
     if (route.request().method() === "POST") {

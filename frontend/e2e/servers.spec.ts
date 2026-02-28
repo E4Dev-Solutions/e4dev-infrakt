@@ -51,6 +51,19 @@ test.describe("Servers", () => {
     await expect(page).toHaveURL(/\/servers\/prod-1/);
   });
 
+  test("Add Server modal shows SSH Key dropdown with managed keys", async ({ page }) => {
+    await page.getByRole("button", { name: "Add Server" }).click();
+    const keySelect = page.getByLabel("SSH Key");
+    await expect(keySelect).toBeVisible();
+    // Should have "None (use SSH agent)" + managed keys from MOCK_SSH_KEYS (2 keys)
+    await expect(keySelect.locator("option")).toHaveCount(3);
+  });
+
+  test("Add Server modal has upload key button", async ({ page }) => {
+    await page.getByRole("button", { name: "Add Server" }).click();
+    await expect(page.getByTitle("Upload a key")).toBeVisible();
+  });
+
   test("delete server shows confirmation", async ({ page }) => {
     // Mock window.confirm
     page.on("dialog", (dialog) => dialog.accept());

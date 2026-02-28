@@ -107,6 +107,44 @@ test.describe("Settings — SSH Keys", () => {
     ).not.toBeVisible();
   });
 
+  // ─── Upload Key modal ──────────────────────────────────────────────────────
+
+  test("Upload Key button is visible", async ({ page }) => {
+    await expect(
+      page.getByRole("button", { name: "Upload Key" }),
+    ).toBeVisible();
+  });
+
+  test("Upload Key button opens modal", async ({ page }) => {
+    await page.getByRole("button", { name: "Upload Key" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Upload SSH Key" }),
+    ).toBeVisible();
+  });
+
+  test("Upload modal has name input and file input", async ({ page }) => {
+    await page.getByRole("button", { name: "Upload Key" }).click();
+    await expect(page.getByLabel(/Key Name/)).toBeVisible();
+    await expect(page.getByLabel(/Private Key File/)).toBeVisible();
+  });
+
+  test("Upload button is disabled when fields are empty", async ({ page }) => {
+    await page.getByRole("button", { name: "Upload Key" }).click();
+    const submitBtn = page.locator("form").getByRole("button", { name: "Upload" });
+    await expect(submitBtn).toBeDisabled();
+  });
+
+  test("Cancel closes Upload Key modal", async ({ page }) => {
+    await page.getByRole("button", { name: "Upload Key" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Upload SSH Key" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Upload SSH Key" }),
+    ).not.toBeVisible();
+  });
+
   // ─── Deploy to server ────────────────────────────────────────────────────────
 
   test("deploy button is visible for each key", async ({ page }) => {

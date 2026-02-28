@@ -10,8 +10,8 @@ test.describe("Servers", () => {
 
   test("lists servers from API", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
-    await expect(page.getByText(MOCK_SERVERS[0].name)).toBeVisible();
-    await expect(page.getByText(MOCK_SERVERS[1].name)).toBeVisible();
+    await expect(page.getByRole("link", { name: MOCK_SERVERS[0].name })).toBeVisible();
+    await expect(page.getByRole("link", { name: MOCK_SERVERS[1].name })).toBeVisible();
   });
 
   test("shows server connection details", async ({ page }) => {

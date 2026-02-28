@@ -558,6 +558,17 @@ export function useGenerateSSHKey() {
   });
 }
 
+export function useUploadSSHKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, file }: { name: string; file: File }) =>
+      keysApi.upload(name, file),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.keys });
+    },
+  });
+}
+
 export function useDeleteSSHKey() {
   const qc = useQueryClient();
   return useMutation({

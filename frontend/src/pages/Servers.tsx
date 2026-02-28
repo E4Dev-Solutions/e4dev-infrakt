@@ -6,12 +6,15 @@ import {
   Loader2,
   Server,
   Box,
+  Upload,
 } from "lucide-react";
 import {
   useServers,
   useAddServer,
   useDeleteServer,
   useServerStatus,
+  useSSHKeys,
+  useUploadSSHKey,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -153,6 +156,12 @@ export default function Servers() {
   const deleteServer = useDeleteServer();
   const toast = useToast();
 
+  const { data: sshKeys = [] } = useSSHKeys();
+  const uploadKey = useUploadSSHKey();
+  const [showUploadKeyInline, setShowUploadKeyInline] = useState(false);
+  const [inlineKeyName, setInlineKeyName] = useState("");
+  const [inlineKeyFile, setInlineKeyFile] = useState<File | null>(null);
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<CreateServerInput>(defaultForm);
   const [deletingName, setDeletingName] = useState<string | null>(null);
@@ -178,6 +187,20 @@ export default function Servers() {
       toast.error(
         err instanceof Error ? err.message : "Failed to add server."
       );
+    }
+  }
+
+  async function handleInlineUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!inlineKeyName.trim() || !inlineKeyFile) return;
+    try {
+      await uploadKey.mutateAsync({ name: inlineKeyName.trim(), file: inlineKeyFile });
+      setForm((prev) => ({ ...prev, ssh_key_path: `~/.infrakt/keys/${inlineKeyName.trim()}` }));
+      setShowUploadKeyInline(false);
+      setInlineKeyName("");
+      setInlineKeyFile(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to upload key.");
     }
   }
 
@@ -343,23 +366,38 @@ export default function Servers() {
               </div>
             </div>
 
-            {/* SSH Key Path */}
+            {/* SSH Key */}
             <div>
               <label
                 htmlFor="server-key"
                 className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
-                SSH Key Path
+                SSH Key
               </label>
-              <input
-                id="server-key"
-                name="ssh_key_path"
-                type="text"
-                value={form.ssh_key_path ?? ""}
-                onChange={handleChange}
-                placeholder="~/.ssh/id_rsa"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
+              <div className="flex gap-2">
+                <select
+                  id="server-key"
+                  name="ssh_key_path"
+                  value={form.ssh_key_path ?? ""}
+                  onChange={handleChange}
+                  className="flex-1 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                >
+                  <option value="">None (use SSH agent)</option>
+                  {sshKeys.map((k) => (
+                    <option key={k.id} value={`~/.infrakt/keys/${k.name}`}>
+                      {k.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowUploadKeyInline(true)}
+                  title="Upload a key"
+                  className="rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-600 hover:text-orange-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+                >
+                  <Upload size={16} aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             {/* Provider */}
@@ -403,6 +441,57 @@ export default function Servers() {
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                 )}
                 Add Server
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Upload SSH Key (inline from Add Server) */}
+      {showUploadKeyInline && (
+        <Modal title="Upload SSH Key" onClose={() => setShowUploadKeyInline(false)}>
+          <form onSubmit={(e) => void handleInlineUpload(e)} className="space-y-4">
+            <div>
+              <label htmlFor="inline-key-name" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Key Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="inline-key-name"
+                type="text"
+                required
+                value={inlineKeyName}
+                onChange={(e) => setInlineKeyName(e.target.value)}
+                placeholder="my-server-key"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="inline-key-file" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Private Key File <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="inline-key-file"
+                type="file"
+                required
+                onChange={(e) => setInlineKeyFile(e.target.files?.[0] ?? null)}
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-600 file:px-3 file:py-1 file:text-sm file:text-zinc-300 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowUploadKeyInline(false)}
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!inlineKeyName.trim() || !inlineKeyFile || uploadKey.isPending}
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
+              >
+                {uploadKey.isPending && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+                Upload
               </button>
             </div>
           </form>

@@ -615,6 +615,21 @@ export const webhooksApi = {
 export const keysApi = {
   list: (): Promise<SSHKey[]> => get("/keys"),
   generate: (name: string): Promise<SSHKey> => post("/keys", { name }),
+  upload: async (name: string, file: File): Promise<SSHKey> => {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("file", file);
+    const res = await fetch(`/api/keys/upload`, {
+      method: "POST",
+      headers: { ...(getApiKey() ? { "X-API-Key": getApiKey()! } : {}) },
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Upload failed (${res.status})`);
+    }
+    return res.json();
+  },
   delete: (name: string): Promise<void> => del(`/keys/${name}`),
   deploy: (name: string, serverName: string): Promise<{ message: string }> =>
     post(`/keys/${name}/deploy`, { server_name: serverName }),

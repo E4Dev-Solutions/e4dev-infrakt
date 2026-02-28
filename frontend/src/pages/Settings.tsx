@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff, Github, Link as LinkIcon } from "lucide-react";
+import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff, Github, Link as LinkIcon, Upload } from "lucide-react";
 import {
   useWebhooks,
   useCreateWebhook,
@@ -7,6 +7,7 @@ import {
   useTestWebhook,
   useSSHKeys,
   useGenerateSSHKey,
+  useUploadSSHKey,
   useDeleteSSHKey,
   useDeploySSHKey,
   useServers,
@@ -91,6 +92,11 @@ export default function Settings() {
   const deleteKey = useDeleteSSHKey();
   const deployKey = useDeploySSHKey();
 
+  const uploadKey = useUploadSSHKey();
+  const [showUploadKeyModal, setShowUploadKeyModal] = useState(false);
+  const [uploadKeyName, setUploadKeyName] = useState("");
+  const [uploadKeyFile, setUploadKeyFile] = useState<File | null>(null);
+
   const [showGenerateKeyModal, setShowGenerateKeyModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [deletingKeyName, setDeletingKeyName] = useState<string | null>(null);
@@ -127,6 +133,20 @@ export default function Settings() {
       setNewKeyName("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to generate key.");
+    }
+  }
+
+  async function handleUploadKey(e: React.FormEvent) {
+    e.preventDefault();
+    if (!uploadKeyName.trim() || !uploadKeyFile) return;
+    try {
+      await uploadKey.mutateAsync({ name: uploadKeyName.trim(), file: uploadKeyFile });
+      toast.success(`SSH key "${uploadKeyName.trim()}" uploaded.`);
+      setShowUploadKeyModal(false);
+      setUploadKeyName("");
+      setUploadKeyFile(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload key.");
     }
   }
 
@@ -327,13 +347,22 @@ export default function Settings() {
               Generate and manage SSH key pairs for server access. Deploy keys to servers to enable passwordless authentication.
             </p>
           </div>
-          <button
-            onClick={() => setShowGenerateKeyModal(true)}
-            className="flex shrink-0 items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
-          >
-            <Plus size={16} aria-hidden="true" />
-            Generate Key
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => setShowUploadKeyModal(true)}
+              className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+            >
+              <Upload size={16} aria-hidden="true" />
+              Upload Key
+            </button>
+            <button
+              onClick={() => setShowGenerateKeyModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+            >
+              <Plus size={16} aria-hidden="true" />
+              Generate Key
+            </button>
+          </div>
         </div>
 
         {keysLoading && (
@@ -807,6 +836,57 @@ export default function Settings() {
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                 )}
                 Generate
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Upload SSH Key Modal */}
+      {showUploadKeyModal && (
+        <Modal title="Upload SSH Key" onClose={() => setShowUploadKeyModal(false)}>
+          <form onSubmit={(e) => void handleUploadKey(e)} className="space-y-4">
+            <div>
+              <label htmlFor="upload-key-name" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Key Name <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="upload-key-name"
+                type="text"
+                required
+                value={uploadKeyName}
+                onChange={(e) => setUploadKeyName(e.target.value)}
+                placeholder="my-server-key"
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor="upload-key-file" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                Private Key File <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="upload-key-file"
+                type="file"
+                required
+                onChange={(e) => setUploadKeyFile(e.target.files?.[0] ?? null)}
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-600 file:px-3 file:py-1 file:text-sm file:text-zinc-300 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowUploadKeyModal(false)}
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!uploadKeyName.trim() || !uploadKeyFile || uploadKey.isPending}
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
+              >
+                {uploadKey.isPending && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+                Upload
               </button>
             </div>
           </form>

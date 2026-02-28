@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Integer, String, func
+from sqlalchemy import Boolean, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cli.core.database import Base
@@ -23,6 +23,7 @@ class Server(Base):
     user: Mapped[str] = mapped_column(String(100), default="root")
     ssh_key_path: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="inactive")
+    is_infrakt_host: Mapped[bool] = mapped_column(Boolean, default=False)
     provider: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime] = mapped_column(default=func.now(), onupdate=func.now())

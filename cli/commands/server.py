@@ -128,6 +128,29 @@ def provision(name: str) -> None:
     init_db()
     srv = _get_server(name)
 
+    # Wipe non-infrakT-host servers before provisioning
+    if not srv.is_infrakt_host:
+        typed = click.prompt(
+            f"All data on '{name}' will be destroyed. Type the server name to confirm",
+            default="",
+        )
+        if typed != name:
+            error("Server name does not match — aborting.")
+            raise SystemExit(1)
+        info(f"Wiping server '{name}' before provisioning...")
+        with _ssh_for_server(srv) as ssh:
+            from cli.core.provisioner import wipe_server
+
+            wipe_server(ssh)
+        # Clean local app records for this server
+        with get_session() as session:
+            s = session.query(Server).filter(Server.name == name).first()
+            if s:
+                for app in s.apps:
+                    session.delete(app)
+                s.status = "pending"
+        success(f"Server '{name}' wiped")
+
     with status_spinner(f"Provisioning {srv.name} ({srv.host})"):
         with _ssh_for_server(srv) as ssh:
             from cli.core.provisioner import provision_server

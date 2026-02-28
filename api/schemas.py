@@ -72,6 +72,7 @@ class ServerUpdate(BaseModel):
     port: int | None = Field(default=None, ge=1, le=65535)
     ssh_key_path: str | None = None
     provider: str | None = None
+    is_infrakt_host: bool | None = None
 
 
 class ServerOut(BaseModel):
@@ -87,6 +88,7 @@ class ServerOut(BaseModel):
     updated_at: datetime
     app_count: int = 0
     tags: list[str] = []
+    is_infrakt_host: bool = False
 
     model_config = {"from_attributes": True}
 

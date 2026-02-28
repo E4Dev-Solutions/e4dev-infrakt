@@ -51,6 +51,39 @@ PROVISION_STEPS = [
 ]
 
 
+WIPE_STEPS = [
+    (
+        "Stopping all Docker containers",
+        "docker stop $(docker ps -aq) 2>/dev/null || true",
+    ),
+    (
+        "Removing all Docker data",
+        "docker system prune -af --volumes 2>/dev/null || true",
+    ),
+    (
+        "Deleting /opt/infrakt",
+        "rm -rf /opt/infrakt",
+    ),
+]
+
+
+def wipe_server(
+    ssh: SSHClient,
+    on_step: Callable[[str, int, int], None] | None = None,
+) -> None:
+    """Wipe all Docker data and infrakt directories from a server.
+
+    Args:
+        ssh: Connected SSHClient instance.
+        on_step: Optional callback(step_name, index, total) for progress reporting.
+    """
+    total = len(WIPE_STEPS)
+    for idx, (step_name, command) in enumerate(WIPE_STEPS):
+        if on_step:
+            on_step(step_name, idx, total)
+        ssh.run(command, timeout=120)
+
+
 def _build_traefik_static_config(acme_email: str = "") -> str:
     """Build the Traefik static configuration YAML."""
     config: dict[str, object] = {

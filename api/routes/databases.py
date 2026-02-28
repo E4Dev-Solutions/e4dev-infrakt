@@ -21,6 +21,7 @@ from cli.core.backup import (
     list_backups,
     remove_backup_cron,
     restore_database,
+    upload_backup_to_s3,
 )
 from cli.core.database import get_session, init_db
 from cli.core.db_stats import get_database_stats
@@ -34,6 +35,25 @@ from cli.models.server import Server
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/databases", tags=["databases"])
+
+
+def _get_s3_config() -> dict | None:
+    """Return decrypted S3 config dict, or None if not configured."""
+    from cli.core.crypto import decrypt
+    from cli.models.s3_config import S3Config
+
+    with get_session() as session:
+        cfg = session.query(S3Config).first()
+        if not cfg:
+            return None
+        return {
+            "endpoint_url": cfg.endpoint_url,
+            "bucket": cfg.bucket,
+            "region": cfg.region,
+            "access_key": cfg.access_key,
+            "secret_key": decrypt(cfg.secret_key_encrypted),
+            "prefix": cfg.prefix,
+        }
 
 
 @router.get("", response_model=list[DatabaseOut])
@@ -167,10 +187,37 @@ def list_database_backups(name: str, server: str | None = None) -> list[BackupFi
     try:
         with ssh:
             backups = list_backups(ssh, db_app)
+            s3_cfg = _get_s3_config()
+            s3_files: list[dict] = []
+            if s3_cfg:
+                try:
+                    from cli.core.backup import list_s3_backups as _list_s3
+
+                    s3_files = _list_s3(
+                        ssh,
+                        s3_endpoint=s3_cfg["endpoint_url"],
+                        bucket=s3_cfg["bucket"],
+                        region=s3_cfg["region"],
+                        access_key=s3_cfg["access_key"],
+                        secret_key=s3_cfg["secret_key"],
+                        prefix=s3_cfg["prefix"],
+                        db_name=name,
+                    )
+                except Exception:
+                    pass
     except (SSHConnectionError, Exception):
         return []
 
-    return [BackupFileOut(**b) for b in backups]
+    local_names = {b["filename"] for b in backups}
+    s3_names = {b["filename"] for b in s3_files}
+    results: list[BackupFileOut] = []
+    for b in backups:
+        loc = "both" if b["filename"] in s3_names else "local"
+        results.append(BackupFileOut(**b, location=loc))
+    for b in s3_files:
+        if b["filename"] not in local_names:
+            results.append(BackupFileOut(**b, location="s3"))
+    return results
 
 
 @router.get("/{name}", response_model=DatabaseOut)
@@ -258,6 +305,22 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
 
     with ssh:
         remote_path = backup_database(ssh, db_app)
+        s3_cfg = _get_s3_config()
+        if s3_cfg:
+            try:
+                upload_backup_to_s3(
+                    ssh,
+                    local_path=remote_path,
+                    s3_endpoint=s3_cfg["endpoint_url"],
+                    bucket=s3_cfg["bucket"],
+                    region=s3_cfg["region"],
+                    access_key=s3_cfg["access_key"],
+                    secret_key=s3_cfg["secret_key"],
+                    prefix=s3_cfg["prefix"],
+                    db_name=name,
+                )
+            except Exception:
+                logger.warning("S3 upload failed for %s, local backup still available", name)
 
     filename = remote_path.rsplit("/", 1)[-1]
     fire_webhooks("backup.complete", {"database": name, "filename": filename})
@@ -285,6 +348,25 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
     remote_path = f"/opt/infrakt/backups/{body.filename}"
     try:
         with ssh:
+            # Check if file exists locally; if not, try downloading from S3
+            _, _, rc = ssh.run(f"test -f {shlex.quote(remote_path)}")
+            if rc != 0:
+                s3_cfg = _get_s3_config()
+                if not s3_cfg:
+                    raise SSHConnectionError(f"Backup file not found on server: {body.filename}")
+                from cli.core.backup import download_backup_from_s3
+
+                download_backup_from_s3(
+                    ssh,
+                    filename=body.filename,
+                    s3_endpoint=s3_cfg["endpoint_url"],
+                    bucket=s3_cfg["bucket"],
+                    region=s3_cfg["region"],
+                    access_key=s3_cfg["access_key"],
+                    secret_key=s3_cfg["secret_key"],
+                    prefix=s3_cfg["prefix"],
+                    db_name=name,
+                )
             restore_database(ssh, db_app, remote_path)
     except SSHConnectionError as exc:
         if "not found" in str(exc):
@@ -312,8 +394,17 @@ def schedule_backup_endpoint(
         ssh = SSHClient.from_server(srv)
         app_id = db_app.id
 
+    s3_cfg = _get_s3_config()
     with ssh:
-        install_backup_cron(ssh, db_app, body.cron_expression, body.retention_days)
+        install_backup_cron(
+            ssh, db_app, body.cron_expression, body.retention_days,
+            s3_endpoint=s3_cfg["endpoint_url"] if s3_cfg else None,
+            s3_bucket=s3_cfg["bucket"] if s3_cfg else None,
+            s3_region=s3_cfg["region"] if s3_cfg else None,
+            s3_access_key=s3_cfg["access_key"] if s3_cfg else None,
+            s3_secret_key=s3_cfg["secret_key"] if s3_cfg else None,
+            s3_prefix=s3_cfg.get("prefix", "") if s3_cfg else "",
+        )
 
     with get_session() as session:
         a = session.query(App).filter(App.id == app_id).first()

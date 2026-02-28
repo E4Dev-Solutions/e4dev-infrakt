@@ -307,6 +307,7 @@ class BackupFileOut(BaseModel):
     size: str
     size_bytes: int
     modified: str
+    location: str = "local"  # "local", "s3", or "both"
 
 
 class DatabaseRestore(BaseModel):

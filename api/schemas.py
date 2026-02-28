@@ -494,6 +494,15 @@ class SSHKeyOut(BaseModel):
 # ── GitHub ─────────────────────────────────────────────
 
 
+class S3ConfigSave(BaseModel):
+    endpoint_url: str = Field(..., min_length=1, max_length=500)
+    bucket: str = Field(..., min_length=1, max_length=200)
+    region: str = Field(..., max_length=50)
+    access_key: str = Field(..., min_length=1, max_length=200)
+    secret_key: str = Field(..., min_length=1, max_length=500)
+    prefix: str = Field(default="", max_length=200)
+
+
 class GitHubConnect(BaseModel):
     token: str = Field(..., min_length=1)
 

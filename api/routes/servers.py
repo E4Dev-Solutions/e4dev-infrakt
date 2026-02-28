@@ -190,7 +190,6 @@ async def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, s
         try:
             ssh = SSHClient(host=host, user=user, port=port, key_path=key_path)
             with ssh:
-
                 # Wipe non-infrakT-host servers first
                 if not is_infrakt_host:
 

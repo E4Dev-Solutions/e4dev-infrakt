@@ -45,6 +45,10 @@ PROVISION_STEPS = [
         "/opt/infrakt/traefik/letsencrypt /opt/infrakt/backups",
     ),
     (
+        "Installing awscli",
+        "pip3 install -q awscli 2>/dev/null || apt-get install -y -qq awscli 2>/dev/null || true",
+    ),
+    (
         "Creating Docker network",
         "docker network create infrakt 2>/dev/null || true",
     ),
@@ -52,6 +56,31 @@ PROVISION_STEPS = [
 
 
 WIPE_STEPS = [
+    # ── k3s / Rancher ────────────────────────────────────────────────────
+    (
+        "Uninstalling k3s (if present)",
+        "if [ -x /usr/local/bin/k3s-killall.sh ]; then /usr/local/bin/k3s-killall.sh; fi && "
+        "if [ -x /usr/local/bin/k3s-uninstall.sh ]; then /usr/local/bin/k3s-uninstall.sh; fi && "
+        "if [ -x /usr/local/bin/k3s-agent-uninstall.sh ]; then "
+        "/usr/local/bin/k3s-agent-uninstall.sh; fi || true",
+    ),
+    (
+        "Removing Rancher (if present)",
+        "docker rm -f $(docker ps -a --filter name=rancher -q) 2>/dev/null || true && "
+        "rm -rf /var/lib/rancher /etc/rancher 2>/dev/null || true",
+    ),
+    # ── Snap packages ────────────────────────────────────────────────────
+    (
+        "Removing snap packages (if present)",
+        "if command -v snap &>/dev/null; then "
+        "snap list 2>/dev/null | awk 'NR>1{print $1}' | "
+        "while read pkg; do snap remove --purge \"$pkg\" 2>/dev/null || true; done; "
+        "systemctl stop snapd 2>/dev/null || true; "
+        "apt-get purge -y -qq snapd 2>/dev/null || true; "
+        "rm -rf /snap /var/snap /var/lib/snapd ~/snap 2>/dev/null || true; "
+        "fi || true",
+    ),
+    # ── Docker ───────────────────────────────────────────────────────────
     (
         "Stopping all Docker containers",
         "docker stop $(docker ps -aq) 2>/dev/null || true",
@@ -60,6 +89,25 @@ WIPE_STEPS = [
         "Removing all Docker data",
         "docker system prune -af --volumes 2>/dev/null || true",
     ),
+    (
+        "Uninstalling Docker (full removal)",
+        "systemctl stop docker docker.socket containerd 2>/dev/null || true && "
+        "apt-get purge -y -qq docker-ce docker-ce-cli containerd.io "
+        "docker-buildx-plugin docker-compose-plugin docker.io 2>/dev/null || true && "
+        "rm -rf /var/lib/docker /var/lib/containerd /etc/docker 2>/dev/null || true",
+    ),
+    # ── Common services cleanup ──────────────────────────────────────────
+    (
+        "Stopping and removing common services",
+        "systemctl stop nginx apache2 caddy traefik haproxy 2>/dev/null || true && "
+        "apt-get purge -y -qq nginx* apache2* caddy 2>/dev/null || true",
+    ),
+    # ── Package cleanup ──────────────────────────────────────────────────
+    (
+        "Cleaning up unused packages",
+        "apt-get autoremove -y -qq && apt-get clean -qq",
+    ),
+    # ── infrakt directories ──────────────────────────────────────────────
     (
         "Deleting /opt/infrakt",
         "rm -rf /opt/infrakt",

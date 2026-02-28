@@ -348,6 +348,13 @@ if [[ -n "$API_KEY" ]]; then
 
     if [ "$REG_CODE" = "200" ] || [ "$REG_CODE" = "201" ]; then
         echo "    Server '${SERVER_NAME}' registered (host: ${DOCKER_BRIDGE_IP})"
+        # Mark as infrakT host to protect from wipe-on-provision
+        curl -s --max-time 10 \
+            -X PUT "${API_BASE}/api/servers/${SERVER_NAME}" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: ${API_KEY}" \
+            -d '{"is_infrakt_host": true}' >/dev/null 2>&1
+        echo "    Marked as infrakT host (protected from wipe)"
     elif [ "$REG_CODE" = "409" ]; then
         echo "    Server '${SERVER_NAME}' already registered"
     else

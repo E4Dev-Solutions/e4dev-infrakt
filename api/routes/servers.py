@@ -25,7 +25,7 @@ from api.schemas import (
 )
 from cli.core.database import get_session, init_db
 from cli.core.exceptions import SSHConnectionError
-from cli.core.provisioner import provision_server
+from cli.core.provisioner import provision_server, wipe_server
 from cli.core.ssh import SSHClient
 from cli.models.server import Server
 from cli.models.server_metric import ServerMetric
@@ -66,6 +66,7 @@ def list_servers(tag: str | None = None) -> list[ServerOut]:
                 updated_at=s.updated_at,
                 app_count=len(s.apps),
                 tags=[t.tag for t in s.tags],
+                is_infrakt_host=s.is_infrakt_host,
             )
             for s in servers
         ]
@@ -105,6 +106,7 @@ def add_server(body: ServerCreate) -> ServerOut:
             updated_at=srv.updated_at,
             app_count=0,
             tags=[],
+            is_infrakt_host=srv.is_infrakt_host,
         )
 
 
@@ -132,6 +134,8 @@ def update_server(name: str, body: ServerUpdate) -> ServerOut:
             srv.ssh_key_path = body.ssh_key_path
         if body.provider is not None:
             srv.provider = body.provider
+        if body.is_infrakt_host is not None:
+            srv.is_infrakt_host = body.is_infrakt_host
 
         session.flush()
 
@@ -148,6 +152,7 @@ def update_server(name: str, body: ServerUpdate) -> ServerOut:
             updated_at=srv.updated_at,
             app_count=len(srv.apps),
             tags=[t.tag for t in srv.tags],
+            is_infrakt_host=srv.is_infrakt_host,
         )
 
 
@@ -173,6 +178,7 @@ async def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, s
             raise HTTPException(404, f"Server '{name}' not found")
         srv.status = "provisioning"
         srv_id = srv.id
+        is_infrakt_host = srv.is_infrakt_host
         host, user, port, key_path = srv.host, srv.user, srv.port, srv.ssh_key_path
 
     # Use negative server ID to avoid collision with deployment IDs
@@ -184,6 +190,20 @@ async def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, s
         try:
             ssh = SSHClient(host=host, user=user, port=port, key_path=key_path)
             with ssh:
+                # Wipe non-infrakT-host servers first
+                if not is_infrakt_host:
+
+                    def _on_wipe_step(step_name: str, index: int, total: int) -> None:
+                        broadcaster.publish(prov_key, f"[wipe {index + 1}/{total}] {step_name}")
+
+                    wipe_server(ssh, on_step=_on_wipe_step)
+
+                    # Clean local app records
+                    with get_session() as session:
+                        s = session.query(Server).filter(Server.name == name).first()
+                        if s:
+                            for app in s.apps:
+                                session.delete(app)
 
                 def _on_step(step_name: str, index: int, total: int) -> None:
                     broadcaster.publish(prov_key, f"[{index + 1}/{total}] {step_name}")

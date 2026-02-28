@@ -39,6 +39,7 @@ export interface Server {
   updated_at: string;
   app_count: number;
   tags?: string[];
+  is_infrakt_host: boolean;
 }
 
 export interface ServerStatusData {

@@ -782,6 +782,8 @@ export default function ServerDetail() {
     lines: string[];
     status: string;
   } | null>(null);
+  const [showWipeConfirm, setShowWipeConfirm] = useState(false);
+  const [wipeConfirmText, setWipeConfirmText] = useState("");
   const provStream = useProvisionStream(decodedName, provisionKey);
 
   // Kebab menu
@@ -816,7 +818,19 @@ export default function ServerDetail() {
   }, [provStream.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleProvision() {
+    // Non-infrakT-host servers need wipe confirmation
+    if (server && !server.is_infrakt_host) {
+      setShowWipeConfirm(true);
+      setWipeConfirmText("");
+      return;
+    }
+    await doProvision();
+  }
+
+  async function doProvision() {
     try {
+      setShowWipeConfirm(false);
+      setWipeConfirmText("");
       setProvisionResult(null);
       const result = await provisionServer.mutateAsync(decodedName);
       setProvisionKey(result.provision_key);
@@ -853,6 +867,49 @@ export default function ServerDetail() {
   return (
     <div>
       <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
+
+      {/* Wipe confirmation modal */}
+      {showWipeConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-zinc-100">
+              Wipe & Provision Server
+            </h3>
+            <p className="mt-2 text-sm text-zinc-400">
+              All Docker containers, images, volumes, and app data on{" "}
+              <span className="font-semibold text-zinc-200">{decodedName}</span>{" "}
+              will be permanently deleted before reprovisioning.
+            </p>
+            <div className="mt-4">
+              <label className="block text-xs font-medium uppercase tracking-wider text-zinc-500 mb-1.5">
+                Type "{decodedName}" to confirm
+              </label>
+              <input
+                type="text"
+                value={wipeConfirmText}
+                onChange={(e) => setWipeConfirmText(e.target.value)}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500/60 focus:outline-none focus:ring-1 focus:ring-orange-500/40"
+                autoFocus
+              />
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setShowWipeConfirm(false)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void doProvision()}
+                disabled={wipeConfirmText !== decodedName}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Wipe & Provision
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Back link */}
       <Link

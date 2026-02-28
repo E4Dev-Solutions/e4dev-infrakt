@@ -326,3 +326,137 @@ def list_backups(
             }
         )
     return results
+
+
+# ---------------------------------------------------------------------------
+# S3 backup operations
+# ---------------------------------------------------------------------------
+
+
+def _write_aws_credentials(
+    ssh: SSHClient,
+    access_key: str,
+    secret_key: str,
+    region: str,
+) -> None:
+    """Write temporary AWS credentials/config files on the remote server."""
+    creds_content = (
+        f"[default]\naws_access_key_id = {access_key}\naws_secret_access_key = {secret_key}\n"
+    )
+    config_content = f"[default]\nregion = {region}\n"
+    ssh.upload_string(creds_content, "/tmp/.infrakt-aws-credentials")
+    ssh.upload_string(config_content, "/tmp/.infrakt-aws-config")
+    ssh.run("chmod 600 /tmp/.infrakt-aws-credentials /tmp/.infrakt-aws-config")
+
+
+def _cleanup_aws_credentials(ssh: SSHClient) -> None:
+    """Remove temporary AWS credential files."""
+    ssh.run("rm -f /tmp/.infrakt-aws-credentials /tmp/.infrakt-aws-config")
+
+
+def _aws_env_prefix() -> str:
+    """Return environment variable prefix for aws CLI with temp credentials."""
+    return (
+        "AWS_SHARED_CREDENTIALS_FILE=/tmp/.infrakt-aws-credentials "
+        "AWS_CONFIG_FILE=/tmp/.infrakt-aws-config "
+    )
+
+
+def upload_backup_to_s3(
+    ssh: SSHClient,
+    local_path: str,
+    s3_endpoint: str,
+    bucket: str,
+    region: str,
+    access_key: str,
+    secret_key: str,
+    prefix: str,
+    db_name: str,
+) -> None:
+    """Upload a backup file from the remote server to S3."""
+    _write_aws_credentials(ssh, access_key, secret_key, region)
+    try:
+        filename = local_path.rsplit("/", 1)[-1]
+        s3_key = f"{prefix}{db_name}/{filename}" if prefix else f"{db_name}/{filename}"
+        q_local = shlex.quote(local_path)
+        q_s3 = shlex.quote(f"s3://{bucket}/{s3_key}")
+        q_endpoint = shlex.quote(s3_endpoint)
+        cmd = f"{_aws_env_prefix()}aws s3 cp {q_local} {q_s3} --endpoint-url {q_endpoint}"
+        ssh.run_checked(cmd, timeout=300)
+    finally:
+        _cleanup_aws_credentials(ssh)
+
+
+def download_backup_from_s3(
+    ssh: SSHClient,
+    filename: str,
+    s3_endpoint: str,
+    bucket: str,
+    region: str,
+    access_key: str,
+    secret_key: str,
+    prefix: str,
+    db_name: str,
+    backup_dir: str = "/opt/infrakt/backups",
+) -> str:
+    """Download a backup file from S3 to the remote server. Returns the local path."""
+    _write_aws_credentials(ssh, access_key, secret_key, region)
+    try:
+        s3_key = f"{prefix}{db_name}/{filename}" if prefix else f"{db_name}/{filename}"
+        local_path = f"{backup_dir}/{filename}"
+        q_s3 = shlex.quote(f"s3://{bucket}/{s3_key}")
+        q_local = shlex.quote(local_path)
+        q_endpoint = shlex.quote(s3_endpoint)
+        ssh.run_checked(f"mkdir -p {shlex.quote(backup_dir)}")
+        cmd = f"{_aws_env_prefix()}aws s3 cp {q_s3} {q_local} --endpoint-url {q_endpoint}"
+        ssh.run_checked(cmd, timeout=300)
+    finally:
+        _cleanup_aws_credentials(ssh)
+    return local_path
+
+
+def list_s3_backups(
+    ssh: SSHClient,
+    s3_endpoint: str,
+    bucket: str,
+    region: str,
+    access_key: str,
+    secret_key: str,
+    prefix: str,
+    db_name: str,
+) -> list[dict[str, str | int]]:
+    """List backup files in S3 for a given database."""
+    _write_aws_credentials(ssh, access_key, secret_key, region)
+    try:
+        s3_prefix = f"{prefix}{db_name}/" if prefix else f"{db_name}/"
+        q_s3 = shlex.quote(f"s3://{bucket}/{s3_prefix}")
+        q_endpoint = shlex.quote(s3_endpoint)
+        cmd = f"{_aws_env_prefix()}aws s3 ls {q_s3} --endpoint-url {q_endpoint}"
+        stdout, _, rc = ssh.run(cmd, timeout=30)
+    finally:
+        _cleanup_aws_credentials(ssh)
+
+    if rc != 0 or not stdout.strip():
+        return []
+
+    results: list[dict[str, str | int]] = []
+    for line in stdout.strip().splitlines():
+        # Format: "2026-02-28 02:00:00    2516582 filename.sql.gz"
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        try:
+            date_str = f"{parts[0]} {parts[1]}"
+            size_bytes = int(parts[2])
+            fname = parts[3]
+        except (ValueError, IndexError):
+            continue
+        results.append(
+            {
+                "filename": fname,
+                "size": _human_size(size_bytes),
+                "size_bytes": size_bytes,
+                "modified": date_str,
+            }
+        )
+    return results

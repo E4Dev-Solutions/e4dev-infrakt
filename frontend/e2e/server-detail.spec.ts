@@ -235,3 +235,40 @@ test.describe("Server Detail", () => {
     ).toBeVisible();
   });
 });
+
+test.describe("Provision wipe confirmation", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApi(page);
+    await login(page);
+  });
+
+  test("shows wipe modal for non-infrakT-host server", async ({ page }) => {
+    await page.goto("/servers/staging");
+    await page.getByRole("button", { name: /provision/i }).click();
+    await expect(page.getByText("Wipe & Provision Server")).toBeVisible();
+    await expect(page.getByText('Type "staging" to confirm')).toBeVisible();
+  });
+
+  test("wipe confirm button is disabled until name typed", async ({ page }) => {
+    await page.goto("/servers/staging");
+    await page.getByRole("button", { name: /provision/i }).click();
+    const confirmBtn = page.getByRole("button", { name: "Wipe & Provision" });
+    await expect(confirmBtn).toBeDisabled();
+    await page.getByRole("textbox").fill("staging");
+    await expect(confirmBtn).toBeEnabled();
+  });
+
+  test("does NOT show wipe modal for infrakT host server", async ({ page }) => {
+    await page.goto("/servers/prod-1");
+    await page.getByRole("button", { name: /provision/i }).click();
+    await expect(page.getByText("Wipe & Provision Server")).not.toBeVisible();
+  });
+
+  test("cancel closes the modal", async ({ page }) => {
+    await page.goto("/servers/staging");
+    await page.getByRole("button", { name: /provision/i }).click();
+    await expect(page.getByText("Wipe & Provision Server")).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("Wipe & Provision Server")).not.toBeVisible();
+  });
+});

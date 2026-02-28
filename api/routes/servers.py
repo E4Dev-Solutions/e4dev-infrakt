@@ -205,6 +205,21 @@ async def provision(name: str, background_tasks: BackgroundTasks) -> dict[str, s
                             for app in s.apps:
                                 session.delete(app)
 
+                # Wipe non-infrakT-host servers first
+                if not is_infrakt_host:
+
+                    def _on_wipe_step(step_name: str, index: int, total: int) -> None:
+                        broadcaster.publish(prov_key, f"[wipe {index + 1}/{total}] {step_name}")
+
+                    wipe_server(ssh, on_step=_on_wipe_step)
+
+                    # Clean local app records
+                    with get_session() as session:
+                        s = session.query(Server).filter(Server.name == name).first()
+                        if s:
+                            for app in s.apps:
+                                session.delete(app)
+
                 def _on_step(step_name: str, index: int, total: int) -> None:
                     broadcaster.publish(prov_key, f"[{index + 1}/{total}] {step_name}")
 

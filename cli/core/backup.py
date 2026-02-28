@@ -161,6 +161,12 @@ def generate_backup_script(
     db_app: App,
     backup_dir: str = "/opt/infrakt/backups",
     retention_days: int = 7,
+    s3_endpoint: str | None = None,
+    s3_bucket: str | None = None,
+    s3_region: str | None = None,
+    s3_access_key: str | None = None,
+    s3_secret_key: str | None = None,
+    s3_prefix: str = "",
 ) -> str:
     """Generate a shell script that performs a backup and cleans old files."""
     db_type = _extract_db_type(db_app)
@@ -221,6 +227,20 @@ def generate_backup_script(
         ]
     )
 
+    # S3 upload (optional)
+    if s3_endpoint and s3_bucket and s3_access_key and s3_secret_key:
+        s3_key = f"{s3_prefix}{name}/{filename}" if s3_prefix else f"{name}/{filename}"
+        lines.extend([
+            "",
+            "# Upload to S3",
+            f"export AWS_ACCESS_KEY_ID={shlex.quote(s3_access_key)}",
+            f"export AWS_SECRET_ACCESS_KEY={shlex.quote(s3_secret_key)}",
+            f"export AWS_DEFAULT_REGION={shlex.quote(s3_region or '')}",
+            f"aws s3 cp \"$BACKUP_DIR/{filename}\" {shlex.quote(f's3://{s3_bucket}/{s3_key}')} "
+            f"--endpoint-url {shlex.quote(s3_endpoint)} || true",
+            "unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION",
+        ])
+
     return "\n".join(lines) + "\n"
 
 
@@ -230,9 +250,23 @@ def install_backup_cron(
     cron_expr: str,
     retention_days: int = 7,
     backup_dir: str = "/opt/infrakt/backups",
+    s3_endpoint: str | None = None,
+    s3_bucket: str | None = None,
+    s3_region: str | None = None,
+    s3_access_key: str | None = None,
+    s3_secret_key: str | None = None,
+    s3_prefix: str = "",
 ) -> None:
     """Upload a backup script and install a cron entry on the remote server."""
-    script = generate_backup_script(db_app, backup_dir, retention_days)
+    script = generate_backup_script(
+        db_app, backup_dir, retention_days,
+        s3_endpoint=s3_endpoint,
+        s3_bucket=s3_bucket,
+        s3_region=s3_region,
+        s3_access_key=s3_access_key,
+        s3_secret_key=s3_secret_key,
+        s3_prefix=s3_prefix,
+    )
     script_path = f"{backup_dir}/backup-{db_app.name}.sh"
     q_script = shlex.quote(script_path)
     marker = _cron_marker(db_app)

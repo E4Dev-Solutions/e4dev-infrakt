@@ -214,3 +214,44 @@ class TestListBackups:
         ssh.run.return_value = ("", "", 0)
         result = list_backups(ssh, app)
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# TestGenerateBackupScriptWithS3
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateBackupScriptWithS3:
+    def test_includes_aws_s3_cp_when_s3_config_provided(self, isolated_config):
+        app = _make_app("testdb", "db:postgres")
+        script = generate_backup_script(
+            app,
+            s3_endpoint="https://s3.amazonaws.com",
+            s3_bucket="my-backups",
+            s3_region="us-east-1",
+            s3_access_key="AKID",
+            s3_secret_key="SECRET",
+            s3_prefix="infrakt/",
+        )
+        assert "aws s3 cp" in script
+        assert "my-backups" in script
+
+    def test_no_s3_when_config_not_provided(self, isolated_config):
+        app = _make_app("testdb", "db:postgres")
+        script = generate_backup_script(app)
+        assert "aws s3 cp" not in script
+
+    def test_s3_credentials_are_exported_and_unset(self, isolated_config):
+        app = _make_app("testdb", "db:postgres")
+        script = generate_backup_script(
+            app,
+            s3_endpoint="https://s3.amazonaws.com",
+            s3_bucket="b",
+            s3_region="r",
+            s3_access_key="AK",
+            s3_secret_key="SK",
+            s3_prefix="",
+        )
+        assert "export AWS_ACCESS_KEY_ID=" in script
+        assert "export AWS_SECRET_ACCESS_KEY=" in script
+        assert "unset AWS_ACCESS_KEY_ID" in script

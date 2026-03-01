@@ -183,6 +183,8 @@ def list_database_backups(name: str, server: str | None = None) -> list[BackupFi
             raise HTTPException(404, f"Database '{name}' not found")
         srv = db_app.server
         ssh = SSHClient.from_server(srv)
+        session.refresh(db_app)
+        session.expunge(db_app)
 
     try:
         with ssh:
@@ -302,6 +304,9 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
             raise HTTPException(404, f"Database '{name}' not found")
         srv = db_app.server
         ssh = SSHClient.from_server(srv)
+        # Eagerly load all columns before detaching from session
+        session.refresh(db_app)
+        session.expunge(db_app)
 
     with ssh:
         remote_path = backup_database(ssh, db_app)
@@ -344,6 +349,8 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
             raise HTTPException(404, f"Database '{name}' not found")
         srv = db_app.server
         ssh = SSHClient.from_server(srv)
+        session.refresh(db_app)
+        session.expunge(db_app)
 
     remote_path = f"/opt/infrakt/backups/{body.filename}"
     try:
@@ -393,6 +400,8 @@ def schedule_backup_endpoint(
         srv = db_app.server
         ssh = SSHClient.from_server(srv)
         app_id = db_app.id
+        session.refresh(db_app)
+        session.expunge(db_app)
 
     s3_cfg = _get_s3_config()
     with ssh:
@@ -435,6 +444,8 @@ def unschedule_backup_endpoint(name: str, server: str | None = None) -> dict[str
         srv = db_app.server
         ssh = SSHClient.from_server(srv)
         app_id = db_app.id
+        session.refresh(db_app)
+        session.expunge(db_app)
 
     with ssh:
         remove_backup_cron(ssh, db_app)

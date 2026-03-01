@@ -22,6 +22,10 @@ def _extract_db_type(app: App) -> str:
 
 def _container_name(app: App) -> str:
     """Return the Docker container name for a database app."""
+    # Template child DBs use "infrakt-{name}" (e.g. infrakt-n8n-db),
+    # while standalone DBs use "infrakt-db-{name}" (from db-compose.yml.j2).
+    if app.parent_app_id is not None:
+        return f"infrakt-{app.name}"
     return f"infrakt-db-{app.name}"
 
 
@@ -49,23 +53,30 @@ def backup_database(
     db_type = _extract_db_type(db_app)
     container = _container_name(db_app)
     q_container = shlex.quote(container)
-    q_name = shlex.quote(db_app.name)
     ts = _timestamp()
     q_backup_dir = shlex.quote(backup_dir)
 
     ssh.run_checked(f"mkdir -p {q_backup_dir}")
 
     if db_type == "postgres":
+        db_user = _get_container_env(ssh, container, "POSTGRES_USER")
+        db_name = _get_container_env(ssh, container, "POSTGRES_DB")
+        q_user = shlex.quote(db_user)
+        q_db = shlex.quote(db_name)
         filename = f"{db_app.name}_{ts}.sql.gz"
         q_file = shlex.quote(f"{backup_dir}/{filename}")
-        cmd = f"docker exec {q_container} pg_dump -U {q_name} {q_name} | gzip > {q_file}"
+        cmd = f"docker exec {q_container} pg_dump -U {q_user} {q_db} | gzip > {q_file}"
     elif db_type == "mysql":
         password = _get_container_env(ssh, container, "MYSQL_PASSWORD")
         q_pass = shlex.quote(password)
+        mysql_user = _get_container_env(ssh, container, "MYSQL_USER")
+        mysql_db = _get_container_env(ssh, container, "MYSQL_DATABASE")
+        q_user = shlex.quote(mysql_user)
+        q_db = shlex.quote(mysql_db)
         filename = f"{db_app.name}_{ts}.sql.gz"
         q_file = shlex.quote(f"{backup_dir}/{filename}")
         cmd = (
-            f"docker exec {q_container} mysqldump -u {q_name} -p{q_pass} {q_name} | gzip > {q_file}"
+            f"docker exec {q_container} mysqldump -u {q_user} -p{q_pass} {q_db} | gzip > {q_file}"
         )
     elif db_type == "redis":
         filename = f"{db_app.name}_{ts}.rdb"
@@ -78,12 +89,14 @@ def backup_database(
     elif db_type == "mongo":
         password = _get_container_env(ssh, container, "MONGO_INITDB_ROOT_PASSWORD")
         q_pass = shlex.quote(password)
+        mongo_user = _get_container_env(ssh, container, "MONGO_INITDB_ROOT_USERNAME")
+        q_user = shlex.quote(mongo_user)
         filename = f"{db_app.name}_{ts}.archive.gz"
         q_file = shlex.quote(f"{backup_dir}/{filename}")
         cmd = (
             f"docker exec {q_container} mongodump"
             f" --archive --gzip"
-            f" -u {q_name} -p {q_pass}"
+            f" -u {q_user} -p {q_pass}"
             f" --authenticationDatabase admin"
             f" > {q_file}"
         )
@@ -106,7 +119,6 @@ def restore_database(
     db_type = _extract_db_type(db_app)
     container = _container_name(db_app)
     q_container = shlex.quote(container)
-    q_name = shlex.quote(db_app.name)
     q_path = shlex.quote(remote_backup_path)
 
     # Verify backup file exists
@@ -115,14 +127,21 @@ def restore_database(
         raise SSHConnectionError(f"Backup file not found on server: {remote_backup_path}")
 
     if db_type == "postgres":
-        # Drop and recreate, then restore
-        cmd = f"gunzip -c {q_path} | docker exec -i {q_container} psql -U {q_name} -d {q_name}"
+        db_user = _get_container_env(ssh, container, "POSTGRES_USER")
+        db_name = _get_container_env(ssh, container, "POSTGRES_DB")
+        q_user = shlex.quote(db_user)
+        q_db = shlex.quote(db_name)
+        cmd = f"gunzip -c {q_path} | docker exec -i {q_container} psql -U {q_user} -d {q_db}"
     elif db_type == "mysql":
         password = _get_container_env(ssh, container, "MYSQL_PASSWORD")
         q_pass = shlex.quote(password)
+        mysql_user = _get_container_env(ssh, container, "MYSQL_USER")
+        mysql_db = _get_container_env(ssh, container, "MYSQL_DATABASE")
+        q_user = shlex.quote(mysql_user)
+        q_db = shlex.quote(mysql_db)
         cmd = (
             f"gunzip -c {q_path}"
-            f" | docker exec -i {q_container} mysql -u {q_name} -p{q_pass} {q_name}"
+            f" | docker exec -i {q_container} mysql -u {q_user} -p{q_pass} {q_db}"
         )
     elif db_type == "redis":
         # Stop redis, replace dump.rdb, restart
@@ -134,11 +153,13 @@ def restore_database(
     elif db_type == "mongo":
         password = _get_container_env(ssh, container, "MONGO_INITDB_ROOT_PASSWORD")
         q_pass = shlex.quote(password)
+        mongo_user = _get_container_env(ssh, container, "MONGO_INITDB_ROOT_USERNAME")
+        q_user = shlex.quote(mongo_user)
         cmd = (
             f"cat {q_path}"
             f" | docker exec -i {q_container} mongorestore"
             f" --archive --gzip --drop"
-            f" -u {q_name} -p {q_pass}"
+            f" -u {q_user} -p {q_pass}"
             f" --authenticationDatabase admin"
         )
     else:

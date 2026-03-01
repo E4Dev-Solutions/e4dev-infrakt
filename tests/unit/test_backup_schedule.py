@@ -18,7 +18,7 @@ from cli.core.backup import (
 
 def _make_app(name: str = "mydb", app_type: str = "db:postgres") -> types.SimpleNamespace:
     """Return a minimal app-like object with the attributes backup functions require."""
-    return types.SimpleNamespace(name=name, app_type=app_type)
+    return types.SimpleNamespace(name=name, app_type=app_type, parent_app_id=None)
 
 
 # ---------------------------------------------------------------------------

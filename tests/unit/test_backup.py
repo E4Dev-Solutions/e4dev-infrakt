@@ -13,10 +13,13 @@ from cli.core.backup import (
 from cli.core.exceptions import SSHConnectionError
 
 
-def _make_app(name: str = "mydb", app_type: str = "db:postgres") -> MagicMock:
+def _make_app(
+    name: str = "mydb", app_type: str = "db:postgres", parent_app_id: int | None = None
+) -> MagicMock:
     app = MagicMock()
     app.name = name
     app.app_type = app_type
+    app.parent_app_id = parent_app_id
     return app
 
 
@@ -44,9 +47,13 @@ class TestExtractDbType:
 
 
 class TestContainerName:
-    def test_returns_infrakt_db_prefix(self):
+    def test_returns_infrakt_db_prefix_for_standalone(self):
         app = _make_app(name="mydb")
         assert _container_name(app) == "infrakt-db-mydb"
+
+    def test_returns_infrakt_prefix_for_template_child(self):
+        app = _make_app(name="n8n-db", parent_app_id=1)
+        assert _container_name(app) == "infrakt-n8n-db"
 
 
 class TestBackupDatabase:

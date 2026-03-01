@@ -75,9 +75,7 @@ def backup_database(
         q_db = shlex.quote(mysql_db)
         filename = f"{db_app.name}_{ts}.sql.gz"
         q_file = shlex.quote(f"{backup_dir}/{filename}")
-        cmd = (
-            f"docker exec {q_container} mysqldump -u {q_user} -p{q_pass} {q_db} | gzip > {q_file}"
-        )
+        cmd = f"docker exec {q_container} mysqldump -u {q_user} -p{q_pass} {q_db} | gzip > {q_file}"
     elif db_type == "redis":
         filename = f"{db_app.name}_{ts}.rdb"
         q_file = shlex.quote(f"{backup_dir}/{filename}")
@@ -140,8 +138,7 @@ def restore_database(
         q_user = shlex.quote(mysql_user)
         q_db = shlex.quote(mysql_db)
         cmd = (
-            f"gunzip -c {q_path}"
-            f" | docker exec -i {q_container} mysql -u {q_user} -p{q_pass} {q_db}"
+            f"gunzip -c {q_path} | docker exec -i {q_container} mysql -u {q_user} -p{q_pass} {q_db}"
         )
     elif db_type == "redis":
         # Stop redis, replace dump.rdb, restart

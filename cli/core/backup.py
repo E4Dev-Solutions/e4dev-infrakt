@@ -574,9 +574,7 @@ def cleanup_old_s3_backups(
         ssh, s3_endpoint, bucket, region, access_key, secret_key, prefix, db_name
     )
     # Only consider files that match this specific server+db combo
-    backups = [
-        b for b in backups if _is_infrakt_backup(str(b["filename"]), server_name, db_name)
-    ]
+    backups = [b for b in backups if _is_infrakt_backup(str(b["filename"]), server_name, db_name)]
     if len(backups) <= keep:
         return 0
 

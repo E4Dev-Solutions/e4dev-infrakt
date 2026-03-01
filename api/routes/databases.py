@@ -172,9 +172,7 @@ def _get_db_out(db_app: App) -> DatabaseOut:
 
 
 @router.get("/{name}/backups", response_model=list[BackupFileOut])
-def list_database_backups(
-    name: str, server: str | None = None
-) -> list[BackupFileOut]:
+def list_database_backups(name: str, server: str | None = None) -> list[BackupFileOut]:
     """List backup files for a database (local + S3, all servers)."""
     init_db()
     with get_session() as session:

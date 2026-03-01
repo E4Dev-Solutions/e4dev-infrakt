@@ -68,6 +68,19 @@ test.describe("Database Detail", () => {
     await expect(select).toHaveValue(MOCK_BACKUP_FILES[0].filename);
   });
 
+  test("restore modal shows source database dropdown", async ({ page }) => {
+    await page.getByRole("tab", { name: /backups/i }).click();
+    await page.getByRole("button", { name: /restore/i }).first().click();
+    await expect(page.getByLabel(/source database/i)).toBeVisible();
+  });
+
+  test("selecting Other in source shows text input", async ({ page }) => {
+    await page.getByRole("tab", { name: /backups/i }).click();
+    await page.getByRole("button", { name: /restore/i }).first().click();
+    await page.getByLabel(/source database/i).selectOption("__custom__");
+    await expect(page.getByLabel(/deleted database name/i)).toBeVisible();
+  });
+
   test("empty backups shows empty state", async ({ page }) => {
     // Override backups to return empty
     await page.route(/\/api\/databases\/[^/]+\/backups/, (route) => {

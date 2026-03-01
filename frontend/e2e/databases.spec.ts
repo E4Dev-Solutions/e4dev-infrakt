@@ -19,13 +19,13 @@ test.describe("Databases", () => {
   test("lists existing database with correct details", async ({ page }) => {
     const db = MOCK_DATABASES[0];
     await expect(page.getByText(db.name)).toBeVisible();
-    await expect(page.getByText(db.server_name)).toBeVisible();
-    await expect(page.getByText("PostgreSQL")).toBeVisible();
+    await expect(page.getByText(db.server_name).first()).toBeVisible();
+    await expect(page.getByText("PostgreSQL").first()).toBeVisible();
     await expect(page.getByText(String(db.port))).toBeVisible();
   });
 
   test("shows status badge for running database", async ({ page }) => {
-    await expect(page.getByLabel("Status: Running")).toBeVisible();
+    await expect(page.getByLabel("Status: Running").first()).toBeVisible();
   });
 
   test("shows delete button with aria-label", async ({ page }) => {
@@ -200,6 +200,26 @@ test.describe("Databases", () => {
     await expect(
       page.getByRole("heading", { name: "Restore Database" }),
     ).not.toBeVisible();
+  });
+
+  // ─── Cross-database restore ─────────────────────────────────────────────────
+
+  test("restore modal shows source database dropdown", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    await expect(page.getByLabel(/source database/i)).toBeVisible();
+  });
+
+  test("source database dropdown shows compatible databases", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    const select = page.getByLabel(/source database/i);
+    // Should have "This database", the other postgres DB, and "Other" options
+    await expect(select.locator("option")).toHaveCount(3);
+  });
+
+  test("selecting Other shows text input for deleted database", async ({ page }) => {
+    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
+    await page.getByLabel(/source database/i).selectOption("__custom__");
+    await expect(page.getByLabel(/deleted database name/i)).toBeVisible();
   });
 
   // ─── Schedule Backups ──────────────────────────────────────────────────────

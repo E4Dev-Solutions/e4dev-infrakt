@@ -174,6 +174,7 @@ export interface BackupFile {
   size: string;
   size_bytes: number;
   modified: string;
+  location?: "local" | "s3" | "both";
 }
 
 export interface ProxyDomain {
@@ -651,6 +652,32 @@ export interface SelfUpdateConfig {
 
 export const configApi = {
   selfUpdate: (): Promise<SelfUpdateConfig> => get("/config/self-update"),
+};
+
+// ─── S3 Config ───────────────────────────────────────────────────────────────
+
+export interface S3Config {
+  configured: boolean;
+  endpoint_url?: string;
+  bucket?: string;
+  region?: string;
+  access_key?: string;
+  prefix?: string;
+}
+
+export interface S3ConfigSave {
+  endpoint_url: string;
+  bucket: string;
+  region: string;
+  access_key: string;
+  secret_key: string;
+  prefix: string;
+}
+
+export const s3Api = {
+  get: (): Promise<S3Config> => get("/settings/s3"),
+  save: (config: S3ConfigSave): Promise<{ message: string }> => put("/settings/s3", config),
+  delete: (): Promise<{ message: string }> => del("/settings/s3"),
 };
 
 // ─── GitHub ──────────────────────────────────────────────────────────────────

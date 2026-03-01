@@ -74,7 +74,7 @@ WIPE_STEPS = [
         "Removing snap packages (if present)",
         "if command -v snap &>/dev/null; then "
         "snap list 2>/dev/null | awk 'NR>1{print $1}' | "
-        "while read pkg; do snap remove --purge \"$pkg\" 2>/dev/null || true; done; "
+        'while read pkg; do snap remove --purge "$pkg" 2>/dev/null || true; done; '
         "systemctl stop snapd 2>/dev/null || true; "
         "apt-get purge -y -qq snapd 2>/dev/null || true; "
         "rm -rf /snap /var/snap /var/lib/snapd ~/snap 2>/dev/null || true; "

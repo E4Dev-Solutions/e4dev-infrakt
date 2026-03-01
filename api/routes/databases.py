@@ -397,7 +397,10 @@ def schedule_backup_endpoint(
     s3_cfg = _get_s3_config()
     with ssh:
         install_backup_cron(
-            ssh, db_app, body.cron_expression, body.retention_days,
+            ssh,
+            db_app,
+            body.cron_expression,
+            body.retention_days,
             s3_endpoint=s3_cfg["endpoint_url"] if s3_cfg else None,
             s3_bucket=s3_cfg["bucket"] if s3_cfg else None,
             s3_region=s3_cfg["region"] if s3_cfg else None,

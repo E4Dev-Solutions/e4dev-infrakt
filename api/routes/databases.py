@@ -3,8 +3,9 @@
 import logging
 import secrets
 import shlex
+from types import SimpleNamespace
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from api.schemas import (
     BackupFileOut,
@@ -173,7 +174,13 @@ def _get_db_out(db_app: App) -> DatabaseOut:
 
 @router.get("/{name}/backups", response_model=list[BackupFileOut])
 def list_database_backups(
-    name: str, server: str | None = None, source_db: str | None = None
+    name: str,
+    server: str | None = None,
+    source_db: str | None = Query(
+        default=None,
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+    ),
 ) -> list[BackupFileOut]:
     """List backup files for a database (local + S3, all servers).
 
@@ -199,8 +206,6 @@ def list_database_backups(
         with ssh:
             # For local backups, use a SimpleNamespace with the lookup name
             # so list_backups finds files matching the source DB pattern
-            from types import SimpleNamespace
-
             lookup_app = SimpleNamespace(name=lookup_name) if source_db else db_app
             backups: list[dict] = list_backups(ssh, lookup_app)
 

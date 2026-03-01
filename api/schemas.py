@@ -315,6 +315,13 @@ class DatabaseRestore(BaseModel):
     server_name: str | None = None
     source_db: str | None = None
 
+    @field_validator("source_db")
+    @classmethod
+    def validate_source_db(cls, v: str | None) -> str | None:
+        if v is not None:
+            return _validate_safe_name(v)
+        return v
+
 
 class BackupScheduleCreate(BaseModel):
     cron_expression: str = Field(..., min_length=5, max_length=100)

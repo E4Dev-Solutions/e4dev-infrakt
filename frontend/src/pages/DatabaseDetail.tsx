@@ -678,6 +678,7 @@ export default function DatabaseDetail() {
               {restoreSourceDb === "__custom__" && (
                 <input
                   type="text"
+                  aria-label="Deleted database name"
                   value={restoreSourceCustom}
                   onChange={(e) => {
                     setRestoreSourceCustom(e.target.value);
@@ -734,7 +735,7 @@ export default function DatabaseDetail() {
               </button>
               <button
                 type="submit"
-                disabled={restoreDatabase.isPending || !restoreFilename}
+                disabled={restoreDatabase.isPending || !restoreFilename || restoreBackupsLoading}
                 className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {restoreDatabase.isPending && (

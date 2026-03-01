@@ -64,7 +64,7 @@ export default function Databases() {
   const { data: restoreBackups = [], isLoading: restoreBackupsLoading } =
     useDatabaseBackups(
       showRestoreModal?.name ?? "",
-      undefined,
+      showRestoreModal?.server,
       effectiveSourceDb || undefined,
       { enabled: Boolean(showRestoreModal) && (restoreSourceDb !== "__custom__" || Boolean(restoreSourceCustom)) },
     );
@@ -414,12 +414,12 @@ export default function Databases() {
                 className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
               >
                 <option value="">This database ({showRestoreModal.name})</option>
-                {databases
-                  .filter((d) => {
-                    const targetDbType = databases.find((x) => x.name === showRestoreModal.name)?.db_type;
-                    return d.name !== showRestoreModal.name && d.db_type === targetDbType;
-                  })
-                  .map((d) => (
+                {(() => {
+                  const targetDbType = databases.find((x) => x.name === showRestoreModal.name)?.db_type;
+                  return databases.filter(
+                    (d) => d.name !== showRestoreModal.name && targetDbType && d.db_type === targetDbType,
+                  );
+                })().map((d) => (
                     <option key={d.name} value={d.name}>
                       {d.name} ({d.server_name})
                     </option>
@@ -429,6 +429,7 @@ export default function Databases() {
               {restoreSourceDb === "__custom__" && (
                 <input
                   type="text"
+                  aria-label="Deleted database name"
                   value={restoreSourceCustom}
                   onChange={(e) => {
                     setRestoreSourceCustom(e.target.value);

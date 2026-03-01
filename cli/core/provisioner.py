@@ -46,7 +46,13 @@ PROVISION_STEPS = [
     ),
     (
         "Installing awscli",
-        "pip3 install -q awscli 2>/dev/null || apt-get install -y -qq awscli 2>/dev/null || true",
+        "if ! command -v aws &>/dev/null; then "
+        "curl -s https://awscli.amazonaws.com/"
+        "awscli-exe-linux-$(uname -m).zip -o /tmp/awscliv2.zip "
+        "&& unzip -qo /tmp/awscliv2.zip -d /tmp "
+        "&& /tmp/aws/install "
+        "&& rm -rf /tmp/awscliv2.zip /tmp/aws; "
+        "fi",
     ),
     (
         "Creating Docker network",

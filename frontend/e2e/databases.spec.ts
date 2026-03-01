@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, mockApi, MOCK_DATABASES } from "./fixtures";
+import { login, mockApi, MOCK_DATABASES, MOCK_BACKUP_FILES } from "./fixtures";
 
 test.describe("Databases", () => {
   test.beforeEach(async ({ page }) => {
@@ -168,9 +168,9 @@ test.describe("Databases", () => {
     ).toBeVisible();
   });
 
-  test("restore modal has filename input", async ({ page }) => {
+  test("restore modal has backup selector", async ({ page }) => {
     await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
-    await expect(page.getByLabel("Backup Filename")).toBeVisible();
+    await expect(page.getByLabel(/select backup/i)).toBeVisible();
   });
 
   test("restore modal Cancel closes it", async ({ page }) => {
@@ -186,7 +186,7 @@ test.describe("Databases", () => {
 
   test("restore submit shows success toast", async ({ page }) => {
     await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
-    await page.getByLabel("Backup Filename").fill("main-pg_20260224_120000.sql.gz");
+    await page.getByLabel(/select backup/i).selectOption(MOCK_BACKUP_FILES[0].filename);
     await page.locator("form").getByRole("button", { name: "Restore" }).click();
     await expect(
       page.getByText(`Database "${MOCK_DATABASES[0].name}" restored`),
@@ -195,7 +195,7 @@ test.describe("Databases", () => {
 
   test("restore modal closes after successful submit", async ({ page }) => {
     await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
-    await page.getByLabel("Backup Filename").fill("main-pg_20260224_120000.sql.gz");
+    await page.getByLabel(/select backup/i).selectOption(MOCK_BACKUP_FILES[0].filename);
     await page.locator("form").getByRole("button", { name: "Restore" }).click();
     await expect(
       page.getByRole("heading", { name: "Restore Database" }),

@@ -64,8 +64,8 @@ test.describe("Database Detail", () => {
     await expect(
       page.getByRole("heading", { name: /restore/i }),
     ).toBeVisible();
-    const input = page.getByLabel(/filename/i);
-    await expect(input).toHaveValue(MOCK_BACKUP_FILES[0].filename);
+    const select = page.getByLabel(/select backup/i);
+    await expect(select).toHaveValue(MOCK_BACKUP_FILES[0].filename);
   });
 
   test("empty backups shows empty state", async ({ page }) => {

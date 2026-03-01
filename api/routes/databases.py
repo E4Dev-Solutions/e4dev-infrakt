@@ -173,7 +173,7 @@ def _get_db_out(db_app: App) -> DatabaseOut:
 
 @router.get("/{name}/backups", response_model=list[BackupFileOut])
 def list_database_backups(name: str, server: str | None = None) -> list[BackupFileOut]:
-    """List backup files for a database on the remote server."""
+    """List backup files for a database (local + S3, all servers)."""
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
@@ -182,14 +182,14 @@ def list_database_backups(name: str, server: str | None = None) -> list[BackupFi
         db_app = q.first()
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
-        srv = db_app.server
-        ssh = SSHClient.from_server(srv)
+        ssh = SSHClient.from_server(db_app.server)
         session.refresh(db_app)
         session.expunge(db_app)
 
     try:
         with ssh:
-            backups = list_backups(ssh, db_app)
+            backups: list[dict] = list_backups(ssh, db_app)
+
             s3_cfg = _get_s3_config()
             s3_files: list[dict] = []
             if s3_cfg:
@@ -304,13 +304,14 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
         srv = db_app.server
+        server_name = srv.name
         ssh = SSHClient.from_server(srv)
         # Eagerly load all columns before detaching from session
         session.refresh(db_app)
         session.expunge(db_app)
 
     with ssh:
-        remote_path = backup_database(ssh, db_app)
+        remote_path = backup_database(ssh, db_app, server_name=server_name)
         s3_cfg = _get_s3_config()
         if s3_cfg:
             try:
@@ -338,6 +339,7 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
                         secret_key=s3_cfg["secret_key"],
                         prefix=s3_cfg["prefix"],
                         db_name=name,
+                        server_name=server_name,
                     )
                 except Exception:
                     logger.warning("S3 cleanup failed for %s", name, exc_info=True)
@@ -368,8 +370,7 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
         db_app = q.first()
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
-        srv = db_app.server
-        ssh = SSHClient.from_server(srv)
+        ssh = SSHClient.from_server(db_app.server)
         session.refresh(db_app)
         session.expunge(db_app)
 
@@ -419,6 +420,7 @@ def schedule_backup_endpoint(
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
         srv = db_app.server
+        server_name = srv.name
         ssh = SSHClient.from_server(srv)
         app_id = db_app.id
         session.refresh(db_app)
@@ -437,6 +439,7 @@ def schedule_backup_endpoint(
             s3_access_key=s3_cfg["access_key"] if s3_cfg else None,
             s3_secret_key=s3_cfg["secret_key"] if s3_cfg else None,
             s3_prefix=s3_cfg.get("prefix", "") if s3_cfg else "",
+            server_name=server_name,
         )
 
     with get_session() as session:

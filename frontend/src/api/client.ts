@@ -520,8 +520,11 @@ export const databasesApi = {
     return get(`/databases/${encodeURIComponent(name)}${qs}`);
   },
 
-  listBackups: (name: string, server?: string): Promise<BackupFile[]> => {
-    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+  listBackups: (name: string, server?: string, sourceDb?: string): Promise<BackupFile[]> => {
+    const params = new URLSearchParams();
+    if (server) params.set("server", server);
+    if (sourceDb) params.set("source_db", sourceDb);
+    const qs = params.toString() ? `?${params.toString()}` : "";
     return get(`/databases/${encodeURIComponent(name)}/backups${qs}`);
   },
 
@@ -545,10 +548,12 @@ export const databasesApi = {
     name: string,
     filename: string,
     serverName?: string,
+    sourceDb?: string,
   ): Promise<{ message: string }> =>
     post(`/databases/${encodeURIComponent(name)}/restore`, {
       filename,
       server_name: serverName,
+      ...(sourceDb && { source_db: sourceDb }),
     }),
 
   schedule: (

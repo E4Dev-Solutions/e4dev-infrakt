@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import {
   useDatabase,
+  useDatabases,
   useDatabaseBackups,
   useBackupDatabase,
   useDeleteDatabase,
@@ -129,6 +130,19 @@ export default function DatabaseDetail() {
   // Restore modal state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreFilename, setRestoreFilename] = useState("");
+  const [restoreSourceDb, setRestoreSourceDb] = useState("");
+  const [restoreSourceCustom, setRestoreSourceCustom] = useState("");
+
+  const { data: allDatabases = [] } = useDatabases();
+  const effectiveSourceDb = restoreSourceDb === "__custom__"
+    ? restoreSourceCustom
+    : restoreSourceDb || "";
+  const { data: restoreBackupsList = [], isLoading: restoreBackupsLoading } = useDatabaseBackups(
+    decodedName,
+    undefined,
+    effectiveSourceDb || undefined,
+    { enabled: showRestoreModal && (restoreSourceDb !== "__custom__" || Boolean(restoreSourceCustom)) },
+  );
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -164,22 +178,28 @@ export default function DatabaseDetail() {
 
   function openRestoreModal(filename?: string) {
     setRestoreFilename(filename ?? "");
+    setRestoreSourceDb("");
+    setRestoreSourceCustom("");
     setShowRestoreModal(true);
   }
 
   function closeRestoreModal() {
     setShowRestoreModal(false);
     setRestoreFilename("");
+    setRestoreSourceDb("");
+    setRestoreSourceCustom("");
   }
 
   async function handleRestore(e: React.FormEvent) {
     e.preventDefault();
     if (!db || !restoreFilename) return;
+    const sourceDb = restoreSourceDb === "__custom__" ? restoreSourceCustom : restoreSourceDb;
     try {
       await restoreDatabase.mutateAsync({
         name: decodedName,
         filename: restoreFilename,
         serverName: db.server_name,
+        sourceDb: sourceDb || undefined,
       });
       toast.success(`Database "${decodedName}" restored from "${restoreFilename}".`);
       closeRestoreModal();
@@ -627,6 +647,48 @@ export default function DatabaseDetail() {
               backup.
             </p>
 
+            {/* Source database selector */}
+            <div>
+              <label
+                htmlFor="restore-source-db"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
+              >
+                Source Database
+              </label>
+              <select
+                id="restore-source-db"
+                value={restoreSourceDb}
+                onChange={(e) => {
+                  setRestoreSourceDb(e.target.value);
+                  setRestoreFilename("");
+                  if (e.target.value !== "__custom__") setRestoreSourceCustom("");
+                }}
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+              >
+                <option value="">This database ({decodedName})</option>
+                {allDatabases
+                  .filter((d) => d.name !== decodedName && d.db_type === db.db_type)
+                  .map((d) => (
+                    <option key={d.name} value={d.name}>
+                      {d.name} ({d.server_name})
+                    </option>
+                  ))}
+                <option value="__custom__">Other (deleted database)...</option>
+              </select>
+              {restoreSourceDb === "__custom__" && (
+                <input
+                  type="text"
+                  value={restoreSourceCustom}
+                  onChange={(e) => {
+                    setRestoreSourceCustom(e.target.value);
+                    setRestoreFilename("");
+                  }}
+                  placeholder="Enter source database name"
+                  className="mt-2 w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                />
+              )}
+            </div>
+
             {/* Backup selector */}
             <div>
               <label
@@ -635,12 +697,12 @@ export default function DatabaseDetail() {
               >
                 Select Backup <span className="text-red-400">*</span>
               </label>
-              {backupsLoading ? (
+              {restoreBackupsLoading ? (
                 <div className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700/50 px-3 py-3 text-sm text-zinc-500">
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                   Loading backups...
                 </div>
-              ) : backups.length > 0 ? (
+              ) : restoreBackupsList.length > 0 ? (
                 <select
                   id="restore-filename"
                   required
@@ -649,7 +711,7 @@ export default function DatabaseDetail() {
                   className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 >
                   <option value="">Choose a backup...</option>
-                  {backups.map((b) => (
+                  {restoreBackupsList.map((b) => (
                     <option key={b.filename} value={b.filename}>
                       {b.filename} — {b.size}{" "}
                       ({b.location === "s3" ? "S3" : b.location === "both" ? "Local + S3" : "Local"})

@@ -17,6 +17,7 @@ from api.schemas import (
 from cli.commands.db import DB_TEMPLATES, DEFAULT_VERSIONS, _generate_db_compose
 from cli.core.backup import (
     backup_database,
+    cleanup_old_s3_backups,
     install_backup_cron,
     list_backups,
     remove_backup_cron,
@@ -324,6 +325,22 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
                     prefix=s3_cfg["prefix"],
                     db_name=name,
                 )
+                # Delete local file after successful S3 upload
+                ssh.run(f"rm -f {shlex.quote(remote_path)}")
+                # Clean up old S3 backups (keep last 10)
+                try:
+                    cleanup_old_s3_backups(
+                        ssh,
+                        s3_endpoint=s3_cfg["endpoint_url"],
+                        bucket=s3_cfg["bucket"],
+                        region=s3_cfg["region"],
+                        access_key=s3_cfg["access_key"],
+                        secret_key=s3_cfg["secret_key"],
+                        prefix=s3_cfg["prefix"],
+                        db_name=name,
+                    )
+                except Exception:
+                    logger.warning("S3 cleanup failed for %s", name, exc_info=True)
             except Exception:
                 logger.warning(
                     "S3 upload failed for %s, local backup still available",

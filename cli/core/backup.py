@@ -516,3 +516,41 @@ def list_s3_backups(
             }
         )
     return results
+
+
+def cleanup_old_s3_backups(
+    ssh: SSHClient,
+    s3_endpoint: str,
+    bucket: str,
+    region: str,
+    access_key: str,
+    secret_key: str,
+    prefix: str,
+    db_name: str,
+    keep: int = 10,
+) -> int:
+    """Delete old S3 backups, keeping the most recent `keep` files. Returns count deleted."""
+    backups = list_s3_backups(
+        ssh, s3_endpoint, bucket, region, access_key, secret_key, prefix, db_name
+    )
+    if len(backups) <= keep:
+        return 0
+
+    # Sort by modified date descending (newest first), delete the rest
+    backups.sort(key=lambda b: str(b.get("modified", "")), reverse=True)
+    to_delete = backups[keep:]
+
+    _write_aws_credentials(ssh, access_key, secret_key, region)
+    try:
+        s3_dir = f"{prefix}{db_name}/" if prefix else f"{db_name}/"
+        q_endpoint = shlex.quote(s3_endpoint)
+        deleted = 0
+        for b in to_delete:
+            s3_key = f"s3://{bucket}/{s3_dir}{b['filename']}"
+            cmd = f"{_aws_env_prefix()}aws s3 rm {shlex.quote(s3_key)} --endpoint-url {q_endpoint}"
+            _, _, rc = ssh.run(cmd, timeout=30)
+            if rc == 0:
+                deleted += 1
+    finally:
+        _cleanup_aws_credentials(ssh)
+    return deleted

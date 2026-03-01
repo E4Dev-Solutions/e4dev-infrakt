@@ -65,12 +65,13 @@ test.describe("Settings — Webhooks", () => {
     page,
   }) => {
     await page.getByRole("button", { name: "Add Webhook" }).first().click();
-    await expect(page.getByLabel(/Endpoint URL/)).toBeVisible();
+    const modal = page.locator("[role=dialog]");
+    await expect(modal.getByLabel(/Endpoint URL/)).toBeVisible();
     await expect(page.getByText("Deploy Success")).toBeVisible();
     await expect(page.getByText("Deploy Failure")).toBeVisible();
     await expect(page.getByText("Backup Complete")).toBeVisible();
     await expect(page.getByText("Backup Restore")).toBeVisible();
-    await expect(page.getByLabel(/Signing Secret/)).toBeVisible();
+    await expect(modal.getByLabel(/Signing Secret/)).toBeVisible();
   });
 
   test("Cancel button closes modal", async ({ page }) => {
@@ -97,13 +98,15 @@ test.describe("Settings — Webhooks", () => {
 
   test("URL validation shows error for http:// URLs", async ({ page }) => {
     await page.getByRole("button", { name: "Add Webhook" }).first().click();
-    await page.getByLabel(/Endpoint URL/).fill("http://insecure.example.com/hook");
+    const modal = page.locator("[role=dialog]");
+    await modal.getByLabel(/Endpoint URL/).fill("http://insecure.example.com/hook");
     await expect(page.getByText("URL must start with https://")).toBeVisible();
   });
 
   test("form submission creates webhook and shows toast", async ({ page }) => {
     await page.getByRole("button", { name: "Add Webhook" }).first().click();
-    await page.getByLabel(/Endpoint URL/).fill("https://hooks.example.com/new");
+    const modal = page.locator("[role=dialog]");
+    await modal.getByLabel(/Endpoint URL/).fill("https://hooks.example.com/new");
     await page.getByText("Deploy Success").click();
     await page
       .locator("form")

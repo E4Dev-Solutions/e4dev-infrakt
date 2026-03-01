@@ -75,6 +75,7 @@ class TestRestoreEndpoint:
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_ssh.run.return_value = ("", "", 0)  # test -f succeeds (file exists locally)
             mock_cls.from_server.return_value = mock_ssh
 
             with patch("api.routes.databases.restore_database"):
@@ -101,6 +102,7 @@ class TestRestoreEndpoint:
             mock_ssh = MagicMock()
             mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
             mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_ssh.run.return_value = ("", "", 0)  # test -f succeeds
             mock_cls.from_server.return_value = mock_ssh
 
             with patch(
@@ -251,3 +253,102 @@ class TestListBackupsEndpoint:
         """GET /databases/{name}/backups returns 404 for non-existent database."""
         response = client.get("/api/databases/ghost/backups")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# S3 integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestBackupEndpointWithS3:
+    def test_uploads_to_s3_when_configured(self, client, isolated_config):
+        """Backup endpoint uploads to S3 when S3 config exists."""
+        _seed_db("mydb")
+        with patch("api.routes.databases.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+
+            with (
+                patch("api.routes.databases.backup_database") as mock_backup,
+                patch("api.routes.databases._get_s3_config") as mock_s3cfg,
+                patch("api.routes.databases.upload_backup_to_s3") as mock_upload,
+            ):
+                mock_backup.return_value = "/opt/infrakt/backups/mydb_20260224.sql.gz"
+                mock_s3cfg.return_value = {
+                    "endpoint_url": "https://s3.amazonaws.com",
+                    "bucket": "backups",
+                    "region": "us-east-1",
+                    "access_key": "AK",
+                    "secret_key": "SK",
+                    "prefix": "infrakt/",
+                }
+                response = client.post("/api/databases/mydb/backup")
+
+        assert response.status_code == 200
+        mock_upload.assert_called_once()
+
+    def test_backup_succeeds_even_if_s3_upload_fails(self, client, isolated_config):
+        """Backup endpoint returns success even if S3 upload fails."""
+        _seed_db("mydb")
+        with patch("api.routes.databases.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            mock_cls.from_server.return_value = mock_ssh
+
+            with (
+                patch("api.routes.databases.backup_database") as mock_backup,
+                patch("api.routes.databases._get_s3_config") as mock_s3cfg,
+                patch(
+                    "api.routes.databases.upload_backup_to_s3",
+                    side_effect=RuntimeError("S3 down"),
+                ),
+            ):
+                mock_backup.return_value = "/opt/infrakt/backups/mydb_20260224.sql.gz"
+                mock_s3cfg.return_value = {
+                    "endpoint_url": "https://s3.amazonaws.com",
+                    "bucket": "b",
+                    "region": "r",
+                    "access_key": "k",
+                    "secret_key": "s",
+                    "prefix": "",
+                }
+                response = client.post("/api/databases/mydb/backup")
+
+        assert response.status_code == 200
+
+
+class TestRestoreEndpointWithS3:
+    def test_downloads_from_s3_when_local_missing(self, client, isolated_config):
+        """Restore downloads from S3 when file is not local."""
+        _seed_db("mydb")
+        with patch("api.routes.databases.SSHClient") as mock_cls:
+            mock_ssh = MagicMock()
+            mock_ssh.__enter__ = MagicMock(return_value=mock_ssh)
+            mock_ssh.__exit__ = MagicMock(return_value=False)
+            # First call: test -f fails (no local file); subsequent calls succeed
+            mock_ssh.run.return_value = ("", "", 1)
+            mock_cls.from_server.return_value = mock_ssh
+
+            with (
+                patch("api.routes.databases._get_s3_config") as mock_s3cfg,
+                patch("cli.core.backup.download_backup_from_s3") as mock_download,
+                patch("api.routes.databases.restore_database"),
+            ):
+                mock_s3cfg.return_value = {
+                    "endpoint_url": "https://s3.amazonaws.com",
+                    "bucket": "b",
+                    "region": "r",
+                    "access_key": "k",
+                    "secret_key": "s",
+                    "prefix": "",
+                }
+                response = client.post(
+                    "/api/databases/mydb/restore",
+                    json={"filename": "mydb_20260224.sql.gz"},
+                )
+
+        assert response.status_code == 200
+        mock_download.assert_called_once()

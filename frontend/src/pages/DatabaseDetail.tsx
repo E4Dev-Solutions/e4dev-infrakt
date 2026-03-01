@@ -9,6 +9,8 @@ import {
   Clock,
   Loader2,
   BarChart2,
+  Cloud,
+  HardDrive,
 } from "lucide-react";
 import {
   useDatabase,
@@ -549,7 +551,7 @@ export default function DatabaseDetail() {
                     <table className="w-full text-sm" role="table">
                       <thead>
                         <tr className="border-b border-zinc-700 bg-zinc-800/60">
-                          {["Filename", "Size", "Date", "Actions"].map((h) => (
+                          {["Filename", "Size", "Location", "Date", "Actions"].map((h) => (
                             <th
                               key={h}
                               scope="col"
@@ -571,6 +573,24 @@ export default function DatabaseDetail() {
                             </td>
                             <td className="px-4 py-3 text-xs text-zinc-400">
                               {backup.size}
+                            </td>
+                            <td className="px-4 py-3">
+                              {backup.location === "s3" ? (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-300 ring-1 ring-sky-500/30">
+                                  <Cloud size={10} aria-hidden="true" />
+                                  S3
+                                </span>
+                              ) : backup.location === "both" ? (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300 ring-1 ring-emerald-500/30">
+                                  <Cloud size={10} aria-hidden="true" />
+                                  Both
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-zinc-500/15 px-2 py-0.5 text-xs font-medium text-zinc-400 ring-1 ring-zinc-500/30">
+                                  <HardDrive size={10} aria-hidden="true" />
+                                  Local
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-xs text-zinc-400">
                               {formatDate(backup.modified)}

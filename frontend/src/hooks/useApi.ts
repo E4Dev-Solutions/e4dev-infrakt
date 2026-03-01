@@ -15,6 +15,9 @@ import {
   keysApi,
   configApi,
   githubApi,
+  s3Api,
+  type S3Config,
+  type S3ConfigSave,
   type CreateServerInput,
   type UpdateServerInput,
   type CreateAppInput,
@@ -67,6 +70,7 @@ export const queryKeys = {
   githubStatus: ["github", "status"] as const,
   githubRepos: ["github", "repos"] as const,
   templates: ["templates"] as const,
+  s3Config: ["s3-config"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -742,6 +746,36 @@ export function useDisconnectGitHub() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.githubStatus });
       void qc.invalidateQueries({ queryKey: queryKeys.githubRepos });
+    },
+  });
+}
+
+// ─── S3 Config ───────────────────────────────────────────────────────────────
+
+export function useS3Config(options?: Partial<UseQueryOptions<S3Config>>) {
+  return useQuery({
+    queryKey: queryKeys.s3Config,
+    queryFn: s3Api.get,
+    ...options,
+  });
+}
+
+export function useSaveS3Config() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: S3ConfigSave) => s3Api.save(config),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.s3Config });
+    },
+  });
+}
+
+export function useDeleteS3Config() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => s3Api.delete(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.s3Config });
     },
   });
 }

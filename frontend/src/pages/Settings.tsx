@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff, Github, Link as LinkIcon, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff, Github, Link as LinkIcon, Upload, Cloud } from "lucide-react";
 import {
   useWebhooks,
   useCreateWebhook,
@@ -15,6 +15,9 @@ import {
   useGitHubStatus,
   useConnectGitHub,
   useDisconnectGitHub,
+  useS3Config,
+  useSaveS3Config,
+  useDeleteS3Config,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -116,6 +119,27 @@ export default function Settings() {
   const [githubToken, setGithubToken] = useState("");
   const [showGithubToken, setShowGithubToken] = useState(false);
 
+  // S3 Backup Storage
+  const { data: s3Config, isLoading: s3Loading } = useS3Config();
+  const saveS3 = useSaveS3Config();
+  const deleteS3 = useDeleteS3Config();
+  const [s3Endpoint, setS3Endpoint] = useState("");
+  const [s3Bucket, setS3Bucket] = useState("");
+  const [s3Region, setS3Region] = useState("");
+  const [s3AccessKey, setS3AccessKey] = useState("");
+  const [s3SecretKey, setS3SecretKey] = useState("");
+  const [s3Prefix, setS3Prefix] = useState("");
+
+  useEffect(() => {
+    if (s3Config?.configured) {
+      setS3Endpoint(s3Config.endpoint_url ?? "");
+      setS3Bucket(s3Config.bucket ?? "");
+      setS3Region(s3Config.region ?? "");
+      setS3AccessKey(s3Config.access_key ?? "");
+      setS3Prefix(s3Config.prefix ?? "");
+    }
+  }, [s3Config]);
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [testingId, setTestingId] = useState<number | null>(null);
@@ -213,6 +237,41 @@ export default function Settings() {
       toast.success("GitHub account disconnected.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to disconnect GitHub account.");
+    }
+  }
+
+  // ─── S3 handlers ────────────────────────────────────────────────────────────
+
+  async function handleSaveS3(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await saveS3.mutateAsync({
+        endpoint_url: s3Endpoint,
+        bucket: s3Bucket,
+        region: s3Region,
+        access_key: s3AccessKey,
+        secret_key: s3SecretKey,
+        prefix: s3Prefix,
+      });
+      toast.success("S3 configuration saved");
+      setS3SecretKey("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save S3 configuration");
+    }
+  }
+
+  async function handleDeleteS3() {
+    try {
+      await deleteS3.mutateAsync();
+      toast.success("S3 configuration removed");
+      setS3Endpoint("");
+      setS3Bucket("");
+      setS3Region("");
+      setS3AccessKey("");
+      setS3SecretKey("");
+      setS3Prefix("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove S3 configuration");
     }
   }
 
@@ -335,6 +394,149 @@ export default function Settings() {
           </p>
         </div>
       </div>
+
+      {/* ── S3 Backup Storage ── */}
+      <section aria-labelledby="s3-heading" className="mb-10">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-700">
+            <Cloud size={18} className="text-orange-400" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 id="s3-heading" className="text-lg font-semibold text-zinc-100">
+              S3 Backup Storage
+            </h2>
+            <p className="text-xs text-zinc-500">
+              Configure S3-compatible storage for off-server database backups.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-700 bg-zinc-800 p-5">
+          {s3Loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-zinc-500" aria-label="Loading S3 config" />
+            </div>
+          ) : (
+            <form onSubmit={(e) => void handleSaveS3(e)} className="space-y-4" noValidate>
+              {/* Status indicator */}
+              {s3Config?.configured && (
+                <div className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
+                  <span className="text-sm text-emerald-300">S3 storage configured</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteS3()}
+                    disabled={deleteS3.isPending}
+                    className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                  >
+                    {deleteS3.isPending && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
+                    Remove
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="s3-endpoint" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                    Endpoint URL <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="s3-endpoint"
+                    type="url"
+                    required
+                    value={s3Endpoint}
+                    onChange={(e) => setS3Endpoint(e.target.value)}
+                    placeholder="https://s3.amazonaws.com"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="s3-bucket" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                    Bucket <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="s3-bucket"
+                    type="text"
+                    required
+                    value={s3Bucket}
+                    onChange={(e) => setS3Bucket(e.target.value)}
+                    placeholder="my-backups"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="s3-region" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                    Region <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="s3-region"
+                    type="text"
+                    required
+                    value={s3Region}
+                    onChange={(e) => setS3Region(e.target.value)}
+                    placeholder="us-east-1"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="s3-prefix" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                    Prefix
+                  </label>
+                  <input
+                    id="s3-prefix"
+                    type="text"
+                    value={s3Prefix}
+                    onChange={(e) => setS3Prefix(e.target.value)}
+                    placeholder="infrakt/"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="s3-access-key" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                    Access Key <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="s3-access-key"
+                    type="text"
+                    required
+                    value={s3AccessKey}
+                    onChange={(e) => setS3AccessKey(e.target.value)}
+                    placeholder="AKIAIOSFODNN7EXAMPLE"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="s3-secret-key" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                    Secret Key <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="s3-secret-key"
+                    type="password"
+                    required={!s3Config?.configured}
+                    value={s3SecretKey}
+                    onChange={(e) => setS3SecretKey(e.target.value)}
+                    placeholder={s3Config?.configured ? "••••••••" : "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                  {s3Config?.configured && (
+                    <p className="mt-1 text-xs text-zinc-500">Leave blank to keep the existing secret key.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={saveS3.isPending || !s3Endpoint || !s3Bucket || !s3Region || !s3AccessKey || (!s3Config?.configured && !s3SecretKey)}
+                  className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
+                >
+                  {saveS3.isPending && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+                  {s3Config?.configured ? "Update" : "Save"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </section>
 
       {/* SSH Keys section */}
       <section aria-labelledby="ssh-keys-heading" className="mb-10">

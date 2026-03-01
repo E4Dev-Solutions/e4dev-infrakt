@@ -117,7 +117,6 @@ export default function DatabaseDetail() {
     isFetching: statsFetching,
     refetch: refetchStats,
   } = useDatabaseStats(decodedName, db?.server_name, { enabled: false, staleTime: Infinity });
-
   const backupDatabase = useBackupDatabase();
   const deleteDatabase = useDeleteDatabase();
   const restoreDatabase = useRestoreDatabase();
@@ -623,28 +622,45 @@ export default function DatabaseDetail() {
           <form onSubmit={(e) => void handleRestore(e)} className="space-y-4" noValidate>
             <p className="text-sm text-zinc-400">
               Restore{" "}
-              <span className="font-medium text-zinc-200">{decodedName}</span> from a
-              backup file on the server.
+              <span className="font-medium text-zinc-200">{decodedName}</span> on{" "}
+              <span className="font-medium text-zinc-200">{db.server_name}</span> from a
+              backup.
             </p>
+
+            {/* Backup selector */}
             <div>
               <label
                 htmlFor="restore-filename"
                 className="mb-1.5 block text-xs font-medium text-zinc-300"
               >
-                Backup Filename <span className="text-red-400">*</span>
+                Select Backup <span className="text-red-400">*</span>
               </label>
-              <input
-                id="restore-filename"
-                type="text"
-                required
-                value={restoreFilename}
-                onChange={(e) => setRestoreFilename(e.target.value)}
-                placeholder="main-pg_20260224_120000.sql.gz"
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              />
-              <p className="mt-1 text-xs text-zinc-500">
-                File must exist in /opt/infrakt/backups/ on the server.
-              </p>
+              {backupsLoading ? (
+                <div className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700/50 px-3 py-3 text-sm text-zinc-500">
+                  <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                  Loading backups...
+                </div>
+              ) : backups.length > 0 ? (
+                <select
+                  id="restore-filename"
+                  required
+                  value={restoreFilename}
+                  onChange={(e) => setRestoreFilename(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                >
+                  <option value="">Choose a backup...</option>
+                  {backups.map((b) => (
+                    <option key={b.filename} value={b.filename}>
+                      {b.filename} — {b.size}{" "}
+                      ({b.location === "s3" ? "S3" : b.location === "both" ? "Local + S3" : "Local"})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="rounded-lg border border-zinc-600 bg-zinc-700/50 px-3 py-3 text-sm text-zinc-500">
+                  No backups available.
+                </p>
+              )}
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button

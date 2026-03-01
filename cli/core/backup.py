@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -33,6 +34,11 @@ def _timestamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
 
+def _backup_filename(server_name: str, db_name: str, ts: str, ext: str) -> str:
+    """Build a backup filename: ``{server}__{db}_{ts}.{ext}``."""
+    return f"{server_name}__{db_name}_{ts}.{ext}"
+
+
 def _get_container_env(ssh: SSHClient, container: str, var: str) -> str:
     """Read an environment variable from a running container."""
     q_container = shlex.quote(container)
@@ -44,6 +50,7 @@ def _get_container_env(ssh: SSHClient, container: str, var: str) -> str:
 def backup_database(
     ssh: SSHClient,
     db_app: App,
+    server_name: str = "",
     backup_dir: str = "/opt/infrakt/backups",
 ) -> str:
     """Run a backup on the remote server and return the remote file path.
@@ -63,7 +70,7 @@ def backup_database(
         db_name = _get_container_env(ssh, container, "POSTGRES_DB")
         q_user = shlex.quote(db_user)
         q_db = shlex.quote(db_name)
-        filename = f"{db_app.name}_{ts}.sql.gz"
+        filename = _backup_filename(server_name, db_app.name, ts, "sql.gz")
         q_file = shlex.quote(f"{backup_dir}/{filename}")
         cmd = f"docker exec {q_container} pg_dump -U {q_user} {q_db} | gzip > {q_file}"
     elif db_type == "mysql":
@@ -73,11 +80,11 @@ def backup_database(
         mysql_db = _get_container_env(ssh, container, "MYSQL_DATABASE")
         q_user = shlex.quote(mysql_user)
         q_db = shlex.quote(mysql_db)
-        filename = f"{db_app.name}_{ts}.sql.gz"
+        filename = _backup_filename(server_name, db_app.name, ts, "sql.gz")
         q_file = shlex.quote(f"{backup_dir}/{filename}")
         cmd = f"docker exec {q_container} mysqldump -u {q_user} -p{q_pass} {q_db} | gzip > {q_file}"
     elif db_type == "redis":
-        filename = f"{db_app.name}_{ts}.rdb"
+        filename = _backup_filename(server_name, db_app.name, ts, "rdb")
         q_file = shlex.quote(f"{backup_dir}/{filename}")
         # Trigger a save, then copy the dump file out
         ssh.run_checked(f"docker exec {q_container} redis-cli BGSAVE", timeout=30)
@@ -89,7 +96,7 @@ def backup_database(
         q_pass = shlex.quote(password)
         mongo_user = _get_container_env(ssh, container, "MONGO_INITDB_ROOT_USERNAME")
         q_user = shlex.quote(mongo_user)
-        filename = f"{db_app.name}_{ts}.archive.gz"
+        filename = _backup_filename(server_name, db_app.name, ts, "archive.gz")
         q_file = shlex.quote(f"{backup_dir}/{filename}")
         cmd = (
             f"docker exec {q_container} mongodump"
@@ -185,12 +192,14 @@ def generate_backup_script(
     s3_access_key: str | None = None,
     s3_secret_key: str | None = None,
     s3_prefix: str = "",
+    server_name: str = "",
 ) -> str:
     """Generate a shell script that performs a backup and cleans old files."""
     db_type = _extract_db_type(db_app)
     container = _container_name(db_app)
     name = db_app.name
     ts_var = "$(date +%Y%m%d_%H%M%S)"
+    fname_prefix = f"{server_name}__{name}" if server_name else name
 
     lines = [
         "#!/usr/bin/env bash",
@@ -201,20 +210,20 @@ def generate_backup_script(
     ]
 
     if db_type == "postgres":
-        filename = f"{name}_{ts_var}.sql.gz"
+        filename = f"{fname_prefix}_{ts_var}.sql.gz"
         q_c = shlex.quote(container)
         q_n = shlex.quote(name)
         lines.append(f'docker exec {q_c} pg_dump -U {q_n} {q_n} | gzip > "$BACKUP_DIR/{filename}"')
     elif db_type == "mysql":
         lines.append(f"MYSQL_PASS=$(docker exec {shlex.quote(container)} printenv MYSQL_PASSWORD)")
-        filename = f"{name}_{ts_var}.sql.gz"
+        filename = f"{fname_prefix}_{ts_var}.sql.gz"
         lines.append(
             f"docker exec {shlex.quote(container)} mysqldump -u {shlex.quote(name)}"
             f' -p"$MYSQL_PASS" {shlex.quote(name)}'
             f' | gzip > "$BACKUP_DIR/{filename}"'
         )
     elif db_type == "redis":
-        filename = f"{name}_{ts_var}.rdb"
+        filename = f"{fname_prefix}_{ts_var}.rdb"
         lines.extend(
             [
                 f"docker exec {shlex.quote(container)} redis-cli BGSAVE",
@@ -225,7 +234,7 @@ def generate_backup_script(
     elif db_type == "mongo":
         q_c = shlex.quote(container)
         lines.append(f"MONGO_PASS=$(docker exec {q_c} printenv MONGO_INITDB_ROOT_PASSWORD)")
-        filename = f"{name}_{ts_var}.archive.gz"
+        filename = f"{fname_prefix}_{ts_var}.archive.gz"
         lines.append(
             f"docker exec {shlex.quote(container)} mongodump"
             f" --archive --gzip"
@@ -236,18 +245,20 @@ def generate_backup_script(
     else:
         raise ValueError(f"Unsupported database type for scheduled backup: {db_type}")
 
-    # Retention: delete files older than N days matching this db's name pattern
+    # Retention: delete files older than N days matching this server+db pattern
     lines.extend(
         [
             "",
             "# Clean up old backups",
-            f'find "$BACKUP_DIR" -name {shlex.quote(name + "_*")} -mtime +{retention_days} -delete',
+            f'find "$BACKUP_DIR" -name {shlex.quote(fname_prefix + "_*")}'
+            f" -mtime +{retention_days} -delete",
         ]
     )
 
     # S3 upload (optional)
     if s3_endpoint and s3_bucket and s3_access_key and s3_secret_key:
-        s3_key = f"{s3_prefix}{name}/{filename}" if s3_prefix else f"{name}/{filename}"
+        s3_dir = f"{s3_prefix}{name}/" if s3_prefix else f"{name}/"
+        s3_key = f"{s3_dir}{filename}"
         lines.extend(
             [
                 "",
@@ -276,6 +287,7 @@ def install_backup_cron(
     s3_access_key: str | None = None,
     s3_secret_key: str | None = None,
     s3_prefix: str = "",
+    server_name: str = "",
 ) -> None:
     """Upload a backup script and install a cron entry on the remote server."""
     script = generate_backup_script(
@@ -288,6 +300,7 @@ def install_backup_cron(
         s3_access_key=s3_access_key,
         s3_secret_key=s3_secret_key,
         s3_prefix=s3_prefix,
+        server_name=server_name,
     )
     script_path = f"{backup_dir}/backup-{db_app.name}.sh"
     q_script = shlex.quote(script_path)
@@ -350,7 +363,8 @@ def list_backups(
     or the directory is missing.
     """
     q_dir = shlex.quote(backup_dir)
-    q_pattern = shlex.quote(db_app.name + "_*")
+    # Match both old-style ({db}_*) and new-style (*__{db}_*) filenames
+    q_pattern = shlex.quote(f"*{db_app.name}_*")
 
     # GNU find -printf: filename\tsize_bytes\tmtime_epoch
     stdout, _, rc = ssh.run(
@@ -418,6 +432,16 @@ def _aws_env_prefix() -> str:
     )
 
 
+def _s3_db_dir(prefix: str, db_name: str) -> str:
+    """Build the S3 key directory for a database's backups.
+
+    Result: ``{prefix}{db_name}/`` (or ``{db_name}/`` when *prefix* is empty).
+    All servers' backups for this DB are in the same folder; the server name
+    is encoded in each filename instead.
+    """
+    return f"{prefix}{db_name}/" if prefix else f"{db_name}/"
+
+
 def upload_backup_to_s3(
     ssh: SSHClient,
     local_path: str,
@@ -433,7 +457,8 @@ def upload_backup_to_s3(
     _write_aws_credentials(ssh, access_key, secret_key, region)
     try:
         filename = local_path.rsplit("/", 1)[-1]
-        s3_key = f"{prefix}{db_name}/{filename}" if prefix else f"{db_name}/{filename}"
+        s3_dir = _s3_db_dir(prefix, db_name)
+        s3_key = f"{s3_dir}{filename}"
         q_local = shlex.quote(local_path)
         q_s3 = shlex.quote(f"s3://{bucket}/{s3_key}")
         q_endpoint = shlex.quote(s3_endpoint)
@@ -458,7 +483,8 @@ def download_backup_from_s3(
     """Download a backup file from S3 to the remote server. Returns the local path."""
     _write_aws_credentials(ssh, access_key, secret_key, region)
     try:
-        s3_key = f"{prefix}{db_name}/{filename}" if prefix else f"{db_name}/{filename}"
+        s3_dir = _s3_db_dir(prefix, db_name)
+        s3_key = f"{s3_dir}{filename}"
         local_path = f"{backup_dir}/{filename}"
         q_s3 = shlex.quote(f"s3://{bucket}/{s3_key}")
         q_local = shlex.quote(local_path)
@@ -481,10 +507,10 @@ def list_s3_backups(
     prefix: str,
     db_name: str,
 ) -> list[dict[str, str | int]]:
-    """List backup files in S3 for a given database."""
+    """List backup files in S3 for a given database (all servers)."""
     _write_aws_credentials(ssh, access_key, secret_key, region)
     try:
-        s3_prefix = f"{prefix}{db_name}/" if prefix else f"{db_name}/"
+        s3_prefix = _s3_db_dir(prefix, db_name)
         q_s3 = shlex.quote(f"s3://{bucket}/{s3_prefix}")
         q_endpoint = shlex.quote(s3_endpoint)
         cmd = f"{_aws_env_prefix()}aws s3 ls {q_s3} --endpoint-url {q_endpoint}"
@@ -518,6 +544,15 @@ def list_s3_backups(
     return results
 
 
+def _is_infrakt_backup(filename: str, server_name: str, db_name: str) -> bool:
+    """Check if a filename matches the infrakt backup naming convention.
+
+    Matches: ``{server_name}__{db_name}_YYYYMMDD_HHMMSS.{ext}``
+    """
+    pattern = rf"^{re.escape(server_name)}__{re.escape(db_name)}_\d{{8}}_\d{{6}}\."
+    return bool(re.match(pattern, filename))
+
+
 def cleanup_old_s3_backups(
     ssh: SSHClient,
     s3_endpoint: str,
@@ -527,12 +562,21 @@ def cleanup_old_s3_backups(
     secret_key: str,
     prefix: str,
     db_name: str,
+    server_name: str = "",
     keep: int = 10,
 ) -> int:
-    """Delete old S3 backups, keeping the most recent `keep` files. Returns count deleted."""
+    """Delete old S3 backups for this server+database, keeping the most recent `keep`.
+
+    Only deletes files matching this server's backup pattern
+    (``{server_name}__{db_name}_YYYYMMDD_HHMMSS.ext``). Returns count deleted.
+    """
     backups = list_s3_backups(
         ssh, s3_endpoint, bucket, region, access_key, secret_key, prefix, db_name
     )
+    # Only consider files that match this specific server+db combo
+    backups = [
+        b for b in backups if _is_infrakt_backup(str(b["filename"]), server_name, db_name)
+    ]
     if len(backups) <= keep:
         return 0
 
@@ -542,7 +586,7 @@ def cleanup_old_s3_backups(
 
     _write_aws_credentials(ssh, access_key, secret_key, region)
     try:
-        s3_dir = f"{prefix}{db_name}/" if prefix else f"{db_name}/"
+        s3_dir = _s3_db_dir(prefix, db_name)
         q_endpoint = shlex.quote(s3_endpoint)
         deleted = 0
         for b in to_delete:

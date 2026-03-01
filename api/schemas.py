@@ -313,6 +313,7 @@ class BackupFileOut(BaseModel):
 class DatabaseRestore(BaseModel):
     filename: str = Field(..., min_length=1, max_length=255)
     server_name: str | None = None
+    source_db: str | None = None
 
 
 class BackupScheduleCreate(BaseModel):

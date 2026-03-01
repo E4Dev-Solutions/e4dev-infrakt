@@ -172,8 +172,14 @@ def _get_db_out(db_app: App) -> DatabaseOut:
 
 
 @router.get("/{name}/backups", response_model=list[BackupFileOut])
-def list_database_backups(name: str, server: str | None = None) -> list[BackupFileOut]:
-    """List backup files for a database (local + S3, all servers)."""
+def list_database_backups(
+    name: str, server: str | None = None, source_db: str | None = None
+) -> list[BackupFileOut]:
+    """List backup files for a database (local + S3, all servers).
+
+    When source_db is provided, list backups belonging to that source database
+    instead. The target DB (name) is still used to determine the server/SSH connection.
+    """
     init_db()
     with get_session() as session:
         q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
@@ -186,9 +192,17 @@ def list_database_backups(name: str, server: str | None = None) -> list[BackupFi
         session.refresh(db_app)
         session.expunge(db_app)
 
+    # Use source_db name for backup lookups if provided
+    lookup_name = source_db or name
+
     try:
         with ssh:
-            backups: list[dict] = list_backups(ssh, db_app)
+            # For local backups, use a SimpleNamespace with the lookup name
+            # so list_backups finds files matching the source DB pattern
+            from types import SimpleNamespace
+
+            lookup_app = SimpleNamespace(name=lookup_name) if source_db else db_app
+            backups: list[dict] = list_backups(ssh, lookup_app)
 
             s3_cfg = _get_s3_config()
             s3_files: list[dict] = []
@@ -204,10 +218,10 @@ def list_database_backups(name: str, server: str | None = None) -> list[BackupFi
                         access_key=s3_cfg["access_key"],
                         secret_key=s3_cfg["secret_key"],
                         prefix=s3_cfg["prefix"],
-                        db_name=name,
+                        db_name=lookup_name,
                     )
                 except Exception:
-                    logger.warning("Failed to list S3 backups for %s", name, exc_info=True)
+                    logger.warning("Failed to list S3 backups for %s", lookup_name, exc_info=True)
     except (SSHConnectionError, Exception):
         return []
 
@@ -220,6 +234,7 @@ def list_database_backups(name: str, server: str | None = None) -> list[BackupFi
     for b in s3_files:
         if b["filename"] not in local_names:
             results.append(BackupFileOut(**b, location="s3"))
+    results.sort(key=lambda x: x.modified or "", reverse=True)
     return results
 
 
@@ -370,6 +385,24 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
         db_app = q.first()
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
+
+        # Cross-DB restore: validate type compatibility if source_db differs
+        source_db_name = body.source_db or name
+        if body.source_db and body.source_db != name:
+            source_app = (
+                session.query(App)
+                .filter(App.name == body.source_db, App.app_type.like("db:%"))
+                .first()
+            )
+            # If source DB still exists, validate type compatibility
+            if source_app and source_app.app_type != db_app.app_type:
+                raise HTTPException(
+                    400,
+                    f"Type mismatch: source '{body.source_db}' is {source_app.app_type} "
+                    f"but target '{name}' is {db_app.app_type}",
+                )
+            # If source DB was deleted, skip validation (backups may still exist)
+
         ssh = SSHClient.from_server(db_app.server)
         session.refresh(db_app)
         session.expunge(db_app)
@@ -394,7 +427,7 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
                     access_key=s3_cfg["access_key"],
                     secret_key=s3_cfg["secret_key"],
                     prefix=s3_cfg["prefix"],
-                    db_name=name,
+                    db_name=source_db_name,
                 )
             restore_database(ssh, db_app, remote_path)
     except SSHConnectionError as exc:

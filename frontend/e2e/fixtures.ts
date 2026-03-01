@@ -111,12 +111,14 @@ export const MOCK_BACKUP_FILES = [
     size: "2.4 MB",
     size_bytes: 2516582,
     modified: "2026-02-24T02:00:00+00:00",
+    location: "both",
   },
   {
     filename: "main-pg_20260223_020000.sql.gz",
     size: "2.1 MB",
     size_bytes: 2202009,
     modified: "2026-02-23T02:00:00+00:00",
+    location: "local",
   },
 ];
 
@@ -532,6 +534,20 @@ export async function mockApi(page: Page): Promise<void> {
           created_at: new Date().toISOString(),
         },
       });
+    }
+    return route.continue();
+  });
+
+  // S3 settings
+  await page.route("**/api/settings/s3", (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: { configured: false } });
+    }
+    if (route.request().method() === "PUT") {
+      return route.fulfill({ json: { message: "S3 configuration saved" } });
+    }
+    if (route.request().method() === "DELETE") {
+      return route.fulfill({ json: { message: "S3 configuration removed" } });
     }
     return route.continue();
   });

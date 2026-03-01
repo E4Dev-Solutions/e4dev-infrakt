@@ -206,7 +206,7 @@ def list_database_backups(name: str, server: str | None = None) -> list[BackupFi
                         db_name=name,
                     )
                 except Exception:
-                    pass
+                    logger.warning("Failed to list S3 backups for %s", name, exc_info=True)
     except (SSHConnectionError, Exception):
         return []
 
@@ -325,7 +325,11 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
                     db_name=name,
                 )
             except Exception:
-                logger.warning("S3 upload failed for %s, local backup still available", name)
+                logger.warning(
+                    "S3 upload failed for %s, local backup still available",
+                    name,
+                    exc_info=True,
+                )
 
     filename = remote_path.rsplit("/", 1)[-1]
     fire_webhooks("backup.complete", {"database": name, "filename": filename})

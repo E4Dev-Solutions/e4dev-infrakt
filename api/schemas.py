@@ -313,14 +313,6 @@ class BackupFileOut(BaseModel):
 class DatabaseRestore(BaseModel):
     filename: str = Field(..., min_length=1, max_length=255)
     server_name: str | None = None
-    source_db: str | None = None
-
-    @field_validator("source_db")
-    @classmethod
-    def validate_source_db(cls, v: str | None) -> str | None:
-        if v is not None:
-            return _validate_safe_name(v)
-        return v
 
 
 class BackupScheduleCreate(BaseModel):

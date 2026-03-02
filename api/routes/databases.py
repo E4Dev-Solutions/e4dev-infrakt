@@ -3,9 +3,8 @@
 import logging
 import secrets
 import shlex
-from types import SimpleNamespace
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from api.schemas import (
     BackupFileOut,
@@ -176,16 +175,11 @@ def _get_db_out(db_app: App) -> DatabaseOut:
 def list_database_backups(
     name: str,
     server: str | None = None,
-    source_db: str | None = Query(
-        default=None,
-        max_length=100,
-        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
-    ),
 ) -> list[BackupFileOut]:
-    """List backup files for a database (local + S3, all servers).
+    """List backup files for a database (local + S3).
 
-    When source_db is provided, list backups belonging to that source database
-    instead. The target DB (name) is still used to determine the server/SSH connection.
+    Local backups are filtered by DB name. S3 backups are listed from the
+    DB type folder (e.g. ``postgres/``) so all same-type backups are visible.
     """
     init_db()
     with get_session() as session:
@@ -195,19 +189,14 @@ def list_database_backups(
         db_app = q.first()
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
+        db_type = db_app.app_type.split(":", 1)[1]
         ssh = SSHClient.from_server(db_app.server)
         session.refresh(db_app)
         session.expunge(db_app)
 
-    # Use source_db name for backup lookups if provided
-    lookup_name = source_db or name
-
     try:
         with ssh:
-            # For local backups, use a SimpleNamespace with the lookup name
-            # so list_backups finds files matching the source DB pattern
-            lookup_app = SimpleNamespace(name=lookup_name) if source_db else db_app
-            backups: list[dict] = list_backups(ssh, lookup_app)
+            backups: list[dict] = list_backups(ssh, db_app)
 
             s3_cfg = _get_s3_config()
             s3_files: list[dict] = []
@@ -223,10 +212,10 @@ def list_database_backups(
                         access_key=s3_cfg["access_key"],
                         secret_key=s3_cfg["secret_key"],
                         prefix=s3_cfg["prefix"],
-                        db_name=lookup_name,
+                        db_type=db_type,
                     )
                 except Exception:
-                    logger.warning("Failed to list S3 backups for %s", lookup_name, exc_info=True)
+                    logger.warning("Failed to list S3 backups for %s", name, exc_info=True)
     except (SSHConnectionError, Exception):
         return []
 
@@ -325,6 +314,8 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
             raise HTTPException(404, f"Database '{name}' not found")
         srv = db_app.server
         server_name = srv.name
+        db_type = db_app.app_type.split(":", 1)[1]
+        backup_id = db_app.backup_id or ""
         ssh = SSHClient.from_server(srv)
         # Eagerly load all columns before detaching from session
         session.refresh(db_app)
@@ -344,7 +335,7 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
                     access_key=s3_cfg["access_key"],
                     secret_key=s3_cfg["secret_key"],
                     prefix=s3_cfg["prefix"],
-                    db_name=name,
+                    db_type=db_type,
                 )
                 # Delete local file after successful S3 upload
                 ssh.run(f"rm -f {shlex.quote(remote_path)}")
@@ -358,8 +349,8 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
                         access_key=s3_cfg["access_key"],
                         secret_key=s3_cfg["secret_key"],
                         prefix=s3_cfg["prefix"],
-                        db_name=name,
-                        server_name=server_name,
+                        db_type=db_type,
+                        backup_id=backup_id,
                     )
                 except Exception:
                     logger.warning("S3 cleanup failed for %s", name, exc_info=True)
@@ -390,24 +381,7 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
         db_app = q.first()
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
-
-        # Cross-DB restore: validate type compatibility if source_db differs
-        source_db_name = body.source_db or name
-        if body.source_db and body.source_db != name:
-            source_app = (
-                session.query(App)
-                .filter(App.name == body.source_db, App.app_type.like("db:%"))
-                .first()
-            )
-            # If source DB still exists, validate type compatibility
-            if source_app and source_app.app_type != db_app.app_type:
-                raise HTTPException(
-                    400,
-                    f"Type mismatch: source '{body.source_db}' is {source_app.app_type} "
-                    f"but target '{name}' is {db_app.app_type}",
-                )
-            # If source DB was deleted, skip validation (backups may still exist)
-
+        db_type = db_app.app_type.split(":", 1)[1]
         ssh = SSHClient.from_server(db_app.server)
         session.refresh(db_app)
         session.expunge(db_app)
@@ -432,7 +406,7 @@ def restore_database_endpoint(name: str, body: DatabaseRestore) -> dict[str, str
                     access_key=s3_cfg["access_key"],
                     secret_key=s3_cfg["secret_key"],
                     prefix=s3_cfg["prefix"],
-                    db_name=source_db_name,
+                    db_type=db_type,
                 )
             restore_database(ssh, db_app, remote_path)
     except SSHConnectionError as exc:

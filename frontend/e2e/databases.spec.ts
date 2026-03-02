@@ -202,26 +202,6 @@ test.describe("Databases", () => {
     ).not.toBeVisible();
   });
 
-  // ─── Cross-database restore ─────────────────────────────────────────────────
-
-  test("restore modal shows source database dropdown", async ({ page }) => {
-    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
-    await expect(page.getByLabel(/source database/i)).toBeVisible();
-  });
-
-  test("source database dropdown shows compatible databases", async ({ page }) => {
-    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
-    const select = page.getByLabel(/source database/i);
-    // Should have "This database", the other postgres DB, and "Other" options
-    await expect(select.locator("option")).toHaveCount(3);
-  });
-
-  test("selecting Other shows text input for deleted database", async ({ page }) => {
-    await page.getByLabel(`Restore ${MOCK_DATABASES[0].name}`).click();
-    await page.getByLabel(/source database/i).selectOption("__custom__");
-    await expect(page.getByLabel(/deleted database name/i)).toBeVisible();
-  });
-
   // ─── Schedule Backups ──────────────────────────────────────────────────────
 
   test("schedule button is visible for each database", async ({ page }) => {

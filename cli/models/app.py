@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -7,6 +8,12 @@ from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint, f
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from cli.core.database import Base
+
+
+def _generate_backup_id() -> str:
+    """Generate a random 8-character alphanumeric ID for backup filenames."""
+    return secrets.token_hex(4)
+
 
 if TYPE_CHECKING:
     from cli.models.app_dependency import AppDependency
@@ -27,6 +34,7 @@ class App(Base):
     image: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="stopped")
     app_type: Mapped[str] = mapped_column(String(50), default="compose")
+    backup_id: Mapped[str | None] = mapped_column(String(8), default=_generate_backup_id)
     backup_schedule: Mapped[str | None] = mapped_column(String(100), default=None)
     cpu_limit: Mapped[str | None] = mapped_column(String(20), default=None)
     memory_limit: Mapped[str | None] = mapped_column(String(20), default=None)

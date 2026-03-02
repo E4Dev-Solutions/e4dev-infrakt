@@ -47,6 +47,7 @@ def _apply_migrations(engine: Engine) -> None:
         "ALTER TABLE apps ADD COLUMN auto_deploy BOOLEAN DEFAULT 1",
         "ALTER TABLE apps ADD COLUMN parent_app_id INTEGER REFERENCES apps(id) ON DELETE CASCADE",
         "ALTER TABLE servers ADD COLUMN is_infrakt_host BOOLEAN DEFAULT 0",
+        "ALTER TABLE apps ADD COLUMN backup_id VARCHAR(8)",
     ]
     with engine.connect() as conn:
         for sql in migrations:
@@ -55,6 +56,23 @@ def _apply_migrations(engine: Engine) -> None:
                 conn.commit()
             except OperationalError:
                 conn.rollback()
+
+        # Backfill backup_id for existing apps that don't have one
+        try:
+            import secrets as _secrets
+
+            result = conn.execute(text("SELECT id FROM apps WHERE backup_id IS NULL"))
+            rows = result.fetchall()
+            for row in rows:
+                bid = _secrets.token_hex(4)
+                conn.execute(
+                    text("UPDATE apps SET backup_id = :bid WHERE id = :id"),
+                    {"bid": bid, "id": row[0]},
+                )
+            if rows:
+                conn.commit()
+        except Exception:
+            conn.rollback()
 
 
 def _backfill_template_dbs() -> None:

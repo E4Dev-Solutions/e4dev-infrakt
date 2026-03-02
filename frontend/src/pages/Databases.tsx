@@ -56,17 +56,11 @@ export default function Databases() {
   const [showModal, setShowModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState<{ name: string; server: string } | null>(null);
   const [restoreFilename, setRestoreFilename] = useState("");
-  const [restoreSourceDb, setRestoreSourceDb] = useState("");
-  const [restoreSourceCustom, setRestoreSourceCustom] = useState("");
-  const effectiveSourceDb = restoreSourceDb === "__custom__"
-    ? restoreSourceCustom
-    : restoreSourceDb || "";
   const { data: restoreBackups = [], isLoading: restoreBackupsLoading } =
     useDatabaseBackups(
       showRestoreModal?.name ?? "",
       showRestoreModal?.server,
-      effectiveSourceDb || undefined,
-      { enabled: Boolean(showRestoreModal) && (restoreSourceDb !== "__custom__" || Boolean(restoreSourceCustom)) },
+      { enabled: Boolean(showRestoreModal) },
     );
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleDb, setScheduleDb] = useState<{ name: string; server: string; currentSchedule?: string | null } | null>(null);
@@ -133,19 +127,15 @@ export default function Databases() {
   async function handleRestore(e: React.FormEvent) {
     e.preventDefault();
     if (!showRestoreModal || !restoreFilename) return;
-    const sourceDb = restoreSourceDb === "__custom__" ? restoreSourceCustom : restoreSourceDb;
     try {
       await restoreDatabase.mutateAsync({
         name: showRestoreModal.name,
         filename: restoreFilename,
         serverName: showRestoreModal.server,
-        sourceDb: sourceDb || undefined,
       });
       toast.success(`Database "${showRestoreModal.name}" restored.`);
       setShowRestoreModal(null);
       setRestoreFilename("");
-      setRestoreSourceDb("");
-      setRestoreSourceCustom("");
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to restore database."
@@ -338,8 +328,6 @@ export default function Databases() {
                       <button
                         onClick={() => {
                           setShowRestoreModal({ name: db.name, server: db.server_name });
-                          setRestoreSourceDb("");
-                          setRestoreSourceCustom("");
                           setRestoreFilename("");
                         }}
                         title="Restore database"
@@ -387,59 +375,13 @@ export default function Databases() {
       {showRestoreModal && (
         <Modal
           title="Restore Database"
-          onClose={() => { setShowRestoreModal(null); setRestoreFilename(""); setRestoreSourceDb(""); setRestoreSourceCustom(""); }}
+          onClose={() => { setShowRestoreModal(null); setRestoreFilename(""); }}
         >
           <form onSubmit={handleRestore} className="space-y-4" noValidate>
             <p className="text-sm text-zinc-400">
               Restore <span className="font-medium text-zinc-200">{showRestoreModal.name}</span> from
               a backup file on the server.
             </p>
-
-            {/* Source database selector */}
-            <div>
-              <label
-                htmlFor="restore-source-db"
-                className="mb-1.5 block text-xs font-medium text-zinc-300"
-              >
-                Source Database
-              </label>
-              <select
-                id="restore-source-db"
-                value={restoreSourceDb}
-                onChange={(e) => {
-                  setRestoreSourceDb(e.target.value);
-                  setRestoreFilename("");
-                  if (e.target.value !== "__custom__") setRestoreSourceCustom("");
-                }}
-                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-              >
-                <option value="">This database ({showRestoreModal.name})</option>
-                {(() => {
-                  const targetDbType = databases.find((x) => x.name === showRestoreModal.name)?.db_type;
-                  return databases.filter(
-                    (d) => d.name !== showRestoreModal.name && targetDbType && d.db_type === targetDbType,
-                  );
-                })().map((d) => (
-                    <option key={d.name} value={d.name}>
-                      {d.name} ({d.server_name})
-                    </option>
-                  ))}
-                <option value="__custom__">Other (deleted database)...</option>
-              </select>
-              {restoreSourceDb === "__custom__" && (
-                <input
-                  type="text"
-                  aria-label="Deleted database name"
-                  value={restoreSourceCustom}
-                  onChange={(e) => {
-                    setRestoreSourceCustom(e.target.value);
-                    setRestoreFilename("");
-                  }}
-                  placeholder="Enter source database name"
-                  className="mt-2 w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                />
-              )}
-            </div>
 
             <div>
               <label
@@ -478,7 +420,7 @@ export default function Databases() {
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => { setShowRestoreModal(null); setRestoreFilename(""); setRestoreSourceDb(""); setRestoreSourceCustom(""); }}
+                onClick={() => { setShowRestoreModal(null); setRestoreFilename(""); }}
                 className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
               >
                 Cancel

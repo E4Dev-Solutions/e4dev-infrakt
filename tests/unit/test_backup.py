@@ -14,12 +14,16 @@ from cli.core.exceptions import SSHConnectionError
 
 
 def _make_app(
-    name: str = "mydb", app_type: str = "db:postgres", parent_app_id: int | None = None
+    name: str = "mydb",
+    app_type: str = "db:postgres",
+    parent_app_id: int | None = None,
+    backup_id: str = "a1b2c3d4",
 ) -> MagicMock:
     app = MagicMock()
     app.name = name
     app.app_type = app_type
     app.parent_app_id = parent_app_id
+    app.backup_id = backup_id
     return app
 
 
@@ -62,8 +66,8 @@ class TestBackupDatabase:
         with patch("cli.core.backup._timestamp", return_value="20260224_120000"):
             result = backup_database(mock_ssh, app, server_name="prod-1")
 
-        assert result == "/opt/infrakt/backups/prod-1__testdb_20260224_120000.sql.gz"
-        # Verify pg_dump command was called
+        expected = "/opt/infrakt/backups/prod-1_testdb_postgres_a1b2c3d4_20260224_120000.sql.gz"
+        assert result == expected
         calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
         assert any("pg_dump" in c for c in calls)
 
@@ -73,7 +77,7 @@ class TestBackupDatabase:
         with patch("cli.core.backup._timestamp", return_value="20260224_120000"):
             result = backup_database(mock_ssh, app, server_name="prod-1")
 
-        assert result == "/opt/infrakt/backups/prod-1__testdb_20260224_120000.sql.gz"
+        assert result == "/opt/infrakt/backups/prod-1_testdb_mysql_a1b2c3d4_20260224_120000.sql.gz"
         calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
         assert any("mysqldump" in c for c in calls)
 
@@ -82,7 +86,7 @@ class TestBackupDatabase:
         with patch("cli.core.backup._timestamp", return_value="20260224_120000"):
             result = backup_database(mock_ssh, app, server_name="prod-1")
 
-        assert result == "/opt/infrakt/backups/prod-1__cache_20260224_120000.rdb"
+        assert result == "/opt/infrakt/backups/prod-1_cache_redis_a1b2c3d4_20260224_120000.rdb"
         calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
         assert any("BGSAVE" in c for c in calls)
 
@@ -92,7 +96,8 @@ class TestBackupDatabase:
         with patch("cli.core.backup._timestamp", return_value="20260224_120000"):
             result = backup_database(mock_ssh, app, server_name="prod-1")
 
-        assert result == "/opt/infrakt/backups/prod-1__docdb_20260224_120000.archive.gz"
+        expected = "/opt/infrakt/backups/prod-1_docdb_mongo_a1b2c3d4_20260224_120000.archive.gz"
+        assert result == expected
         calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
         assert any("mongodump" in c for c in calls)
 
@@ -106,7 +111,7 @@ class TestBackupDatabase:
         with patch("cli.core.backup._timestamp", return_value="20260224_120000"):
             result = backup_database(mock_ssh, app, server_name="prod-1", backup_dir="/tmp/backups")
 
-        assert result == "/tmp/backups/prod-1__testdb_20260224_120000.sql.gz"
+        assert result == "/tmp/backups/prod-1_testdb_postgres_a1b2c3d4_20260224_120000.sql.gz"
 
 
 class TestRestoreDatabase:

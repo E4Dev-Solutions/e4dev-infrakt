@@ -377,10 +377,10 @@ export function useDatabase(name: string, options?: Partial<UseQueryOptions<Data
   });
 }
 
-export function useDatabaseBackups(name: string, server?: string, sourceDb?: string, options?: Partial<UseQueryOptions<BackupFile[]>>) {
+export function useDatabaseBackups(name: string, server?: string, options?: Partial<UseQueryOptions<BackupFile[]>>) {
   return useQuery({
-    queryKey: [...queryKeys.databaseBackups(name), sourceDb ?? ""],
-    queryFn: () => databasesApi.listBackups(name, server, sourceDb),
+    queryKey: queryKeys.databaseBackups(name),
+    queryFn: () => databasesApi.listBackups(name, server),
     enabled: Boolean(name),
     ...options,
   });
@@ -426,13 +426,11 @@ export function useRestoreDatabase() {
       name,
       filename,
       serverName,
-      sourceDb,
     }: {
       name: string;
       filename: string;
       serverName?: string;
-      sourceDb?: string;
-    }) => databasesApi.restore(name, filename, serverName, sourceDb),
+    }) => databasesApi.restore(name, filename, serverName),
   });
 }
 

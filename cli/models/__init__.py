@@ -1,5 +1,6 @@
 from cli.models.app import App
 from cli.models.app_dependency import AppDependency
+from cli.models.backup_policy import BackupPolicy
 from cli.models.deployment import Deployment
 from cli.models.github_integration import GitHubIntegration
 from cli.models.s3_config import S3Config
@@ -13,6 +14,7 @@ __all__ = [
     "Server",
     "App",
     "AppDependency",
+    "BackupPolicy",
     "Deployment",
     "GitHubIntegration",
     "S3Config",

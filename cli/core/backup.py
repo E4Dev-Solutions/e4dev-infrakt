@@ -569,30 +569,58 @@ def cleanup_old_s3_backups(
     db_type: str,
     backup_id: str = "",
     keep: int = 10,
+    max_age_days: int = 0,
 ) -> int:
-    """Delete old S3 backups for this app, keeping the most recent `keep`.
+    """Delete old S3 backups, keeping the most recent ``keep``.
 
-    Only deletes files matching this app's ID in the filename. Returns count deleted.
+    The **latest** backup is always preserved regardless of count or age
+    limits.  Only files matching this app's ``backup_id`` are considered.
+
+    When *max_age_days* > 0, candidates older than the cutoff are also
+    marked for deletion (but the latest is still kept).
+
+    Returns the number of files deleted.
     """
+    from datetime import timedelta
+
     backups = list_s3_backups(
         ssh, s3_endpoint, bucket, region, access_key, secret_key, prefix, db_type
     )
-    # Only consider files that match this specific app
     backups = [b for b in backups if _is_app_backup(str(b["filename"]), backup_id)]
-    if len(backups) <= keep:
+    # Sort newest-first
+    backups.sort(key=lambda b: str(b.get("modified", "")), reverse=True)
+
+    # Always keep at least the latest backup
+    if len(backups) <= 1:
         return 0
 
-    # Sort by modified date descending (newest first), delete the rest
-    backups.sort(key=lambda b: str(b.get("modified", "")), reverse=True)
-    to_delete = backups[keep:]
+    candidates = backups[1:]  # everything except the latest
+
+    # Build deletion set
+    delete_filenames: set[str] = set()
+
+    # Count-based: keep only `keep - 1` candidates (latest already kept)
+    if len(candidates) > keep - 1:
+        for b in candidates[keep - 1 :]:
+            delete_filenames.add(str(b["filename"]))
+
+    # Age-based: mark candidates older than cutoff
+    if max_age_days > 0:
+        cutoff = (datetime.now(UTC) - timedelta(days=max_age_days)).strftime("%Y-%m-%d %H:%M:%S")
+        for b in candidates:
+            if str(b.get("modified", "")) < cutoff:
+                delete_filenames.add(str(b["filename"]))
+
+    if not delete_filenames:
+        return 0
 
     _write_aws_credentials(ssh, access_key, secret_key, region)
     try:
         s3_dir = _s3_db_dir(prefix, db_type)
         q_endpoint = shlex.quote(s3_endpoint)
         deleted = 0
-        for b in to_delete:
-            s3_key = f"s3://{bucket}/{s3_dir}{b['filename']}"
+        for fn in delete_filenames:
+            s3_key = f"s3://{bucket}/{s3_dir}{fn}"
             cmd = f"{_aws_env_prefix()}aws s3 rm {shlex.quote(s3_key)} --endpoint-url {q_endpoint}"
             _, _, rc = ssh.run(cmd, timeout=30)
             if rc == 0:

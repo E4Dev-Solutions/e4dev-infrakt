@@ -328,6 +328,35 @@ class BackupScheduleCreate(BaseModel):
         return v.strip()
 
 
+# ── Backup Policy ───────────────────────────────────────
+
+
+class BackupPolicyOut(BaseModel):
+    default_cron: str | None = None
+    default_retention_days: int = 7
+    s3_max_backups_per_db: int = 10
+    s3_max_age_days: int = 30
+    scheduled_count: int = 0
+    total_count: int = 0
+
+
+class BackupPolicySave(BaseModel):
+    default_cron: str | None = None
+    default_retention_days: int = Field(default=7, ge=1, le=365)
+    s3_max_backups_per_db: int = Field(default=10, ge=1, le=1000)
+    s3_max_age_days: int = Field(default=30, ge=1, le=3650)
+
+    @field_validator("default_cron")
+    @classmethod
+    def validate_default_cron(cls, v: str | None) -> str | None:
+        if v is not None:
+            parts = v.strip().split()
+            if len(parts) != 5:
+                raise ValueError("Cron expression must have exactly 5 fields")
+            return v.strip()
+        return v
+
+
 # ── Proxy ───────────────────────────────────────────────
 
 

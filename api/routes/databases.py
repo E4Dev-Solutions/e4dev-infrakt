@@ -6,6 +6,7 @@ import shlex
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from api.helpers import get_s3_config as _get_s3_config
 from api.schemas import (
     BackupFileOut,
     BackupScheduleCreate,
@@ -36,25 +37,6 @@ from cli.models.server import Server
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/databases", tags=["databases"])
-
-
-def _get_s3_config() -> dict | None:
-    """Return decrypted S3 config dict, or None if not configured."""
-    from cli.core.crypto import decrypt
-    from cli.models.s3_config import S3Config
-
-    with get_session() as session:
-        cfg = session.query(S3Config).first()
-        if not cfg:
-            return None
-        return {
-            "endpoint_url": cfg.endpoint_url,
-            "bucket": cfg.bucket,
-            "region": cfg.region,
-            "access_key": cfg.access_key,
-            "secret_key": decrypt(cfg.secret_key_encrypted),
-            "prefix": cfg.prefix,
-        }
 
 
 @router.get("", response_model=list[DatabaseOut])
@@ -339,8 +321,14 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
                 )
                 # Delete local file after successful S3 upload
                 ssh.run(f"rm -f {shlex.quote(remote_path)}")
-                # Clean up old S3 backups (keep last 10)
+                # Clean up old S3 backups using policy limits
                 try:
+                    from cli.models.backup_policy import BackupPolicy
+
+                    with get_session() as _s:
+                        _p = _s.query(BackupPolicy).first()
+                    max_keep = _p.s3_max_backups_per_db if _p else 10
+                    max_age = _p.s3_max_age_days if _p else 0
                     cleanup_old_s3_backups(
                         ssh,
                         s3_endpoint=s3_cfg["endpoint_url"],
@@ -351,6 +339,8 @@ def backup_database_endpoint(name: str, server: str | None = None) -> dict[str, 
                         prefix=s3_cfg["prefix"],
                         db_type=db_type,
                         backup_id=backup_id,
+                        keep=max_keep,
+                        max_age_days=max_age,
                     )
                 except Exception:
                     logger.warning("S3 cleanup failed for %s", name, exc_info=True)

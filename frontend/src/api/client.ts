@@ -680,6 +680,34 @@ export const s3Api = {
   delete: (): Promise<{ message: string }> => del("/settings/s3"),
 };
 
+// ─── Backup Policy ───────────────────────────────────────────────────────────
+
+export interface BackupPolicy {
+  default_cron: string | null;
+  default_retention_days: number;
+  s3_max_backups_per_db: number;
+  s3_max_age_days: number;
+  scheduled_count: number;
+  total_count: number;
+}
+
+export interface BackupPolicySave {
+  default_cron: string | null;
+  default_retention_days: number;
+  s3_max_backups_per_db: number;
+  s3_max_age_days: number;
+}
+
+export const backupPolicyApi = {
+  get: (): Promise<BackupPolicy> => get("/settings/backup-policy"),
+  save: (policy: BackupPolicySave): Promise<{ message: string }> =>
+    put("/settings/backup-policy", policy),
+  applyAll: (): Promise<{ message: string; count: number }> =>
+    post("/settings/backup-policy/apply-all"),
+  disableAll: (): Promise<{ message: string; count: number }> =>
+    post("/settings/backup-policy/disable-all"),
+};
+
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
 export interface GitHubStatus {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Plus,
@@ -8,6 +8,7 @@ import {
   Download,
   Upload,
   Clock,
+  Settings,
 } from "lucide-react";
 import {
   useDatabases,
@@ -19,6 +20,10 @@ import {
   useRestoreDatabase,
   useScheduleBackup,
   useUnscheduleBackup,
+  useBackupPolicy,
+  useSaveBackupPolicy,
+  useApplyAllBackups,
+  useDisableAllBackups,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -51,6 +56,9 @@ export default function Databases() {
   const restoreDatabase = useRestoreDatabase();
   const scheduleBackup = useScheduleBackup();
   const unscheduleBackup = useUnscheduleBackup();
+  const saveBackupPolicy = useSaveBackupPolicy();
+  const applyAllBackups = useApplyAllBackups();
+  const disableAllBackups = useDisableAllBackups();
   const toast = useToast();
 
   const [showModal, setShowModal] = useState(false);
@@ -69,6 +77,25 @@ export default function Databases() {
   const [form, setForm] = useState<CreateDatabaseInput>(defaultForm);
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const [backingUpName, setBackingUpName] = useState<string | null>(null);
+
+  // Global backup settings
+  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
+  const { data: backupPolicy } = useBackupPolicy({
+    enabled: showGlobalSettings,
+  });
+  const [policyCron, setPolicyCron] = useState<string>("");
+  const [policyRetention, setPolicyRetention] = useState(7);
+  const [policyMaxBackups, setPolicyMaxBackups] = useState(10);
+  const [policyMaxAge, setPolicyMaxAge] = useState(30);
+
+  useEffect(() => {
+    if (backupPolicy) {
+      setPolicyCron(backupPolicy.default_cron ?? "");
+      setPolicyRetention(backupPolicy.default_retention_days);
+      setPolicyMaxBackups(backupPolicy.s3_max_backups_per_db);
+      setPolicyMaxAge(backupPolicy.s3_max_age_days);
+    }
+  }, [backupPolicy]);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -185,6 +212,47 @@ export default function Databases() {
     }
   }
 
+  async function handleSavePolicy(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await saveBackupPolicy.mutateAsync({
+        default_cron: policyCron.trim() || null,
+        default_retention_days: policyRetention,
+        s3_max_backups_per_db: policyMaxBackups,
+        s3_max_age_days: policyMaxAge,
+      });
+      toast.success("Backup policy saved.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to save backup policy.",
+      );
+    }
+  }
+
+  async function handleApplyAll() {
+    try {
+      const res = await applyAllBackups.mutateAsync();
+      toast.success(res.message);
+      setShowGlobalSettings(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to apply schedules.",
+      );
+    }
+  }
+
+  async function handleDisableAll() {
+    try {
+      const res = await disableAllBackups.mutateAsync();
+      toast.success(res.message);
+      setShowGlobalSettings(false);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to disable schedules.",
+      );
+    }
+  }
+
   function getDbTypeLabel(type: string): string {
     return DB_TYPES.find((d) => d.value === type)?.label ?? type;
   }
@@ -201,13 +269,23 @@ export default function Databases() {
             Manage database instances across your servers
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
-        >
-          <Plus size={16} aria-hidden="true" />
-          Create Database
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowGlobalSettings(true)}
+            title="Global Backup Settings"
+            aria-label="Global backup settings"
+            className="flex items-center justify-center rounded-lg border border-zinc-600 bg-zinc-700 p-2 text-zinc-400 transition-colors hover:bg-zinc-600 hover:text-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+          >
+            <Settings size={16} aria-hidden="true" />
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+          >
+            <Plus size={16} aria-hidden="true" />
+            Create Database
+          </button>
+        </div>
       </div>
 
       {/* Loading */}
@@ -434,6 +512,208 @@ export default function Databases() {
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                 )}
                 Restore
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Global Backup Settings Modal */}
+      {showGlobalSettings && (
+        <Modal
+          title="Global Backup Settings"
+          onClose={() => setShowGlobalSettings(false)}
+        >
+          <form onSubmit={handleSavePolicy} className="space-y-5" noValidate>
+            {/* Status overview */}
+            <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-2.5 text-sm text-zinc-400">
+              <span className="font-medium text-zinc-200">
+                {backupPolicy?.scheduled_count ?? 0}
+              </span>{" "}
+              of{" "}
+              <span className="font-medium text-zinc-200">
+                {backupPolicy?.total_count ?? 0}
+              </span>{" "}
+              databases have active backup schedules
+            </div>
+
+            {/* Section 1: Default schedule */}
+            <fieldset className="space-y-3">
+              <legend className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                Default Backup Schedule
+              </legend>
+
+              <div>
+                <label
+                  htmlFor="policy-cron"
+                  className="mb-1.5 block text-xs font-medium text-zinc-300"
+                >
+                  Cron Expression
+                </label>
+                <input
+                  id="policy-cron"
+                  type="text"
+                  value={policyCron}
+                  onChange={(e) => setPolicyCron(e.target.value)}
+                  placeholder="0 2 * * *"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                />
+              </div>
+
+              {/* Presets */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "Daily 2am", value: "0 2 * * *" },
+                  { label: "Every 12h", value: "0 */12 * * *" },
+                  { label: "Weekly Sun", value: "0 2 * * 0" },
+                ].map(({ label, value }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPolicyCron(value)}
+                    className={[
+                      "rounded-md border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500",
+                      policyCron === value
+                        ? "border-orange-500 bg-orange-500/20 text-orange-300"
+                        : "border-zinc-600 bg-zinc-700 text-zinc-300 hover:bg-zinc-600",
+                    ].join(" ")}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="policy-retention"
+                  className="mb-1.5 block text-xs font-medium text-zinc-300"
+                >
+                  Retention Days
+                </label>
+                <input
+                  id="policy-retention"
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={policyRetention}
+                  onChange={(e) =>
+                    setPolicyRetention(Math.max(1, Number(e.target.value)))
+                  }
+                  className="w-32 rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                />
+              </div>
+
+              {/* Bulk actions */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => void handleApplyAll()}
+                  disabled={
+                    applyAllBackups.isPending || !policyCron.trim()
+                  }
+                  className="flex items-center gap-1.5 rounded-md border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-300 transition-colors hover:bg-orange-500/20 disabled:opacity-50"
+                >
+                  {applyAllBackups.isPending && (
+                    <Loader2
+                      size={12}
+                      className="animate-spin"
+                      aria-hidden="true"
+                    />
+                  )}
+                  Apply to All Unscheduled
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDisableAll()}
+                  disabled={disableAllBackups.isPending}
+                  className="flex items-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                >
+                  {disableAllBackups.isPending && (
+                    <Loader2
+                      size={12}
+                      className="animate-spin"
+                      aria-hidden="true"
+                    />
+                  )}
+                  Disable All Schedules
+                </button>
+              </div>
+            </fieldset>
+
+            {/* Section 2: S3 cleanup */}
+            <fieldset className="space-y-3">
+              <legend className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                S3 Cleanup Policy
+              </legend>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="policy-max-backups"
+                    className="mb-1.5 block text-xs font-medium text-zinc-300"
+                  >
+                    Max Backups per DB
+                  </label>
+                  <input
+                    id="policy-max-backups"
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={policyMaxBackups}
+                    onChange={(e) =>
+                      setPolicyMaxBackups(Math.max(1, Number(e.target.value)))
+                    }
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="policy-max-age"
+                    className="mb-1.5 block text-xs font-medium text-zinc-300"
+                  >
+                    Max Backup Age (days)
+                  </label>
+                  <input
+                    id="policy-max-age"
+                    type="number"
+                    min={1}
+                    max={3650}
+                    value={policyMaxAge}
+                    onChange={(e) =>
+                      setPolicyMaxAge(Math.max(1, Number(e.target.value)))
+                    }
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-zinc-500">
+                The latest backup for each database is always preserved,
+                regardless of these limits.
+              </p>
+            </fieldset>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowGlobalSettings(false)}
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saveBackupPolicy.isPending}
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
+              >
+                {saveBackupPolicy.isPending && (
+                  <Loader2
+                    size={14}
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
+                Save Settings
               </button>
             </div>
           </form>

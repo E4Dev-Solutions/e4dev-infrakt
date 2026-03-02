@@ -563,6 +563,44 @@ export async function mockApi(page: Page): Promise<void> {
     return route.continue();
   });
 
+  // Backup policy (specific routes first due to LIFO)
+  await page.route("**/api/settings/backup-policy/apply-all", (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        json: { message: "Applied backup schedule to 2 database(s)", count: 2 },
+      });
+    }
+    return route.continue();
+  });
+
+  await page.route("**/api/settings/backup-policy/disable-all", (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        json: { message: "Disabled backup schedules for 2 database(s)", count: 2 },
+      });
+    }
+    return route.continue();
+  });
+
+  await page.route("**/api/settings/backup-policy", (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        json: {
+          default_cron: null,
+          default_retention_days: 7,
+          s3_max_backups_per_db: 10,
+          s3_max_age_days: 30,
+          scheduled_count: 0,
+          total_count: 2,
+        },
+      });
+    }
+    if (route.request().method() === "PUT") {
+      return route.fulfill({ json: { message: "Backup policy saved" } });
+    }
+    return route.continue();
+  });
+
   // Database backup (must be before generic /databases/*)
   await page.route(/\/api\/databases\/[^/]+\/backup/, (route) => {
     if (route.request().method() === "POST") {

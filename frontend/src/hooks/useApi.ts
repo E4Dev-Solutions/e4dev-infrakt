@@ -16,8 +16,11 @@ import {
   configApi,
   githubApi,
   s3Api,
+  backupPolicyApi,
   type S3Config,
   type S3ConfigSave,
+  type BackupPolicy,
+  type BackupPolicySave,
   type CreateServerInput,
   type UpdateServerInput,
   type CreateAppInput,
@@ -71,6 +74,7 @@ export const queryKeys = {
   githubRepos: ["github", "repos"] as const,
   templates: ["templates"] as const,
   s3Config: ["s3-config"] as const,
+  backupPolicy: ["backup-policy"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -776,6 +780,50 @@ export function useDeleteS3Config() {
     mutationFn: () => s3Api.delete(),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.s3Config });
+    },
+  });
+}
+
+// ─── Backup Policy ────────────────────────────────────────────────────────────
+
+export function useBackupPolicy(
+  options?: Partial<UseQueryOptions<BackupPolicy>>,
+) {
+  return useQuery({
+    queryKey: queryKeys.backupPolicy,
+    queryFn: backupPolicyApi.get,
+    ...options,
+  });
+}
+
+export function useSaveBackupPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (policy: BackupPolicySave) => backupPolicyApi.save(policy),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.backupPolicy });
+    },
+  });
+}
+
+export function useApplyAllBackups() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => backupPolicyApi.applyAll(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.backupPolicy });
+      void qc.invalidateQueries({ queryKey: queryKeys.databases() });
+    },
+  });
+}
+
+export function useDisableAllBackups() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => backupPolicyApi.disableAll(),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.backupPolicy });
+      void qc.invalidateQueries({ queryKey: queryKeys.databases() });
     },
   });
 }

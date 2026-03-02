@@ -286,4 +286,68 @@ test.describe("Databases", () => {
       page.getByText(`Backup schedule removed for "${MOCK_DATABASES[0].name}"`),
     ).toBeVisible();
   });
+
+  // ─── Global Backup Settings ─────────────────────────────────────────────────
+
+  test("global backup settings gear icon is visible", async ({ page }) => {
+    await expect(page.getByLabel("Global backup settings")).toBeVisible();
+  });
+
+  test("clicking gear icon opens Global Backup Settings modal", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await expect(
+      page.getByRole("heading", { name: "Global Backup Settings" }),
+    ).toBeVisible();
+  });
+
+  test("global settings modal has cron and retention inputs", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await expect(page.getByLabel("Cron Expression")).toBeVisible();
+    await expect(page.getByLabel("Retention Days")).toBeVisible();
+  });
+
+  test("global settings modal has S3 cleanup inputs", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await expect(page.getByLabel("Max Backups per DB")).toBeVisible();
+    await expect(page.getByLabel("Max Backup Age (days)")).toBeVisible();
+  });
+
+  test("global settings modal has preset buttons", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await expect(page.getByRole("button", { name: /Daily 2am/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Every 12h/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Weekly Sun/ })).toBeVisible();
+  });
+
+  test("global settings modal shows status count", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await expect(page.getByText(/0.*of.*2.*databases have active backup schedules/)).toBeVisible();
+  });
+
+  test("save settings shows success toast", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await page.getByRole("button", { name: "Save Settings" }).click();
+    await expect(page.getByText("Backup policy saved")).toBeVisible();
+  });
+
+  test("Apply to All Unscheduled shows success toast", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    // Need a cron value for apply-all to be enabled
+    await page.getByLabel("Cron Expression").fill("0 2 * * *");
+    await page.getByRole("button", { name: "Apply to All Unscheduled" }).click();
+    await expect(page.getByText("Applied backup schedule to 2 database(s)")).toBeVisible();
+  });
+
+  test("Disable All Schedules shows success toast", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await page.getByRole("button", { name: "Disable All Schedules" }).click();
+    await expect(page.getByText("Disabled backup schedules for 2 database(s)")).toBeVisible();
+  });
+
+  test("global settings modal preserves latest backup note", async ({ page }) => {
+    await page.getByLabel("Global backup settings").click();
+    await expect(
+      page.getByText("The latest backup for each database is always preserved"),
+    ).toBeVisible();
+  });
 });

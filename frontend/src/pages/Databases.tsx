@@ -57,9 +57,11 @@ export default function Databases() {
   const [showRestoreModal, setShowRestoreModal] = useState<{ name: string; server: string } | null>(null);
   const [restoreFilename, setRestoreFilename] = useState("");
   const { data: restoreBackups = [], isLoading: restoreBackupsLoading } =
-    useDatabaseBackups(showRestoreModal?.name ?? "", showRestoreModal?.server, {
-      enabled: Boolean(showRestoreModal),
-    });
+    useDatabaseBackups(
+      showRestoreModal?.name ?? "",
+      showRestoreModal?.server,
+      { enabled: Boolean(showRestoreModal) },
+    );
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleDb, setScheduleDb] = useState<{ name: string; server: string; currentSchedule?: string | null } | null>(null);
   const [cronExpression, setCronExpression] = useState("0 2 * * *");
@@ -324,7 +326,10 @@ export default function Databases() {
                         )}
                       </button>
                       <button
-                        onClick={() => setShowRestoreModal({ name: db.name, server: db.server_name })}
+                        onClick={() => {
+                          setShowRestoreModal({ name: db.name, server: db.server_name });
+                          setRestoreFilename("");
+                        }}
                         title="Restore database"
                         className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-amber-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
                         aria-label={`Restore ${db.name}`}
@@ -377,6 +382,7 @@ export default function Databases() {
               Restore <span className="font-medium text-zinc-200">{showRestoreModal.name}</span> from
               a backup file on the server.
             </p>
+
             <div>
               <label
                 htmlFor="restore-filename"

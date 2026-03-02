@@ -103,6 +103,17 @@ export const MOCK_DATABASES = [
     backup_schedule: null,
     created_at: "2025-01-18T14:00:00",
   },
+  {
+    id: 2,
+    name: "staging-pg",
+    server_id: 1,
+    server_name: "prod-1",
+    db_type: "postgres",
+    status: "running",
+    port: 5433,
+    backup_schedule: null,
+    created_at: "2025-01-20T10:00:00",
+  },
 ];
 
 export const MOCK_BACKUP_FILES = [
@@ -163,7 +174,7 @@ export const MOCK_DASHBOARD = {
   active_servers: 2,
   total_apps: 2,
   running_apps: 1,
-  total_databases: 1,
+  total_databases: 2,
   recent_deployments: MOCK_DEPLOYMENTS,
 };
 
@@ -609,12 +620,14 @@ export async function mockApi(page: Page): Promise<void> {
   // Single database detail GET (must be before generic DELETE)
   await page.route(/\/api\/databases\/[^/]+$/, (route) => {
     if (route.request().method() === "GET") {
+      const url = route.request().url();
+      const name = decodeURIComponent(url.split("/databases/")[1].split("?")[0]);
+      const db = MOCK_DATABASES.find((d) => d.name === name);
       return route.fulfill({
-        json: {
-          ...MOCK_DATABASES[0],
-          created_at: "2025-01-18T14:00:00",
-          updated_at: "2025-01-18T14:00:00",
-        },
+        json: db
+          ? { ...db, updated_at: db.created_at }
+          : null,
+        status: db ? 200 : 404,
       });
     }
     if (route.request().method() === "DELETE") {

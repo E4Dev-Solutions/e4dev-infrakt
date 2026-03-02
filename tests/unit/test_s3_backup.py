@@ -19,7 +19,7 @@ class TestUploadBackupToS3:
             access_key="AKID",
             secret_key="SECRET",
             prefix="infrakt/",
-            db_name="mydb",
+            db_type="postgres",
         )
         calls = [str(c) for c in ssh.run_checked.call_args_list]
         assert any("aws s3 cp" in c for c in calls)
@@ -38,7 +38,7 @@ class TestUploadBackupToS3:
             access_key="k",
             secret_key="s",
             prefix="",
-            db_name="test",
+            db_type="postgres",
         )
         calls = [str(c) for c in ssh.run.call_args_list]
         assert any("rm -f" in c for c in calls)
@@ -58,7 +58,7 @@ class TestDownloadBackupFromS3:
             access_key="AKID",
             secret_key="SECRET",
             prefix="infrakt/",
-            db_name="mydb",
+            db_type="postgres",
         )
         assert result == "/opt/infrakt/backups/mydb_20260228_020000.sql.gz"
         calls = [str(c) for c in ssh.run_checked.call_args_list]
@@ -83,7 +83,7 @@ class TestListS3Backups:
             access_key="k",
             secret_key="s",
             prefix="infrakt/",
-            db_name="mydb",
+            db_type="postgres",
         )
         assert len(results) == 2
         assert results[0]["filename"] == "mydb_20260228_020000.sql.gz"
@@ -101,6 +101,6 @@ class TestListS3Backups:
             access_key="k",
             secret_key="s",
             prefix="",
-            db_name="mydb",
+            db_type="postgres",
         )
         assert results == []

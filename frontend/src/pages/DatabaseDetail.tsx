@@ -129,6 +129,11 @@ export default function DatabaseDetail() {
   // Restore modal state
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreFilename, setRestoreFilename] = useState("");
+  const { data: restoreBackupsList = [], isLoading: restoreBackupsLoading } = useDatabaseBackups(
+    decodedName,
+    undefined,
+    { enabled: showRestoreModal },
+  );
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -627,7 +632,7 @@ export default function DatabaseDetail() {
               backup.
             </p>
 
-            {/* Backup selector */}
+            {/* Backup selector — shows all same-type backups from S3 */}
             <div>
               <label
                 htmlFor="restore-filename"
@@ -635,12 +640,12 @@ export default function DatabaseDetail() {
               >
                 Select Backup <span className="text-red-400">*</span>
               </label>
-              {backupsLoading ? (
+              {restoreBackupsLoading ? (
                 <div className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700/50 px-3 py-3 text-sm text-zinc-500">
                   <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                   Loading backups...
                 </div>
-              ) : backups.length > 0 ? (
+              ) : restoreBackupsList.length > 0 ? (
                 <select
                   id="restore-filename"
                   required
@@ -649,7 +654,7 @@ export default function DatabaseDetail() {
                   className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
                 >
                   <option value="">Choose a backup...</option>
-                  {backups.map((b) => (
+                  {restoreBackupsList.map((b) => (
                     <option key={b.filename} value={b.filename}>
                       {b.filename} — {b.size}{" "}
                       ({b.location === "s3" ? "S3" : b.location === "both" ? "Local + S3" : "Local"})
@@ -672,7 +677,7 @@ export default function DatabaseDetail() {
               </button>
               <button
                 type="submit"
-                disabled={restoreDatabase.isPending || !restoreFilename}
+                disabled={restoreDatabase.isPending || !restoreFilename || restoreBackupsLoading}
                 className="flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500 disabled:opacity-50"
               >
                 {restoreDatabase.isPending && (

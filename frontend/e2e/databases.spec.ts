@@ -19,13 +19,13 @@ test.describe("Databases", () => {
   test("lists existing database with correct details", async ({ page }) => {
     const db = MOCK_DATABASES[0];
     await expect(page.getByText(db.name)).toBeVisible();
-    await expect(page.getByText(db.server_name)).toBeVisible();
-    await expect(page.getByText("PostgreSQL")).toBeVisible();
+    await expect(page.getByText(db.server_name).first()).toBeVisible();
+    await expect(page.getByText("PostgreSQL").first()).toBeVisible();
     await expect(page.getByText(String(db.port))).toBeVisible();
   });
 
   test("shows status badge for running database", async ({ page }) => {
-    await expect(page.getByLabel("Status: Running")).toBeVisible();
+    await expect(page.getByLabel("Status: Running").first()).toBeVisible();
   });
 
   test("shows delete button with aria-label", async ({ page }) => {

@@ -66,6 +66,7 @@ export default function Apps() {
   const [sourceType, setSourceType] = useState<"template" | "github" | "image">("template");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<AppTemplate | null>(null);
+  const [domainRows, setDomainRows] = useState<{ service: string; domain: string; port: string }[]>([]);
 
   // Templates
   const { data: templates = [] } = useTemplates();
@@ -102,6 +103,7 @@ export default function Apps() {
     setSourceType("template");
     setSelectedTemplate(null);
     setShowAdvanced(false);
+    setDomainRows([]);
     if (githubConnected && githubRepos.length === 0) {
       void refetchRepos();
     }
@@ -137,11 +139,19 @@ export default function Apps() {
     try {
       // For multi-domain templates, send domains dict instead of domain string
       const hasMultiDomain = form.domains && Object.values(form.domains).some(Boolean);
+      // For git/image domain rows
+      const filledRows = domainRows.filter((r) => r.service && r.domain);
+      const hasRowDomains = filledRows.length > 0;
       const payload: CreateAppInput = {
         ...form,
-        domain: hasMultiDomain ? undefined : (form.domain || undefined),
+        domain: hasMultiDomain || hasRowDomains ? undefined : (form.domain || undefined),
         domains: hasMultiDomain
           ? Object.fromEntries(Object.entries(form.domains!).filter(([, v]) => v))
+          : hasRowDomains
+            ? Object.fromEntries(filledRows.map((r) => [r.service, r.domain]))
+            : undefined,
+        domain_ports: hasRowDomains
+          ? Object.fromEntries(filledRows.filter((r) => r.port).map((r) => [r.service, Number(r.port)]))
           : undefined,
         git_repo: form.git_repo || undefined,
         branch: form.branch || undefined,
@@ -634,38 +644,100 @@ export default function Apps() {
                   </div>
                 ))}
               </div>
+            ) : domainRows.length > 0 ? (
+              /* Multi-domain rows for git/image apps */
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-zinc-300">Service Domains</label>
+                  <button
+                    type="button"
+                    onClick={() => setDomainRows((prev) => [...prev, { service: "", domain: "", port: "" }])}
+                    className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300"
+                  >
+                    <Plus size={12} /> Add
+                  </button>
+                </div>
+                <div className="grid grid-cols-12 gap-2 text-[10px] uppercase tracking-wider text-zinc-500 px-0.5">
+                  <span className="col-span-3">Service</span>
+                  <span className="col-span-5">Domain</span>
+                  <span className="col-span-3">Port</span>
+                  <span className="col-span-1" />
+                </div>
+                {domainRows.map((row, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-2">
+                    <input
+                      className="col-span-3 rounded-lg border border-zinc-600 bg-zinc-700 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                      placeholder="api"
+                      value={row.service}
+                      onChange={(e) => setDomainRows((prev) => prev.map((r, j) => (j === i ? { ...r, service: e.target.value } : r)))}
+                    />
+                    <input
+                      className="col-span-5 rounded-lg border border-zinc-600 bg-zinc-700 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                      placeholder="api.example.com"
+                      value={row.domain}
+                      onChange={(e) => setDomainRows((prev) => prev.map((r, j) => (j === i ? { ...r, domain: e.target.value } : r)))}
+                    />
+                    <input
+                      type="number"
+                      className="col-span-3 rounded-lg border border-zinc-600 bg-zinc-700 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                      placeholder="4000"
+                      value={row.port}
+                      onChange={(e) => setDomainRows((prev) => prev.map((r, j) => (j === i ? { ...r, port: e.target.value } : r)))}
+                    />
+                    <button
+                      type="button"
+                      className="col-span-1 flex items-center justify-center text-zinc-500 hover:text-red-400"
+                      onClick={() => setDomainRows((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <label htmlFor="app-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                    Domain
-                  </label>
-                  <input
-                    id="app-domain"
-                    name="domain"
-                    type="text"
-                    value={form.domain ?? ""}
-                    onChange={handleChange}
-                    placeholder="app.example.com"
-                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                  />
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label htmlFor="app-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                      Domain
+                    </label>
+                    <input
+                      id="app-domain"
+                      name="domain"
+                      type="text"
+                      value={form.domain ?? ""}
+                      onChange={handleChange}
+                      placeholder="app.example.com"
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="app-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                      Port
+                    </label>
+                    <input
+                      id="app-port"
+                      name="port"
+                      type="number"
+                      min={1}
+                      max={65535}
+                      value={form.port ?? ""}
+                      onChange={handleChange}
+                      placeholder="3000"
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="app-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                    Port
-                  </label>
-                  <input
-                    id="app-port"
-                    name="port"
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={form.port ?? ""}
-                    onChange={handleChange}
-                    placeholder="3000"
-                    className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
-                  />
-                </div>
+                {(sourceType === "github" || sourceType === "image") && (
+                  <button
+                    type="button"
+                    onClick={() => setDomainRows([{ service: "", domain: "", port: "" }])}
+                    className="flex items-center gap-1 text-xs text-zinc-400 hover:text-orange-400 transition-colors"
+                    aria-label="Add service domain"
+                  >
+                    <Plus size={12} /> Add service domain
+                  </button>
+                )}
               </div>
             )}
 

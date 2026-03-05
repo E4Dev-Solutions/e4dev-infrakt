@@ -43,6 +43,7 @@ class App(Base):
     replicas: Mapped[int] = mapped_column(Integer, default=1)
     deploy_strategy: Mapped[str] = mapped_column(String(20), default="restart")
     webhook_secret: Mapped[str | None] = mapped_column(String(100), default=None)
+    domain_ports: Mapped[str | None] = mapped_column(String(500), default=None)
     auto_deploy: Mapped[bool] = mapped_column(Boolean, default=True)
     parent_app_id: Mapped[int | None] = mapped_column(
         ForeignKey("apps.id", ondelete="CASCADE"), default=None

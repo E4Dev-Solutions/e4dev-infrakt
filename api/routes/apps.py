@@ -61,6 +61,58 @@ def _ssh_for(srv: Server) -> SSHClient:
     return SSHClient.from_server(srv)
 
 
+def _parse_domains(raw: str | None) -> set[str]:
+    """Extract all domain strings from a raw domain column value."""
+    if not raw:
+        return set()
+    if raw.startswith("{"):
+        try:
+            return set(json.loads(raw).values())
+        except (json.JSONDecodeError, AttributeError):
+            return set()
+    return {raw}
+
+
+def _refresh_proxy_routes(
+    app_obj: App,
+    old_raw: str | None,
+    new_raw: str | None,
+    app_name: str,
+) -> None:
+    """Remove old Traefik routes and add new ones when domains change."""
+    old_domains = _parse_domains(old_raw)
+    new_domains = _parse_domains(new_raw)
+    if old_domains == new_domains:
+        return
+
+    uses_repo_compose = app_obj.app_type == "git" and not (app_obj.app_type.startswith("template:"))
+    port = app_obj.port or 3000
+
+    try:
+        with _ssh_for(app_obj.server) as ssh:
+            # Remove routes that no longer apply
+            for domain in old_domains - new_domains:
+                try:
+                    remove_domain(ssh, domain)
+                except Exception:
+                    logger.warning("Failed to remove proxy route for %s", domain)
+
+            # Add new routes
+            for domain in new_domains - old_domains:
+                try:
+                    add_domain(
+                        ssh,
+                        domain,
+                        port,
+                        app_name=app_name,
+                        repo_compose=uses_repo_compose,
+                    )
+                except Exception:
+                    logger.warning("Failed to add proxy route for %s", domain)
+    except Exception:
+        logger.warning("Failed to refresh proxy routes for %s", app_name)
+
+
 def _register_embedded_dbs(
     app_id: int, server_id: int, app_name: str, db_services: dict[str, str]
 ) -> None:
@@ -251,6 +303,9 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
         if not app_obj:
             raise HTTPException(404, f"App '{name}' not found")
 
+        # Capture old domain(s) before updating so we can diff later
+        old_domain_raw = app_obj.domain
+
         if body.domains is not None:
             import json as _json
 
@@ -299,6 +354,16 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
                 app_obj.app_type = "compose"
 
         session.flush()
+
+        # If domain changed, update Traefik routes immediately
+        new_domain_raw = app_obj.domain
+        if old_domain_raw != new_domain_raw and app_obj.server:
+            _refresh_proxy_routes(
+                app_obj,
+                old_domain_raw,
+                new_domain_raw,
+                name,
+            )
 
         return _app_out(app_obj, session)
 

@@ -7,6 +7,7 @@ from cli.core.deployer import (
     _compose_work_dir,
     _generate_compose,
     deploy_app,
+    detect_all_services,
     detect_db_services,
     get_container_health,
     get_logs,
@@ -642,3 +643,59 @@ def test_detect_db_services_handles_bitnami_images():
     )
     result = detect_db_services(ssh, "myapp")
     assert result == {"postgres": "postgres", "mongo": "mongo"}
+
+
+def test_detect_all_services_classifies_web_api_db():
+    """detect_all_services classifies services by role and detects ports."""
+    import yaml
+
+    compose_config = yaml.dump(
+        {
+            "services": {
+                "web": {
+                    "build": {"context": ".", "dockerfile": "apps/web/Dockerfile"},
+                    "expose": ["3000"],
+                    "networks": {"infrakt": None, "internal": None},
+                },
+                "api": {
+                    "build": {"context": ".", "dockerfile": "apps/api/Dockerfile"},
+                    "expose": ["4000"],
+                    "environment": {"PORT": "4000"},
+                    "networks": {"infrakt": None, "internal": None},
+                },
+                "postgres": {
+                    "image": "postgres:17-alpine",
+                    "networks": {"internal": None},
+                },
+                "redis": {
+                    "image": "redis:7-alpine",
+                    "networks": {"internal": None},
+                },
+            }
+        }
+    )
+    ssh = MagicMock()
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 1),  # _compose_work_dir: no repo compose
+            (compose_config, "", 0),  # docker compose config
+        ]
+    )
+    services = detect_all_services(ssh, "myapp")
+    by_name = {s.name: s for s in services}
+
+    assert by_name["web"].role == "web"
+    assert by_name["web"].port == 3000
+    assert by_name["web"].routable is True
+
+    assert by_name["api"].role == "api"
+    assert by_name["api"].port == 4000
+    assert by_name["api"].routable is True
+
+    assert by_name["postgres"].role == "db"
+    assert by_name["postgres"].db_type == "postgres"
+    assert by_name["postgres"].routable is False
+
+    assert by_name["redis"].role == "cache"
+    assert by_name["redis"].db_type == "redis"
+    assert by_name["redis"].routable is False

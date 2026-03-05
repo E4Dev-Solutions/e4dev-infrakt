@@ -34,6 +34,7 @@ from cli.core.database import get_session, init_db
 from cli.core.deployer import (
     deploy_app,
     destroy_app,
+    detect_all_services,
     detect_db_services,
     get_container_health,
     get_logs,
@@ -926,6 +927,36 @@ def app_services(name: str) -> list[str]:
     try:
         with ssh:
             return list_services(ssh, name)
+    except SSHConnectionError as exc:
+        raise HTTPException(502, str(exc))
+
+
+@router.get("/{name}/detected-services")
+def app_detected_services(name: str) -> list[dict]:
+    """Detect and classify all services from the deployed compose file.
+
+    Returns service name, role (web/api/worker/db/cache), port, and
+    whether the service is routable via the infrakt network.
+    """
+    init_db()
+    with get_session() as session:
+        app_obj = session.query(App).filter(App.name == name).first()
+        if not app_obj:
+            raise HTTPException(404, f"App '{name}' not found")
+        ssh = _ssh_for(app_obj.server)
+    try:
+        with ssh:
+            services = detect_all_services(ssh, name)
+        return [
+            {
+                "name": s.name,
+                "role": s.role,
+                "port": s.port,
+                "db_type": s.db_type,
+                "routable": s.routable,
+            }
+            for s in services
+        ]
     except SSHConnectionError as exc:
         raise HTTPException(502, str(exc))
 

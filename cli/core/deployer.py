@@ -467,6 +467,141 @@ def detect_db_services(ssh: SSHClient, app_name: str) -> dict[str, str]:
     return result
 
 
+@dataclass
+class DetectedService:
+    """Info about a service detected from a compose file."""
+
+    name: str
+    role: str  # "web", "api", "worker", "db", "cache", "unknown"
+    port: int | None = None
+    db_type: str | None = None  # e.g. "postgres", "redis" — only for db/cache roles
+    routable: bool = False  # True if on the infrakt network (externally reachable)
+
+
+def detect_all_services(ssh: SSHClient, app_name: str) -> list[DetectedService]:
+    """Parse the deployed compose config and classify every service.
+
+    Returns a list of ``DetectedService`` with role, port, and routability
+    info. This lets the UI auto-suggest domain-to-service mappings.
+    """
+    work_dir = _compose_work_dir(ssh, app_name)
+    cmd = f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} config"
+    stdout, _, rc = ssh.run(cmd, timeout=15)
+    if rc != 0 or not stdout.strip():
+        return []
+    try:
+        config = yaml.safe_load(stdout)
+    except Exception:
+        return []
+
+    services = (config or {}).get("services", {})
+    result: list[DetectedService] = []
+
+    for svc_name, svc_def in services.items():
+        if not svc_def:
+            continue
+
+        image = svc_def.get("image", "")
+        has_build = bool(svc_def.get("build"))
+        networks = set(svc_def.get("networks", {}).keys())
+        routable = "infrakt" in networks
+
+        # Detect exposed port from expose or ports
+        port = _detect_port(svc_def)
+
+        # Classify service
+        db_type = _classify_db_image(image)
+        if db_type:
+            role = "cache" if db_type == "redis" else "db"
+            result.append(
+                DetectedService(
+                    name=svc_name,
+                    role=role,
+                    port=port,
+                    db_type=db_type,
+                    routable=routable,
+                )
+            )
+        elif has_build or (image and not db_type):
+            role = _guess_app_role(svc_name, svc_def)
+            result.append(
+                DetectedService(
+                    name=svc_name,
+                    role=role,
+                    port=port,
+                    routable=routable,
+                )
+            )
+
+    return result
+
+
+def _classify_db_image(image: str) -> str | None:
+    """Return db_type if image matches a known DB, else None."""
+    for prefix, db_type in _DB_IMAGE_PREFIXES.items():
+        if image.startswith(prefix):
+            return db_type
+    return None
+
+
+def _detect_port(svc_def: dict) -> int | None:
+    """Extract the first exposed/published port from a service definition."""
+    # Check 'expose' first (preferred for compose services)
+    expose = svc_def.get("expose", [])
+    if expose:
+        try:
+            return int(str(expose[0]).split("/")[0])
+        except (ValueError, IndexError):
+            pass
+    # Check 'ports' (host:container mappings)
+    ports = svc_def.get("ports", [])
+    for p in ports:
+        if isinstance(p, dict):
+            target = p.get("target")
+            if target:
+                return int(target)
+        elif isinstance(p, str) and ":" in p:
+            try:
+                return int(p.rsplit(":", 1)[1].split("/")[0])
+            except (ValueError, IndexError):
+                pass
+    # Check environment for common PORT variables
+    env = svc_def.get("environment", {})
+    if isinstance(env, dict):
+        for key in ("PORT", "APP_PORT", "SERVER_PORT"):
+            val = env.get(key)
+            if val:
+                try:
+                    return int(val)
+                except (ValueError, TypeError):
+                    pass
+    return None
+
+
+_WEB_HINTS = {"web", "frontend", "app", "client", "ui", "next", "nuxt", "www"}
+_API_HINTS = {"api", "server", "backend", "gateway", "graphql", "rest"}
+_WORKER_HINTS = {"worker", "queue", "consumer", "cron", "scheduler", "job"}
+
+
+def _guess_app_role(svc_name: str, svc_def: dict) -> str:
+    """Heuristically classify a non-DB service as web, api, or worker."""
+    name_lower = svc_name.lower()
+    # Check service name first
+    for hint in _WEB_HINTS:
+        if hint in name_lower:
+            return "web"
+    for hint in _API_HINTS:
+        if hint in name_lower:
+            return "api"
+    for hint in _WORKER_HINTS:
+        if hint in name_lower:
+            return "worker"
+    # Check if it has exposed ports (likely web/api)
+    if svc_def.get("expose") or svc_def.get("ports"):
+        return "web"
+    return "unknown"
+
+
 def _generate_compose(
     app_name: str,
     *,

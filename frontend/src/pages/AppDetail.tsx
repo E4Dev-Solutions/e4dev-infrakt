@@ -23,6 +23,7 @@ import {
   RotateCcw,
   MoreVertical,
   ExternalLink,
+  FileText,
 } from "lucide-react";
 import {
   useApps,
@@ -493,6 +494,8 @@ function EnvTab({ appName }: { appName: string }) {
   const [editValue, setEditValue] = useState("");
   const [editOriginal, setEditOriginal] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkText, setBulkText] = useState("");
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -509,6 +512,29 @@ function EnvTab({ appName }: { appName: string }) {
       toast.error(
         err instanceof Error ? err.message : "Failed to save.",
       );
+    }
+  }
+
+  async function handleBulkImport() {
+    const lines = bulkText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith("#"));
+    const vars = lines
+      .map((l) => {
+        const idx = l.indexOf("=");
+        if (idx < 1) return null;
+        return { key: l.slice(0, idx).trim(), value: l.slice(idx + 1) };
+      })
+      .filter((v): v is { key: string; value: string } => v !== null);
+    if (vars.length === 0) return;
+    try {
+      await setEnv.mutateAsync({ name: appName, vars });
+      toast.success(`Imported ${vars.length} variable${vars.length > 1 ? "s" : ""}.`);
+      setBulkText("");
+      setShowBulk(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bulk import failed.");
     }
   }
 
@@ -650,7 +676,52 @@ function EnvTab({ appName }: { appName: string }) {
           )}
           Add
         </button>
+        <button
+          type="button"
+          onClick={() => setShowBulk(true)}
+          className="flex items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500"
+        >
+          <FileText size={14} />
+          Bulk Import
+        </button>
       </form>
+
+      {/* Bulk import modal */}
+      {showBulk && (
+        <Modal title="Bulk Import" onClose={() => setShowBulk(false)} maxWidth="max-w-lg">
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-400">
+              Paste environment variables in KEY=VALUE format, one per line. Lines starting with # are ignored.
+            </p>
+            <textarea
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              placeholder={"DATABASE_URL=postgres://...\nSECRET_KEY=abc123\n# comment lines are ignored"}
+              rows={8}
+              className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBulk(false)}
+                className="rounded-lg border border-zinc-600 bg-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:bg-zinc-600"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkImport}
+                disabled={setEnv.isPending || !bulkText.trim()}
+                className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
+              >
+                {setEnv.isPending && <Loader2 size={14} className="animate-spin" />}
+                Import
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Unified env table */}
       {loading ? (

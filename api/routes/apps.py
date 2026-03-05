@@ -34,6 +34,7 @@ from cli.core.database import get_session, init_db
 from cli.core.deployer import (
     deploy_app,
     destroy_app,
+    detect_db_services,
     get_container_health,
     get_logs,
     list_services,
@@ -58,6 +59,34 @@ logger = logging.getLogger(__name__)
 
 def _ssh_for(srv: Server) -> SSHClient:
     return SSHClient.from_server(srv)
+
+
+def _register_embedded_dbs(
+    app_id: int, server_id: int, app_name: str, db_services: dict[str, str]
+) -> None:
+    """Create child App records for DB services detected in a compose file."""
+    from cli.commands.db import DB_TEMPLATES
+
+    with get_session() as session:
+        for svc_name, db_type in db_services.items():
+            child_name = f"{app_name}-{svc_name}"
+            existing = (
+                session.query(App)
+                .filter(App.name == child_name, App.server_id == server_id)
+                .first()
+            )
+            if existing:
+                continue
+            db_port = DB_TEMPLATES.get(db_type, {}).get("port", 0)
+            child = App(
+                name=child_name,
+                server_id=server_id,
+                port=db_port,
+                app_type=f"db:{db_type}",
+                status="running",
+                parent_app_id=app_id,
+            )
+            session.add(child)
 
 
 def _app_out(a: App, session: object | None = None) -> AppOut:
@@ -298,6 +327,7 @@ async def deploy(
 
         dep_id = dep.id
         app_id = app_obj.id
+        server_id = srv.id
         app_data: dict[str, str | int | None] = {
             "port": app_obj.port,
             "git_repo": app_obj.git_repo,
@@ -457,6 +487,17 @@ async def deploy(
                         app_name=name,
                         repo_compose=uses_repo_compose,
                     )
+
+                # Detect embedded DB services from the deployed compose file
+                detected_dbs: dict[str, str] = {}
+                try:
+                    detected_dbs = detect_db_services(ssh, name)
+                except Exception:
+                    pass
+
+            # Register detected embedded DBs as child App records
+            if detected_dbs:
+                _register_embedded_dbs(app_id, server_id, name, detected_dbs)
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()

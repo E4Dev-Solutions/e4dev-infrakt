@@ -4,9 +4,13 @@ import pytest
 
 from cli.core.deployer import (
     DeployResult,
+    _compose_work_dir,
     _generate_compose,
     deploy_app,
+    detect_db_services,
     get_container_health,
+    get_logs,
+    list_services,
     reconcile_app_status,
     stream_logs,
 )
@@ -239,6 +243,7 @@ def test_deploy_app_rejects_invalid_pinned_commit():
 def test_stream_logs_yields_lines():
     """stream_logs yields decoded lines from the SSH channel."""
     ssh = MagicMock()
+    ssh.run = MagicMock(return_value=("", "", 1))  # no repo compose
     channel = MagicMock()
 
     # Simulate two recv calls: first returns two lines, second raises to end loop
@@ -265,6 +270,7 @@ def test_stream_logs_yields_lines():
 def test_stream_logs_handles_partial_lines():
     """stream_logs buffers partial lines until a newline arrives."""
     ssh = MagicMock()
+    ssh.run = MagicMock(return_value=("", "", 1))  # no repo compose
     channel = MagicMock()
 
     call_count = 0
@@ -528,3 +534,111 @@ def test_deploy_git_no_token_uses_plain_url(mock_get_token):
     clone_cmd = str(clone_calls[0])
     assert "github.com/org/repo.git" in clone_cmd
     assert "@github.com" not in clone_cmd
+
+
+# ── Compose work dir tests ──────────────────────────────────────────────────
+
+
+def test_compose_work_dir_returns_repo_when_compose_exists_there():
+    """_compose_work_dir returns repo/ subdir when it contains docker-compose.yml."""
+    ssh = MagicMock()
+    ssh.run = MagicMock(return_value=("", "", 0))  # test -f succeeds
+    result = _compose_work_dir(ssh, "myapp")
+    assert result == "/opt/infrakt/apps/myapp/repo"
+
+
+def test_compose_work_dir_returns_app_dir_when_no_repo_compose():
+    """_compose_work_dir returns app dir when repo/docker-compose.yml doesn't exist."""
+    ssh = MagicMock()
+    ssh.run = MagicMock(return_value=("", "", 1))  # test -f fails
+    result = _compose_work_dir(ssh, "myapp")
+    assert result == "/opt/infrakt/apps/myapp"
+
+
+def test_get_logs_uses_compose_work_dir():
+    """get_logs uses repo/ dir when compose file is there."""
+    ssh = MagicMock()
+    # First call: test -f repo/docker-compose.yml → 0 (exists)
+    ssh.run = MagicMock(return_value=("", "", 0))
+    ssh.run_checked = MagicMock(return_value="some logs")
+    result = get_logs(ssh, "myapp", lines=50)
+    cmd = ssh.run_checked.call_args[0][0]
+    assert "/opt/infrakt/apps/myapp/repo" in cmd
+    assert result == "some logs"
+
+
+def test_list_services_uses_compose_work_dir():
+    """list_services runs from repo/ dir when compose file is there."""
+    ssh = MagicMock()
+    ssh.run = MagicMock(return_value=("", "", 0))
+    ssh.run_checked = MagicMock(return_value="web\ndb\n")
+    result = list_services(ssh, "myapp")
+    cmd = ssh.run_checked.call_args[0][0]
+    assert "/opt/infrakt/apps/myapp/repo" in cmd
+    assert result == ["web", "db"]
+
+
+# ── Embedded DB detection tests ─────────────────────────────────────────────
+
+
+def test_detect_db_services_finds_postgres_and_redis():
+    """detect_db_services identifies DB services by their image prefix."""
+    import yaml
+
+    compose_config = yaml.dump(
+        {
+            "services": {
+                "web": {"image": "node:20", "ports": ["3000:3000"]},
+                "db": {"image": "postgres:16-alpine"},
+                "cache": {"image": "redis:7-alpine"},
+            }
+        }
+    )
+    ssh = MagicMock()
+    # test -f for _compose_work_dir
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 1),  # no repo/docker-compose.yml
+            (compose_config, "", 0),  # docker compose config output
+        ]
+    )
+    result = detect_db_services(ssh, "myapp")
+    assert result == {"db": "postgres", "cache": "redis"}
+    assert "web" not in result
+
+
+def test_detect_db_services_returns_empty_on_failure():
+    """detect_db_services returns empty dict when compose config fails."""
+    ssh = MagicMock()
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 1),  # no repo/docker-compose.yml
+            ("", "error", 1),  # compose config failed
+        ]
+    )
+    result = detect_db_services(ssh, "myapp")
+    assert result == {}
+
+
+def test_detect_db_services_handles_bitnami_images():
+    """detect_db_services recognises bitnami/* image prefixes."""
+    import yaml
+
+    compose_config = yaml.dump(
+        {
+            "services": {
+                "app": {"image": "myapp:latest"},
+                "postgres": {"image": "bitnami/postgresql:15"},
+                "mongo": {"image": "bitnami/mongodb:7"},
+            }
+        }
+    )
+    ssh = MagicMock()
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 1),
+            (compose_config, "", 0),
+        ]
+    )
+    result = detect_db_services(ssh, "myapp")
+    assert result == {"postgres": "postgres", "mongo": "mongo"}

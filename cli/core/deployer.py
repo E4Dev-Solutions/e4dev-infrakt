@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shlex
 import time
@@ -10,6 +11,8 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePosixPath
+
+import yaml
 
 from cli.core.exceptions import DeploymentError
 from cli.core.github import get_github_token, inject_token_in_url
@@ -54,6 +57,19 @@ def _compose_cmd(app_name: str) -> str:
     regardless of the working directory, so Traefik can route to them by name.
     """
     return f"docker compose -p infrakt-{shlex.quote(app_name)}"
+
+
+def _compose_work_dir(ssh: SSHClient, app_name: str) -> str:
+    """Return the directory containing docker-compose.yml for this app.
+
+    For repo-based apps the compose file lives in ``repo/``, not the app root.
+    """
+    app_path = _app_dir(app_name)
+    repo_compose = f"{app_path}/repo/docker-compose.yml"
+    _, _, rc = ssh.run(f"test -f {shlex.quote(repo_compose)}")
+    if rc == 0:
+        return f"{app_path}/repo"
+    return app_path
 
 
 def deploy_app(
@@ -335,28 +351,31 @@ def _prune_old_images(ssh: SSHClient, app_name: str, keep: int = 5) -> None:
 
 
 def stop_app(ssh: SSHClient, app_name: str) -> None:
-    app_path = _app_dir(app_name)
-    ssh.run_checked(f"cd {shlex.quote(app_path)} && {_compose_cmd(app_name)} down", timeout=60)
+    work_dir = _compose_work_dir(ssh, app_name)
+    ssh.run_checked(f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} down", timeout=60)
 
 
 def restart_app(ssh: SSHClient, app_name: str) -> None:
-    app_path = _app_dir(app_name)
-    ssh.run_checked(f"cd {shlex.quote(app_path)} && {_compose_cmd(app_name)} restart", timeout=60)
+    work_dir = _compose_work_dir(ssh, app_name)
+    ssh.run_checked(f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} restart", timeout=60)
 
 
 def destroy_app(ssh: SSHClient, app_name: str) -> None:
+    work_dir = _compose_work_dir(ssh, app_name)
     app_path = _app_dir(app_name)
-    q = shlex.quote(app_path)
-    ssh.run(f"cd {q} && {_compose_cmd(app_name)} down -v --remove-orphans", timeout=60)
-    ssh.run_checked(f"rm -rf {q}")
+    ssh.run(
+        f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} down -v --remove-orphans",
+        timeout=60,
+    )
+    ssh.run_checked(f"rm -rf {shlex.quote(app_path)}")
 
 
 def get_logs(ssh: SSHClient, app_name: str, lines: int = 100, service: str | None = None) -> str:
-    app_path = _app_dir(app_name)
+    work_dir = _compose_work_dir(ssh, app_name)
     lines = max(1, min(lines, 10000))  # clamp to sane range
     svc = f" {shlex.quote(service)}" if service else ""
     compose = _compose_cmd(app_name)
-    ssh_cmd = f"cd {shlex.quote(app_path)} && {compose} logs --tail={int(lines)} --no-color{svc}"
+    ssh_cmd = f"cd {shlex.quote(work_dir)} && {compose} logs --tail={int(lines)} --no-color{svc}"
     stdout = ssh.run_checked(ssh_cmd, timeout=30)
     return stdout
 
@@ -369,11 +388,11 @@ def stream_logs(
     Yields log lines as they arrive.  The caller controls the lifetime —
     breaking out of the generator closes the SSH channel.
     """
-    app_path = _app_dir(app_name)
+    work_dir = _compose_work_dir(ssh, app_name)
     lines = max(1, min(lines, 10000))
     svc = f" {shlex.quote(service)}" if service else ""
     compose = _compose_cmd(app_name)
-    cmd = f"cd {shlex.quote(app_path)} && {compose} logs -f --tail={int(lines)} --no-color{svc}"
+    cmd = f"cd {shlex.quote(work_dir)} && {compose} logs -f --tail={int(lines)} --no-color{svc}"
     channel = ssh.exec_stream(cmd)
     buf = b""
     try:
@@ -404,10 +423,48 @@ def stream_logs(
 
 def list_services(ssh: SSHClient, app_name: str) -> list[str]:
     """Return compose service names for an app."""
-    app_path = _app_dir(app_name)
-    cmd = f"cd {shlex.quote(app_path)} && {_compose_cmd(app_name)} config --services"
+    work_dir = _compose_work_dir(ssh, app_name)
+    cmd = f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} config --services"
     stdout = ssh.run_checked(cmd, timeout=15)
     return [s.strip() for s in stdout.strip().splitlines() if s.strip()]
+
+
+_logger = logging.getLogger(__name__)
+
+# Well-known DB images → infrakt db type
+_DB_IMAGE_PREFIXES: dict[str, str] = {
+    "postgres": "postgres",
+    "mysql": "mysql",
+    "mariadb": "mysql",
+    "redis": "redis",
+    "mongo": "mongo",
+    "bitnami/postgresql": "postgres",
+    "bitnami/mysql": "mysql",
+    "bitnami/redis": "redis",
+    "bitnami/mongodb": "mongo",
+}
+
+
+def detect_db_services(ssh: SSHClient, app_name: str) -> dict[str, str]:
+    """Parse deployed compose config and return ``{service_name: db_type}`` for DB services."""
+    work_dir = _compose_work_dir(ssh, app_name)
+    cmd = f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} config"
+    stdout, _, rc = ssh.run(cmd, timeout=15)
+    if rc != 0 or not stdout.strip():
+        return {}
+    try:
+        config = yaml.safe_load(stdout)
+    except Exception:
+        return {}
+    services = (config or {}).get("services", {})
+    result: dict[str, str] = {}
+    for svc_name, svc_def in services.items():
+        image = (svc_def or {}).get("image", "")
+        for prefix, db_type in _DB_IMAGE_PREFIXES.items():
+            if image.startswith(prefix):
+                result[svc_name] = db_type
+                break
+    return result
 
 
 def _generate_compose(
@@ -449,8 +506,8 @@ def get_container_health(ssh: SSHClient, app_name: str) -> list[dict[str, str]]:
     Returns a list of dicts with keys: name, state, status, image, health.
     Returns empty list if the app directory doesn't exist or Docker is not running.
     """
-    app_path = _app_dir(app_name)
-    q = shlex.quote(app_path)
+    work_dir = _compose_work_dir(ssh, app_name)
+    q = shlex.quote(work_dir)
 
     # docker compose ps --format json outputs NDJSON (one JSON object per line)
     stdout, _, exit_code = ssh.run(

@@ -49,6 +49,11 @@ def _apply_migrations(engine: Engine) -> None:
         "ALTER TABLE servers ADD COLUMN is_infrakt_host BOOLEAN DEFAULT 0",
         "ALTER TABLE apps ADD COLUMN backup_id VARCHAR(8)",
         "ALTER TABLE apps ADD COLUMN domain_ports VARCHAR(500)",
+        "ALTER TABLE apps ADD COLUMN build_type VARCHAR(20) DEFAULT 'auto'",
+        "ALTER TABLE apps ADD COLUMN github_hook_id INTEGER",
+        "ALTER TABLE apps ADD COLUMN db_password_encrypted VARCHAR(500)",
+        "ALTER TABLE deployments ADD COLUMN image_tag VARCHAR(200)",
+        "ALTER TABLE webhooks ADD COLUMN channel_type VARCHAR(20) DEFAULT 'custom'",
     ]
     with engine.connect() as conn:
         for sql in migrations:

@@ -1,12 +1,13 @@
 """Environment variable management API routes."""
 
 import json
+import re
 import shlex
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from api.schemas import ContainerEnvVar, EnvVarOut, EnvVarSet
+from api.schemas import ContainerEnvVar, EnvImport, EnvVarOut, EnvVarSet
 from cli.core.config import ENVS_DIR, ensure_config_dir
 from cli.core.crypto import decrypt, encrypt
 from cli.core.database import get_session, init_db
@@ -64,6 +65,34 @@ def set_env(app_name: str, vars: list[EnvVarSet]) -> list[EnvVarOut]:
         data[var.key] = encrypt(var.value)
     _save_env(app_id, data)
     return [EnvVarOut(key=v.key, value="••••••••") for v in vars]
+
+
+@router.post("/import")
+def import_env(app_name: str, body: EnvImport) -> dict[str, int]:
+    """Import environment variables from raw .env content."""
+    init_db()
+    app_id = _get_app_id(app_name)
+    data = _load_env(app_id)
+
+    count = 0
+    for line in body.content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+            continue
+        data[key] = encrypt(value)
+        count += 1
+
+    _save_env(app_id, data)
+    return {"imported": count}
 
 
 @router.delete("/{key}")

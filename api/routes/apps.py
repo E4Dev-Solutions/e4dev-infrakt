@@ -185,6 +185,7 @@ def create_app(body: AppCreate) -> AppOut:
             health_check_interval=body.health_check_interval,
             replicas=body.replicas,
             deploy_strategy=body.deploy_strategy,
+            build_type=body.build_type or "auto",
         )
         session.add(new_app)
         session.flush()
@@ -257,6 +258,8 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
             app_obj.replicas = body.replicas
         if body.deploy_strategy is not None:
             app_obj.deploy_strategy = body.deploy_strategy
+        if body.build_type is not None:
+            app_obj.build_type = body.build_type
 
         if body.image is not None or body.git_repo is not None:
             if app_obj.image:
@@ -306,6 +309,7 @@ async def deploy(
             "memory_limit": app_obj.memory_limit,
             "replicas": app_obj.replicas,
             "deploy_strategy": app_obj.deploy_strategy,
+            "build_type": app_obj.build_type,
             "health_check_url": app_obj.health_check_url,
             "health_check_interval": app_obj.health_check_interval,
             "domain_ports": app_obj.domain_ports,
@@ -359,6 +363,9 @@ async def deploy(
                 deploy_strategy = app_data.get("deploy_strategy")
                 if not isinstance(deploy_strategy, str):
                     deploy_strategy = "restart"
+                build_type = app_data.get("build_type")
+                if not isinstance(build_type, str):
+                    build_type = "auto"
                 health_check_url = app_data.get("health_check_url")
                 if not isinstance(health_check_url, (str, type(None))):
                     health_check_url = None
@@ -416,9 +423,15 @@ async def deploy(
                     deploy_strategy=deploy_strategy,
                     health_check_url=health_check_url,
                     health_check_interval=health_check_interval,
+                    build_type=build_type,
+                    deployment_id=dep_id,
                 )
 
                 # Set up proxy routes
+                # Repo-based apps without compose_override use the repo's own
+                # docker-compose.yml which doesn't set container_name, so Docker
+                # names containers with a -1 suffix (e.g. infrakt-app-web-1).
+                uses_repo_compose = bool(git_repo) and not compose_override
                 if multi_domains:
                     # Multi-domain: each service gets its own domain
                     tmpl = (
@@ -429,9 +442,21 @@ async def deploy(
                     domain_map = tmpl.get("domain_map", {}) if tmpl else {}
                     for svc_name, svc_domain in multi_domains.items():
                         svc_port = domain_map.get(svc_name) or domain_ports.get(svc_name, port)
-                        add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{svc_name}")
+                        add_domain(
+                            ssh,
+                            svc_domain,
+                            svc_port,
+                            app_name=f"{name}-{svc_name}",
+                            repo_compose=uses_repo_compose,
+                        )
                 elif primary_domain:
-                    add_domain(ssh, primary_domain, port, app_name=name)
+                    add_domain(
+                        ssh,
+                        primary_domain,
+                        port,
+                        app_name=name,
+                        repo_compose=uses_repo_compose,
+                    )
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()
@@ -440,6 +465,7 @@ async def deploy(
                     dep.log = result.log
                     dep.commit_hash = result.commit_hash
                     dep.image_used = result.image_used
+                    dep.image_tag = result.image_tag
                     dep.finished_at = datetime.utcnow()
                 a = session.query(App).filter(App.id == app_id).first()
                 if a:
@@ -475,6 +501,7 @@ async def deploy(
                                 )
                                 if hook_id:
                                     a.webhook_secret = webhook_secret
+                                    a.github_hook_id = hook_id
                                     _on_log(f"Auto-created GitHub webhook for {owner}/{repo_name}")
 
             fire_webhooks(
@@ -1000,6 +1027,18 @@ def destroy(name: str, server: str | None = None) -> dict[str, str]:
         ssh = _ssh_for(app_obj.server)
         app_id = app_obj.id
         app_domain = app_obj.domain
+        hook_id = app_obj.github_hook_id
+        git_repo = app_obj.git_repo
+
+    # Clean up GitHub webhook if one was created
+    if hook_id and git_repo and "github.com" in (git_repo or ""):
+        gh_token = get_github_token()
+        if gh_token:
+            parts = git_repo.replace("https://github.com/", "").replace(".git", "").split("/")
+            if len(parts) >= 2:
+                from cli.core.github import delete_repo_webhook
+
+                delete_repo_webhook(gh_token, parts[0], parts[1], hook_id)
 
     with ssh:
         destroy_app(ssh, name)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import time
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,6 +13,7 @@ from pathlib import PurePosixPath
 
 from cli.core.exceptions import DeploymentError
 from cli.core.github import get_github_token, inject_token_in_url
+from cli.core.health import check_app_health
 from cli.core.ssh import SSHClient
 
 APP_BASE = PurePosixPath("/opt/infrakt/apps")
@@ -29,6 +31,7 @@ class DeployResult:
     log: str = ""
     commit_hash: str | None = None
     image_used: str | None = None
+    image_tag: str | None = None
 
 
 def _validate_name(value: str, label: str) -> None:
@@ -42,6 +45,15 @@ def _validate_name(value: str, label: str) -> None:
 def _app_dir(app_name: str) -> str:
     _validate_name(app_name, "app name")
     return str(APP_BASE / app_name)
+
+
+def _compose_cmd(app_name: str) -> str:
+    """Return ``docker compose -p <project>`` with a predictable project name.
+
+    This ensures containers are named ``infrakt-{app_name}-{service}-1``
+    regardless of the working directory, so Traefik can route to them by name.
+    """
+    return f"docker compose -p infrakt-{shlex.quote(app_name)}"
 
 
 def deploy_app(
@@ -63,6 +75,8 @@ def deploy_app(
     deploy_strategy: str = "restart",
     health_check_url: str | None = None,
     health_check_interval: int | None = None,
+    build_type: str = "auto",
+    deployment_id: int | None = None,
 ) -> DeployResult:
     """Deploy or redeploy an app on a remote server.
 
@@ -77,6 +91,12 @@ def deploy_app(
 
     def _log(msg: str) -> None:
         line = f"[{datetime.utcnow().isoformat()}] {msg}"
+        log_lines.append(line)
+        if log_fn is not None:
+            log_fn(line)
+
+    def _stream(line: str) -> None:
+        """Forward raw command output through log_fn."""
         log_lines.append(line)
         if log_fn is not None:
             log_fn(line)
@@ -115,20 +135,23 @@ def deploy_app(
             if pinned_commit:
                 q_commit = shlex.quote(pinned_commit)
                 _log(f"Rolling back to commit {pinned_commit}")
-                ssh.run_checked(
+                ssh.run_streaming(
                     f"cd {q_repo} && git fetch origin && git reset --hard {q_commit}",
+                    on_output=_stream,
                     timeout=120,
                 )
             else:
                 _log("Pulling latest changes")
-                ssh.run_checked(
+                ssh.run_streaming(
                     f"cd {q_repo} && git fetch origin && git reset --hard origin/{q_branch}",
+                    on_output=_stream,
                     timeout=120,
                 )
         else:
             _log(f"Cloning {git_repo} (branch: {branch})")
-            ssh.run_checked(
+            ssh.run_streaming(
                 f"git clone -b {q_branch} {q_git_repo} {q_repo}",
+                on_output=_stream,
                 timeout=120,
             )
 
@@ -136,14 +159,58 @@ def deploy_app(
         stdout = ssh.run_checked(f"cd {q_repo} && git rev-parse HEAD")
         result.commit_hash = stdout.strip()[:40]
 
-        # Use compose file from repo if it exists, otherwise generate one
+        # Determine build strategy
         _, _, has_compose = ssh.run(f"test -f {q_repo}/docker-compose.yml")
-        if has_compose == 0 and not compose_override:
-            _log("Using docker-compose.yml from repository")
-            ssh.run_checked(
-                f"cd {q_repo} && docker compose --env-file {q_app_path}/.env "
-                f"up -d --build --remove-orphans",
+        use_nixpacks = False
+        if build_type == "nixpacks":
+            use_nixpacks = True
+        elif build_type == "auto" and has_compose != 0:
+            _, _, has_dockerfile = ssh.run(f"test -f {q_repo}/Dockerfile")
+            if has_dockerfile != 0:
+                use_nixpacks = True
+
+        if use_nixpacks:
+            nixpacks_image = f"infrakt-{app_name}"
+            _log("Building with Nixpacks...")
+            ssh.run_streaming(
+                f"nixpacks build {q_repo} --name {shlex.quote(nixpacks_image)}",
+                on_output=_stream,
                 timeout=600,
+            )
+            compose_content = compose_override or _generate_compose(
+                app_name,
+                port=port,
+                image=nixpacks_image,
+                cpu_limit=cpu_limit,
+                memory_limit=memory_limit,
+                replicas=replicas,
+                deploy_strategy=deploy_strategy,
+                health_check_url=health_check_url,
+                health_check_interval=health_check_interval,
+                domain=domain,
+            )
+            ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
+            _log("Swapping containers...")
+            ssh.run_streaming(
+                f"cd {q_app_path} && {_compose_cmd(app_name)} up -d --remove-orphans",
+                on_output=_stream,
+                timeout=120,
+            )
+        elif has_compose == 0 and not compose_override:
+            _log("Using docker-compose.yml from repository")
+            _log("Building images...")
+            ssh.run_streaming(
+                f"cd {q_repo} && {_compose_cmd(app_name)} --env-file {q_app_path}/.env build",
+                on_output=_stream,
+                timeout=600,
+            )
+            _log("Swapping containers...")
+            ssh.run_streaming(
+                f"cd {q_repo} && {_compose_cmd(app_name)}"
+                f" --env-file {q_app_path}/.env"
+                f" up -d --remove-orphans",
+                on_output=_stream,
+                timeout=120,
             )
         else:
             compose_content = compose_override or _generate_compose(
@@ -160,9 +227,17 @@ def deploy_app(
             )
             ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
             _log("Generated docker-compose.yml")
-            ssh.run_checked(
-                f"cd {q_app_path} && docker compose up -d --build --remove-orphans",
+            _log("Building images...")
+            ssh.run_streaming(
+                f"cd {q_app_path} && {_compose_cmd(app_name)} build",
+                on_output=_stream,
                 timeout=600,
+            )
+            _log("Swapping containers...")
+            ssh.run_streaming(
+                f"cd {q_app_path} && {_compose_cmd(app_name)} up -d --remove-orphans",
+                on_output=_stream,
+                timeout=120,
             )
 
     # Handle image-based deployment
@@ -182,8 +257,9 @@ def deploy_app(
         )
         ssh.upload_string(compose_content, f"{app_path}/docker-compose.yml")
         _log(f"Deploying image: {image}")
-        ssh.run_checked(
-            f"cd {q_app_path} && docker compose up -d --pull always --remove-orphans",
+        ssh.run_streaming(
+            f"cd {q_app_path} && {_compose_cmd(app_name)} up -d --pull always --remove-orphans",
+            on_output=_stream,
             timeout=300,
         )
         result.image_used = image
@@ -193,8 +269,9 @@ def deploy_app(
         q_app_path = shlex.quote(app_path)
         ssh.upload_string(compose_override, f"{app_path}/docker-compose.yml")
         _log("Using provided compose override")
-        ssh.run_checked(
-            f"cd {q_app_path} && docker compose up -d --remove-orphans",
+        ssh.run_streaming(
+            f"cd {q_app_path} && {_compose_cmd(app_name)} up -d --remove-orphans",
+            on_output=_stream,
             timeout=300,
         )
 
@@ -206,44 +283,71 @@ def deploy_app(
 
     # Health check gating for rolling deploys
     if deploy_strategy == "rolling" and health_check_url:
-        import time
-
         _log("Waiting for health check to pass...")
         max_retries = 10
         for attempt in range(max_retries):
             time.sleep(5)
-            status = reconcile_app_status(ssh, app_name)
-            if status == "running":
+            health_result = check_app_health(ssh, port, health_check_url)
+            if health_result["healthy"]:
                 _log(f"Health check passed (attempt {attempt + 1})")
                 break
             _log(f"Health check pending... (attempt {attempt + 1}/{max_retries})")
         else:
             _log("Health check failed after all retries — rolling back")
             q_path = shlex.quote(app_path)
-            ssh.run(f"cd {q_path} && docker compose down", timeout=60)
+            ssh.run(f"cd {q_path} && {_compose_cmd(app_name)} down", timeout=60)
             raise DeploymentError(
                 f"Rolling deploy of '{app_name}' failed health check after {max_retries} attempts"
             )
+
+    # Tag image for rollback (git builds and nixpacks only)
+    if git_repo and deployment_id:
+        image_name = f"infrakt-{app_name}"
+        tag = f"v{deployment_id}"
+        try:
+            ssh.run_checked(
+                f"docker tag {shlex.quote(image_name)} {shlex.quote(image_name)}:{shlex.quote(tag)}"
+            )
+            result.image_tag = f"{image_name}:{tag}"
+            _log(f"Tagged image as {image_name}:{tag}")
+        except Exception:
+            _log("Warning: could not tag image for rollback")
 
     _log("Deployment complete")
     result.log = "\n".join(log_lines)
     return result
 
 
+def _prune_old_images(ssh: SSHClient, app_name: str, keep: int = 5) -> None:
+    """Remove old rollback image tags, keeping the N most recent."""
+    image_name = f"infrakt-{app_name}"
+    stdout, _, rc = ssh.run(
+        f"docker images {shlex.quote(image_name)}"
+        f" --format '{{{{.Tag}}}}' | grep '^v' | sort -t v -k 2 -n"
+    )
+    if rc != 0 or not stdout.strip():
+        return
+    tags = [t.strip() for t in stdout.strip().splitlines() if t.strip()]
+    if len(tags) <= keep:
+        return
+    for old_tag in tags[:-keep]:
+        ssh.run(f"docker rmi {shlex.quote(image_name)}:{shlex.quote(old_tag)} 2>/dev/null || true")
+
+
 def stop_app(ssh: SSHClient, app_name: str) -> None:
     app_path = _app_dir(app_name)
-    ssh.run_checked(f"cd {shlex.quote(app_path)} && docker compose down", timeout=60)
+    ssh.run_checked(f"cd {shlex.quote(app_path)} && {_compose_cmd(app_name)} down", timeout=60)
 
 
 def restart_app(ssh: SSHClient, app_name: str) -> None:
     app_path = _app_dir(app_name)
-    ssh.run_checked(f"cd {shlex.quote(app_path)} && docker compose restart", timeout=60)
+    ssh.run_checked(f"cd {shlex.quote(app_path)} && {_compose_cmd(app_name)} restart", timeout=60)
 
 
 def destroy_app(ssh: SSHClient, app_name: str) -> None:
     app_path = _app_dir(app_name)
     q = shlex.quote(app_path)
-    ssh.run(f"cd {q} && docker compose down -v --remove-orphans", timeout=60)
+    ssh.run(f"cd {q} && {_compose_cmd(app_name)} down -v --remove-orphans", timeout=60)
     ssh.run_checked(f"rm -rf {q}")
 
 
@@ -251,9 +355,8 @@ def get_logs(ssh: SSHClient, app_name: str, lines: int = 100, service: str | Non
     app_path = _app_dir(app_name)
     lines = max(1, min(lines, 10000))  # clamp to sane range
     svc = f" {shlex.quote(service)}" if service else ""
-    ssh_cmd = (
-        f"cd {shlex.quote(app_path)} && docker compose logs --tail={int(lines)} --no-color{svc}"
-    )
+    compose = _compose_cmd(app_name)
+    ssh_cmd = f"cd {shlex.quote(app_path)} && {compose} logs --tail={int(lines)} --no-color{svc}"
     stdout = ssh.run_checked(ssh_cmd, timeout=30)
     return stdout
 
@@ -269,9 +372,8 @@ def stream_logs(
     app_path = _app_dir(app_name)
     lines = max(1, min(lines, 10000))
     svc = f" {shlex.quote(service)}" if service else ""
-    cmd = (
-        f"cd {shlex.quote(app_path)} && docker compose logs -f --tail={int(lines)} --no-color{svc}"
-    )
+    compose = _compose_cmd(app_name)
+    cmd = f"cd {shlex.quote(app_path)} && {compose} logs -f --tail={int(lines)} --no-color{svc}"
     channel = ssh.exec_stream(cmd)
     buf = b""
     try:
@@ -303,7 +405,7 @@ def stream_logs(
 def list_services(ssh: SSHClient, app_name: str) -> list[str]:
     """Return compose service names for an app."""
     app_path = _app_dir(app_name)
-    cmd = f"cd {shlex.quote(app_path)} && docker compose config --services"
+    cmd = f"cd {shlex.quote(app_path)} && {_compose_cmd(app_name)} config --services"
     stdout = ssh.run_checked(cmd, timeout=15)
     return [s.strip() for s in stdout.strip().splitlines() if s.strip()]
 
@@ -352,7 +454,7 @@ def get_container_health(ssh: SSHClient, app_name: str) -> list[dict[str, str]]:
 
     # docker compose ps --format json outputs NDJSON (one JSON object per line)
     stdout, _, exit_code = ssh.run(
-        f"cd {q} && docker compose ps --format json 2>/dev/null",
+        f"cd {q} && {_compose_cmd(app_name)} ps --format json 2>/dev/null",
         timeout=15,
     )
     if exit_code != 0 or not stdout.strip():

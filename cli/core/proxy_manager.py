@@ -45,7 +45,9 @@ def _check_dns(domain: str) -> str | None:
         return None
 
 
-def _build_domain_config(domain: str, port: int, *, app_name: str | None = None) -> str:
+def _build_domain_config(
+    domain: str, port: int, *, app_name: str | None = None, repo_compose: bool = False
+) -> str:
     """Build Traefik dynamic config YAML for a single domain."""
     sanitized = _sanitize_domain(domain)
     router_name = sanitized
@@ -53,7 +55,11 @@ def _build_domain_config(domain: str, port: int, *, app_name: str | None = None)
 
     # Route to the app container by name on the shared infrakt network.
     # Falls back to host.docker.internal for non-app routes (e.g. manual proxy add).
-    backend_host = f"infrakt-{app_name}" if app_name else "host.docker.internal"
+    # Repo-based apps don't set container_name, so Docker names them with a -1 suffix.
+    if app_name:
+        backend_host = f"infrakt-{app_name}-1" if repo_compose else f"infrakt-{app_name}"
+    else:
+        backend_host = "host.docker.internal"
 
     config: dict[str, object] = {
         "http": {
@@ -89,11 +95,21 @@ def _conf_path(domain: str) -> str:
     return f"{CONF_DIR}/{_sanitize_domain(domain)}.yml"
 
 
-def add_domain(ssh: SSHClient, domain: str, port: int, *, app_name: str | None = None) -> None:
+def add_domain(
+    ssh: SSHClient,
+    domain: str,
+    port: int,
+    *,
+    app_name: str | None = None,
+    repo_compose: bool = False,
+) -> None:
     """Add a reverse proxy route for a domain pointing to a local port.
 
     Writes a Traefik file provider config to conf.d/. No reload needed —
     Traefik watches the directory automatically.
+
+    Set *repo_compose* to True when the app uses its own docker-compose.yml
+    (no explicit container_name), so the proxy routes to the ``-1`` suffixed name.
     """
     _validate_domain(domain)
     _validate_port(port)
@@ -102,7 +118,7 @@ def add_domain(ssh: SSHClient, domain: str, port: int, *, app_name: str | None =
     if ip is None:
         warning(f"DNS for '{domain}' does not resolve yet — proxy will work once DNS propagates")
 
-    content = _build_domain_config(domain, port, app_name=app_name)
+    content = _build_domain_config(domain, port, app_name=app_name, repo_compose=repo_compose)
     ssh.upload_string(content, _conf_path(domain))
 
 

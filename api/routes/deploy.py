@@ -55,7 +55,7 @@ def _require_api_or_deploy_key(
         return api_key
 
     dk = validate_deploy_key(api_key)
-    if dk is not None:
+    if dk is not None and "deploy" in dk.get("scopes", []):
         return api_key
 
     raise HTTPException(status_code=403, detail="Invalid API key or deploy key")

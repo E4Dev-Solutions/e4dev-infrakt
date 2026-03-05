@@ -73,9 +73,9 @@ def backup_database(
         db_name = _get_container_env(ssh, container, "POSTGRES_DB")
         q_user = shlex.quote(db_user)
         q_db = shlex.quote(db_name)
-        filename = _backup_filename(server_name, db_app.name, db_type, backup_id, ts, "sql.gz")
+        filename = _backup_filename(server_name, db_app.name, db_type, backup_id, ts, "dump")
         q_file = shlex.quote(f"{backup_dir}/{filename}")
-        cmd = f"docker exec {q_container} pg_dump -U {q_user} {q_db} | gzip > {q_file}"
+        cmd = f"docker exec {q_container} pg_dump -Fc -U {q_user} {q_db} > {q_file}"
     elif db_type == "mysql":
         password = _get_container_env(ssh, container, "MYSQL_PASSWORD")
         q_pass = shlex.quote(password)
@@ -139,7 +139,15 @@ def restore_database(
         db_name = _get_container_env(ssh, container, "POSTGRES_DB")
         q_user = shlex.quote(db_user)
         q_db = shlex.quote(db_name)
-        cmd = f"gunzip -c {q_path} | docker exec -i {q_container} psql -U {q_user} -d {q_db}"
+        if remote_backup_path.endswith(".sql.gz"):
+            # Legacy plain-SQL backup — fall back to gunzip | psql
+            cmd = f"gunzip -c {q_path} | docker exec -i {q_container} psql -U {q_user} -d {q_db}"
+        else:
+            # Custom-format backup — use pg_restore with safe flags
+            cmd = (
+                f"cat {q_path} | docker exec -i {q_container}"
+                f" pg_restore -U {q_user} -d {q_db} --clean --if-exists --no-owner"
+            )
     elif db_type == "mysql":
         password = _get_container_env(ssh, container, "MYSQL_PASSWORD")
         q_pass = shlex.quote(password)
@@ -215,10 +223,10 @@ def generate_backup_script(
     ]
 
     if db_type == "postgres":
-        filename = f"{fname_prefix}_{ts_var}.sql.gz"
+        filename = f"{fname_prefix}_{ts_var}.dump"
         q_c = shlex.quote(container)
         q_n = shlex.quote(name)
-        lines.append(f'docker exec {q_c} pg_dump -U {q_n} {q_n} | gzip > "$BACKUP_DIR/{filename}"')
+        lines.append(f'docker exec {q_c} pg_dump -Fc -U {q_n} {q_n} > "$BACKUP_DIR/{filename}"')
     elif db_type == "mysql":
         lines.append(f"MYSQL_PASS=$(docker exec {shlex.quote(container)} printenv MYSQL_PASSWORD)")
         filename = f"{fname_prefix}_{ts_var}.sql.gz"

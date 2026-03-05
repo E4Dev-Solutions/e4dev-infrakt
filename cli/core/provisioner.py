@@ -55,6 +55,12 @@ PROVISION_STEPS = [
         "fi",
     ),
     (
+        "Installing Nixpacks",
+        "if ! command -v nixpacks &>/dev/null; then "
+        "curl -sSL https://nixpacks.com/install.sh | bash; "
+        "fi",
+    ),
+    (
         "Creating Docker network",
         "docker network create infrakt 2>/dev/null || true",
     ),

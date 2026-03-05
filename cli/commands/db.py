@@ -14,6 +14,7 @@ from cli.core.backup import (
 )
 from cli.core.config import BACKUPS_DIR
 from cli.core.console import error, info, print_table, status_spinner, success
+from cli.core.crypto import encrypt
 from cli.core.database import get_session, init_db
 from cli.core.deployer import _validate_name
 from cli.core.exceptions import ServerNotFoundError
@@ -155,6 +156,7 @@ def create(server_name: str, name: str, db_type: str, version: str | None) -> No
             port=DB_TEMPLATES[db_type]["port"],
             app_type=f"db:{db_type}",
             status="stopped",
+            db_password_encrypted=encrypt(password),
         )
         session.add(db_app)
         session.flush()

@@ -155,6 +155,7 @@ class AppCreate(BaseModel):
     health_check_interval: int | None = None
     replicas: int = 1
     deploy_strategy: str = "restart"
+    build_type: str | None = Field(None, pattern=r"^(auto|dockerfile|nixpacks)$")
 
     @field_validator("name")
     @classmethod
@@ -206,6 +207,7 @@ class AppUpdate(BaseModel):
     health_check_interval: int | None = None
     replicas: int | None = None
     deploy_strategy: str | None = None
+    build_type: str | None = Field(None, pattern=r"^(auto|dockerfile|nixpacks)$")
 
     @field_validator("domain")
     @classmethod
@@ -258,6 +260,7 @@ class AppOut(BaseModel):
     health_check_interval: int | None = None
     replicas: int = 1
     deploy_strategy: str = "restart"
+    build_type: str = "auto"
     dependencies: list[str] = []
     created_at: datetime
     updated_at: datetime
@@ -295,6 +298,10 @@ class EnvVarSet(BaseModel):
 class EnvVarOut(BaseModel):
     key: str
     value: str  # masked unless ?show_values=true
+
+
+class EnvImport(BaseModel):
+    content: str = Field(..., min_length=1, max_length=100000)
 
 
 class ContainerEnvVar(BaseModel):
@@ -473,6 +480,7 @@ class WebhookCreate(BaseModel):
     url: str = Field(..., min_length=8, max_length=2048)
     events: list[str]
     secret: str | None = None
+    channel_type: str = Field("custom", pattern=r"^(custom|slack|discord)$")
 
     @field_validator("url")
     @classmethod
@@ -496,6 +504,7 @@ class WebhookOut(BaseModel):
     id: int
     url: str
     events: list[str]
+    channel_type: str = "custom"
     created_at: datetime
 
     model_config = {"from_attributes": True}

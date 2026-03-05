@@ -15,7 +15,12 @@ from api.schemas import (
     DatabaseRestore,
     DatabaseStats,
 )
-from cli.commands.db import DB_TEMPLATES, DEFAULT_VERSIONS, _generate_db_compose
+from cli.commands.db import (
+    DB_TEMPLATES,
+    DEFAULT_VERSIONS,
+    _connection_string,
+    _generate_db_compose,
+)
 from cli.core.backup import (
     backup_database,
     cleanup_old_s3_backups,
@@ -25,6 +30,7 @@ from cli.core.backup import (
     restore_database,
     upload_backup_to_s3,
 )
+from cli.core.crypto import decrypt, encrypt
 from cli.core.database import get_session, init_db
 from cli.core.db_stats import get_database_stats
 from cli.core.deployer import _validate_name
@@ -81,6 +87,7 @@ def create_database(body: DatabaseCreate, background_tasks: BackgroundTasks) -> 
             port=DB_TEMPLATES[body.db_type]["port"],
             app_type=f"db:{body.db_type}",
             status="deploying",
+            db_password_encrypted=encrypt(password),
         )
         session.add(db_app)
         session.flush()
@@ -226,6 +233,25 @@ def get_database(name: str, server: str | None = None) -> DatabaseOut:
         if not db_app:
             raise HTTPException(404, f"Database '{name}' not found")
         return _get_db_out(db_app)
+
+
+@router.get("/{name}/credentials")
+def get_database_credentials(name: str, server: str | None = None) -> dict[str, str]:
+    """Return the decrypted connection string for a database."""
+    init_db()
+    with get_session() as session:
+        q = session.query(App).filter(App.name == name, App.app_type.like("db:%"))
+        if server:
+            q = q.join(Server).filter(Server.name == server)
+        db_app = q.first()
+        if not db_app:
+            raise HTTPException(404, f"Database '{name}' not found")
+        if not db_app.db_password_encrypted:
+            raise HTTPException(404, "No stored credentials (created before this feature)")
+        db_type = db_app.app_type.split(":", 1)[1]
+        password = decrypt(db_app.db_password_encrypted)
+        conn = _connection_string(db_type, name, password)
+    return {"connection_string": conn, "password": password}
 
 
 @router.get("/{name}/stats", response_model=DatabaseStats)

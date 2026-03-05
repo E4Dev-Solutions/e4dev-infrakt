@@ -11,6 +11,9 @@ import {
   BarChart2,
   Cloud,
   HardDrive,
+  Eye,
+  EyeOff,
+  Copy,
 } from "lucide-react";
 import {
   useDatabase,
@@ -22,6 +25,7 @@ import {
   useUnscheduleBackup,
   useDatabaseStats,
 } from "@/hooks/useApi";
+import { databasesApi } from "@/api/client";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
@@ -139,6 +143,12 @@ export default function DatabaseDetail() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [cronExpression, setCronExpression] = useState("0 2 * * *");
   const [retentionDays, setRetentionDays] = useState(7);
+
+  // Credentials state
+  const [showCredentials, setShowCredentials] = useState(false);
+  const [credentials, setCredentials] = useState<{ connection_string: string; password: string } | null>(null);
+  const [credentialsLoading, setCredentialsLoading] = useState(false);
+  const [credentialsError, setCredentialsError] = useState<string | null>(null);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
@@ -435,15 +445,71 @@ export default function DatabaseDetail() {
 
                 {/* Connection String */}
                 <div className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                    Connection String
-                  </p>
-                  <p className="break-all font-mono text-xs text-zinc-300">
-                    {buildConnectionString()}
-                  </p>
-                  <p className="mt-1.5 text-xs text-zinc-500">
-                    Replace <span className="font-mono text-zinc-400">&lt;password&gt;</span> with the password shown when the database was created.
-                  </p>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+                      Connection String
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (showCredentials) {
+                          setShowCredentials(false);
+                          return;
+                        }
+                        if (credentials) {
+                          setShowCredentials(true);
+                          return;
+                        }
+                        setCredentialsLoading(true);
+                        setCredentialsError(null);
+                        try {
+                          const creds = await databasesApi.credentials(decodedName);
+                          setCredentials(creds);
+                          setShowCredentials(true);
+                        } catch {
+                          setCredentialsError("No stored credentials (created before this feature)");
+                        } finally {
+                          setCredentialsLoading(false);
+                        }
+                      }}
+                      disabled={credentialsLoading}
+                      className="flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-600 disabled:opacity-50"
+                    >
+                      {credentialsLoading ? (
+                        <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                      ) : showCredentials ? (
+                        <EyeOff size={12} aria-hidden="true" />
+                      ) : (
+                        <Eye size={12} aria-hidden="true" />
+                      )}
+                      {showCredentials ? "Hide" : "Show Credentials"}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="flex-1 break-all font-mono text-xs text-zinc-300">
+                      {showCredentials && credentials ? credentials.connection_string : buildConnectionString()}
+                    </p>
+                    {showCredentials && credentials && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(credentials.connection_string);
+                          toast.success("Copied to clipboard");
+                        }}
+                        className="shrink-0 rounded-md border border-zinc-600 bg-zinc-700 p-1.5 text-zinc-400 transition-colors hover:bg-zinc-600 hover:text-zinc-200"
+                        title="Copy connection string"
+                      >
+                        <Copy size={12} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                  {credentialsError ? (
+                    <p className="mt-1.5 text-xs text-zinc-500">{credentialsError}</p>
+                  ) : !showCredentials && (
+                    <p className="mt-1.5 text-xs text-zinc-500">
+                      Click "Show Credentials" to reveal the actual password.
+                    </p>
+                  )}
                 </div>
 
                 {/* Stats section */}

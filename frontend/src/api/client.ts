@@ -91,6 +91,7 @@ export interface App {
   health_check_interval?: number;
   replicas?: number;
   deploy_strategy?: string;
+  build_type?: string;
   dependencies?: string[];
 }
 
@@ -99,6 +100,7 @@ export interface Deployment {
   app_id: number;
   commit_hash?: string;
   image_used?: string;
+  image_tag?: string;
   status: DeploymentStatus;
   log?: string;
   started_at: string;
@@ -221,6 +223,7 @@ export interface CreateAppInput {
   memory_limit?: string;
   replicas?: number;
   deploy_strategy?: string;
+  build_type?: string;
 }
 
 export interface AppTemplate {
@@ -246,6 +249,7 @@ export interface UpdateAppInput {
   health_check_interval?: number;
   replicas?: number;
   deploy_strategy?: string;
+  build_type?: string;
 }
 
 export interface ProxyRouteCreateInput {
@@ -287,6 +291,7 @@ export interface Webhook {
   id: number;
   url: string;
   events: string[];
+  channel_type: string;
   created_at: string;
 }
 
@@ -294,6 +299,7 @@ export interface CreateWebhookInput {
   url: string;
   events: string[];
   secret?: string;
+  channel_type?: string;
 }
 
 // ─── Server Metrics ───────────────────────────────────────────────────────────
@@ -579,6 +585,14 @@ export const databasesApi = {
   stats: (name: string, server?: string): Promise<DatabaseStats> => {
     const qs = server ? `?server=${encodeURIComponent(server)}` : "";
     return get(`/databases/${encodeURIComponent(name)}/stats${qs}`);
+  },
+
+  credentials: (
+    name: string,
+    server?: string,
+  ): Promise<{ connection_string: string; password: string }> => {
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    return get(`/databases/${encodeURIComponent(name)}/credentials${qs}`);
   },
 };
 

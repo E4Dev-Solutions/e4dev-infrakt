@@ -15,6 +15,7 @@ def _webhook_out(wh: Webhook) -> WebhookOut:
         id=wh.id,
         url=wh.url,
         events=wh.events.split(","),
+        channel_type=wh.channel_type,
         created_at=wh.created_at,
     )
 
@@ -37,6 +38,7 @@ def create_webhook(body: WebhookCreate) -> WebhookOut:
             url=body.url,
             events=",".join(body.events),
             secret=body.secret,
+            channel_type=body.channel_type,
         )
         session.add(hook)
         session.flush()
@@ -63,8 +65,8 @@ def test_webhook(webhook_id: int) -> dict[str, str]:
         hook = session.query(Webhook).filter(Webhook.id == webhook_id).first()
         if not hook:
             raise HTTPException(404, f"Webhook {webhook_id} not found")
-        url, secret = hook.url, hook.secret
+        url, secret, ch_type = hook.url, hook.secret, hook.channel_type
 
     payload = build_payload("ping", {"message": "Test webhook from infrakt"})
-    deliver_webhook(url, secret, payload)
+    deliver_webhook(url, secret, payload, channel_type=ch_type)
     return {"message": "Test ping sent"}

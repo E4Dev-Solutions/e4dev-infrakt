@@ -32,6 +32,7 @@ def test_deploy_app_calls_log_fn():
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.run_checked = MagicMock(return_value="")
+    ssh.run_streaming = MagicMock(return_value="")
     ssh.run = MagicMock(return_value=("", "", 0))
     ssh.upload_string = MagicMock()
 
@@ -53,6 +54,7 @@ def test_deploy_app_without_log_fn():
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.run_checked = MagicMock(return_value="")
+    ssh.run_streaming = MagicMock(return_value="")
     ssh.run = MagicMock(return_value=("", "", 0))
     ssh.upload_string = MagicMock()
 
@@ -153,6 +155,7 @@ def test_deploy_app_returns_deploy_result():
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.run_checked = MagicMock(return_value="")
+    ssh.run_streaming = MagicMock(return_value="")
     ssh.run = MagicMock(return_value=("", "", 0))
     ssh.upload_string = MagicMock()
 
@@ -170,14 +173,13 @@ def test_deploy_app_captures_commit_hash_for_git(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d returns 1 (no existing repo -> clone)
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1)])
+    # test -d (repo?) = 1, test -f (compose?) = 1, test -f (Dockerfile?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(
         side_effect=[
             "",  # mkdir
-            "",  # git clone
             "abc123def456\n",  # git rev-parse HEAD
-            "",  # docker compose up
         ]
     )
 
@@ -194,14 +196,13 @@ def test_deploy_app_pinned_commit_uses_reset(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d returns 0 (existing repo -> pull/reset)
-    ssh.run = MagicMock(side_effect=[("", "", 0), ("", "", 1)])
+    # test -d (repo?) = 0, test -f (compose?) = 1, test -f (Dockerfile?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 0), ("", "", 1), ("", "", 1)])
+    ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(
         side_effect=[
             "",  # mkdir
-            "",  # git fetch + reset --hard <commit>
             "deadbeef12345678\n",  # git rev-parse HEAD
-            "",  # docker compose up
         ]
     )
 
@@ -213,8 +214,8 @@ def test_deploy_app_pinned_commit_uses_reset(_mock_token):
         pinned_commit="deadbeef12345678",
     )
 
-    # Verify it used the pinned commit in the reset command
-    reset_call = ssh.run_checked.call_args_list[1]
+    # Verify it used the pinned commit in the streaming command
+    reset_call = ssh.run_streaming.call_args_list[0]
     assert "deadbeef12345678" in reset_call[0][0]
     assert "origin/" not in reset_call[0][0]
     assert result.commit_hash == "deadbeef12345678"
@@ -290,6 +291,204 @@ def test_stream_logs_handles_partial_lines():
 # ── GitHub token injection tests ──────────────────────────────────────────────
 
 
+# ── Image tagging for rollback tests ─────────────────────────────────────────
+
+
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_git_tags_image_after_build(_mock_token):
+    """After a successful git build, the image should be tagged for rollback."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.upload_string = MagicMock()
+    # test -d (repo?) = 1, test -f (compose?) = 1, test -f (Dockerfile?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    ssh.run_streaming = MagicMock(return_value="")
+    ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n", ""])
+
+    result = deploy_app(
+        ssh,
+        "test-app",
+        git_repo="https://github.com/test/repo.git",
+        branch="main",
+        deployment_id=42,
+    )
+
+    tag_cmds = [str(c) for c in ssh.run_checked.call_args_list if "docker tag" in str(c)]
+    assert len(tag_cmds) == 1
+    assert "infrakt-test-app:v42" in tag_cmds[0]
+    assert result.image_tag == "infrakt-test-app:v42"
+
+
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_git_no_tag_without_deployment_id(_mock_token):
+    """Without deployment_id, no image tagging occurs."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.upload_string = MagicMock()
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    ssh.run_streaming = MagicMock(return_value="")
+    ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
+
+    result = deploy_app(
+        ssh,
+        "test-app",
+        git_repo="https://github.com/test/repo.git",
+        branch="main",
+    )
+
+    tag_cmds = [str(c) for c in ssh.run_checked.call_args_list if "docker tag" in str(c)]
+    assert len(tag_cmds) == 0
+    assert result.image_tag is None
+
+
+# ── Nixpacks build tests ─────────────────────────────────────────────────────
+
+
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_git_nixpacks_builds_with_nixpacks(_mock_token):
+    """When build_type=nixpacks, deployer runs nixpacks build instead of docker compose build."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.upload_string = MagicMock()
+    # test -d returns 1 (clone), test -f returns 1 (no compose)
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1)])
+    ssh.run_streaming = MagicMock(return_value="")
+    ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
+
+    deploy_app(
+        ssh,
+        "test-app",
+        git_repo="https://github.com/test/repo.git",
+        branch="main",
+        build_type="nixpacks",
+    )
+
+    streaming_cmds = [str(c) for c in ssh.run_streaming.call_args_list]
+    assert any("nixpacks build" in c for c in streaming_cmds)
+    assert not any("compose" in c and " build" in c for c in streaming_cmds)
+
+
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_git_auto_detects_nixpacks_when_no_dockerfile(_mock_token):
+    """build_type=auto with no Dockerfile and no compose should use Nixpacks."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.upload_string = MagicMock()
+    # test -d (repo exists?) = 1 (no), test -f (compose?) = 1 (no), test -f (Dockerfile?) = 1 (no)
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    ssh.run_streaming = MagicMock(return_value="")
+    ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
+
+    deploy_app(
+        ssh,
+        "test-app",
+        git_repo="https://github.com/test/repo.git",
+        branch="main",
+        build_type="auto",
+    )
+
+    streaming_cmds = [str(c) for c in ssh.run_streaming.call_args_list]
+    assert any("nixpacks build" in c for c in streaming_cmds)
+
+
+# ── Split build/swap tests ────────────────────────────────────────────────────
+
+
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_git_splits_build_and_up(_mock_token):
+    """Git deploys must call 'docker compose build' then 'docker compose up -d' separately."""
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.upload_string = MagicMock()
+    # test -d (repo?) = 1, test -f (compose?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1)])
+    ssh.run_streaming = MagicMock(return_value="")
+    ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
+
+    deploy_app(
+        ssh,
+        "test-app",
+        git_repo="https://github.com/test/repo.git",
+        branch="main",
+        build_type="dockerfile",
+    )
+
+    streaming_cmds = [str(c) for c in ssh.run_streaming.call_args_list]
+    # Should have: git clone, docker compose build, docker compose up
+    assert any("git clone" in c for c in streaming_cmds)
+    assert any("compose" in c and "build" in c and "up" not in c for c in streaming_cmds)
+    assert any("compose" in c and "up -d" in c and "--build" not in c for c in streaming_cmds)
+
+
+# ── Rolling deploy health check tests ─────────────────────────────────────────
+
+
+@patch("cli.core.deployer.time.sleep")
+@patch("cli.core.deployer.get_github_token", return_value=None)
+@patch("cli.core.deployer.check_app_health")
+def test_rolling_deploy_uses_http_health_check(mock_health, _mock_token, _mock_sleep):
+    """Rolling deploy must call check_app_health, not reconcile_app_status."""
+    mock_health.return_value = {
+        "healthy": True,
+        "status_code": 200,
+        "response_time_ms": 50,
+        "error": None,
+    }
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.run_checked = MagicMock(return_value="")
+    ssh.run_streaming = MagicMock(return_value="")
+    ssh.run = MagicMock(return_value=("", "", 0))
+    ssh.upload_string = MagicMock()
+
+    deploy_app(
+        ssh,
+        "test-app",
+        image="nginx:latest",
+        deploy_strategy="rolling",
+        health_check_url="/health",
+        port=3000,
+    )
+
+    mock_health.assert_called_once_with(ssh, 3000, "/health")
+
+
+@patch("cli.core.deployer.time.sleep")
+@patch("cli.core.deployer.get_github_token", return_value=None)
+@patch("cli.core.deployer.check_app_health")
+def test_rolling_deploy_fails_on_unhealthy(mock_health, _mock_token, _mock_sleep):
+    """Rolling deploy raises DeploymentError when health check never passes."""
+    mock_health.return_value = {
+        "healthy": False,
+        "status_code": 503,
+        "response_time_ms": 100,
+        "error": None,
+    }
+    ssh = MagicMock()
+    ssh.__enter__ = MagicMock(return_value=ssh)
+    ssh.__exit__ = MagicMock(return_value=False)
+    ssh.run_checked = MagicMock(return_value="")
+    ssh.run_streaming = MagicMock(return_value="")
+    ssh.run = MagicMock(return_value=("", "", 0))
+    ssh.upload_string = MagicMock()
+
+    with pytest.raises(DeploymentError, match="failed health check"):
+        deploy_app(
+            ssh,
+            "test-app",
+            image="nginx:latest",
+            deploy_strategy="rolling",
+            health_check_url="/health",
+            port=3000,
+        )
+
+
 @patch("cli.core.deployer.get_github_token")
 def test_deploy_git_injects_token_for_github(mock_get_token):
     """When a GitHub PAT is stored, clone URL should include the token."""
@@ -298,12 +497,13 @@ def test_deploy_git_injects_token_for_github(mock_get_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.run_checked = MagicMock(return_value="abc1234567890")
+    ssh.run_streaming = MagicMock(return_value="")
     ssh.run = MagicMock(return_value=("", "", 1))  # no existing repo
     ssh.upload_string = MagicMock()
 
     deploy_app(ssh, "test-app", git_repo="https://github.com/org/repo.git", branch="main")
 
-    clone_calls = [c for c in ssh.run_checked.call_args_list if "git clone" in str(c)]
+    clone_calls = [c for c in ssh.run_streaming.call_args_list if "git clone" in str(c)]
     assert len(clone_calls) == 1
     clone_cmd = str(clone_calls[0])
     assert "ghp_secret@github.com" in clone_cmd
@@ -317,12 +517,13 @@ def test_deploy_git_no_token_uses_plain_url(mock_get_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.run_checked = MagicMock(return_value="abc1234567890")
+    ssh.run_streaming = MagicMock(return_value="")
     ssh.run = MagicMock(return_value=("", "", 1))  # no existing repo
     ssh.upload_string = MagicMock()
 
     deploy_app(ssh, "test-app", git_repo="https://github.com/org/repo.git", branch="main")
 
-    clone_calls = [c for c in ssh.run_checked.call_args_list if "git clone" in str(c)]
+    clone_calls = [c for c in ssh.run_streaming.call_args_list if "git clone" in str(c)]
     assert len(clone_calls) == 1
     clone_cmd = str(clone_calls[0])
     assert "github.com/org/repo.git" in clone_cmd

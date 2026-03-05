@@ -61,15 +61,15 @@ class TestContainerName:
 
 
 class TestBackupDatabase:
-    def test_postgres_backup_runs_pg_dump(self, mock_ssh):
+    def test_postgres_backup_runs_pg_dump_custom_format(self, mock_ssh):
         app = _make_app("testdb", "db:postgres")
         with patch("cli.core.backup._timestamp", return_value="20260224_120000"):
             result = backup_database(mock_ssh, app, server_name="prod-1")
 
-        expected = "/opt/infrakt/backups/prod-1_testdb_postgres_a1b2c3d4_20260224_120000.sql.gz"
+        expected = "/opt/infrakt/backups/prod-1_testdb_postgres_a1b2c3d4_20260224_120000.dump"
         assert result == expected
         calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
-        assert any("pg_dump" in c for c in calls)
+        assert any("pg_dump -Fc" in c for c in calls)
 
     def test_mysql_backup_runs_mysqldump(self, mock_ssh):
         mock_ssh.run_checked.return_value = "secret123"  # password from printenv
@@ -111,16 +111,28 @@ class TestBackupDatabase:
         with patch("cli.core.backup._timestamp", return_value="20260224_120000"):
             result = backup_database(mock_ssh, app, server_name="prod-1", backup_dir="/tmp/backups")
 
-        assert result == "/tmp/backups/prod-1_testdb_postgres_a1b2c3d4_20260224_120000.sql.gz"
+        assert result == "/tmp/backups/prod-1_testdb_postgres_a1b2c3d4_20260224_120000.dump"
 
 
 class TestRestoreDatabase:
-    def test_postgres_restore_runs_psql(self, mock_ssh):
+    def test_postgres_restore_uses_pg_restore_for_dump(self, mock_ssh):
         mock_ssh.run.return_value = ("", "", 0)  # test -f succeeds
+        app = _make_app("testdb", "db:postgres")
+        restore_database(mock_ssh, app, "/opt/infrakt/backups/testdb.dump")
+
+        calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
+        assert any("pg_restore" in c for c in calls)
+        assert any("--clean" in c for c in calls)
+        assert any("--if-exists" in c for c in calls)
+
+    def test_postgres_restore_legacy_sql_gz_uses_psql(self, mock_ssh):
+        """Old .sql.gz backups should still restore via gunzip | psql."""
+        mock_ssh.run.return_value = ("", "", 0)
         app = _make_app("testdb", "db:postgres")
         restore_database(mock_ssh, app, "/opt/infrakt/backups/testdb.sql.gz")
 
         calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
+        assert any("gunzip" in c for c in calls)
         assert any("psql" in c for c in calls)
 
     def test_mysql_restore_runs_mysql(self, mock_ssh):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -74,6 +75,69 @@ class SSHClient:
                 f"Command exited with {exit_code} on {self.host}:\n{stderr.strip()}"
             )
         return stdout
+
+    def run_streaming(
+        self,
+        command: str,
+        on_output: Callable[[str], None],
+        timeout: int = 30,
+    ) -> str:
+        """Execute a command, streaming stdout lines through *on_output*.
+
+        Each complete line of stdout is passed to ``on_output(line)`` as it
+        arrives.  After the remote process exits the full stdout is returned
+        (same contract as ``run_checked``).  Raises on non-zero exit.
+        """
+        client = self._ensure_connected()
+        try:
+            _stdin, stdout_file, _stderr_file = client.exec_command(command, timeout=timeout)
+            channel = stdout_file.channel
+        except Exception as exc:
+            raise SSHConnectionError(f"Command failed on {self.host}: {exc}") from exc
+
+        buf = b""
+        all_lines: list[str] = []
+        try:
+            while not channel.exit_status_ready() or channel.recv_ready():
+                if channel.recv_ready():
+                    data = channel.recv(4096)
+                    if not data:
+                        break
+                    buf += data
+                    while b"\n" in buf:
+                        raw_line, buf = buf.split(b"\n", 1)
+                        line = raw_line.decode(errors="replace")
+                        all_lines.append(line)
+                        on_output(line)
+                else:
+                    channel.settimeout(1.0)
+                    try:
+                        data = channel.recv(4096)
+                        if not data:
+                            break
+                        buf += data
+                        while b"\n" in buf:
+                            raw_line, buf = buf.split(b"\n", 1)
+                            line = raw_line.decode(errors="replace")
+                            all_lines.append(line)
+                            on_output(line)
+                    except TimeoutError:
+                        continue
+        finally:
+            # Flush any remaining partial line
+            if buf:
+                line = buf.decode(errors="replace")
+                all_lines.append(line)
+                on_output(line)
+
+        exit_code = channel.recv_exit_status()
+        full_stdout = "\n".join(all_lines)
+        if exit_code != 0:
+            stderr = _stderr_file.read().decode(errors="replace")
+            raise SSHConnectionError(
+                f"Command exited with {exit_code} on {self.host}:\n{stderr.strip()}"
+            )
+        return full_stdout
 
     def upload(self, local_path: str, remote_path: str) -> None:
         client = self._ensure_connected()

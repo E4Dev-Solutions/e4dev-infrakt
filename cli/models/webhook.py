@@ -15,6 +15,7 @@ class Webhook(Base):
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     events: Mapped[str] = mapped_column(String(500), nullable=False)
     secret: Mapped[str | None] = mapped_column(String(256))
+    channel_type: Mapped[str] = mapped_column(String(20), default="custom")
     created_at: Mapped[datetime] = mapped_column(default=func.now())
 
     def __repr__(self) -> str:

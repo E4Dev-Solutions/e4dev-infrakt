@@ -75,7 +75,7 @@ test.describe("Deployment Log Streaming", () => {
     // Wait for the stream to finish (success state appears)
     await expect(page.getByText("Deployment succeeded")).toBeVisible();
     // Close button must be rendered once isStreaming === false
-    await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
   });
 
   test("Close button is absent while stream is still in progress", async ({
@@ -90,27 +90,25 @@ test.describe("Deployment Log Streaming", () => {
     // assert the post-stream state: once "Deployment succeeded" appears the
     // Close button SHOULD be present (confirming the conditional logic works).
     await expect(page.getByText("Deployment succeeded")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
   });
 
-  test("clicking Close returns to normal application logs", async ({
+  test("clicking Close dismisses the deployment log modal", async ({
     page,
   }) => {
     await page.getByRole("button", { name: "Deploy" }).click();
     await expect(page.getByText("Deployment succeeded")).toBeVisible();
 
-    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
 
-    // After closing, the DeploymentLogStream is replaced by the LogsTab which
-    // shows the static logs from the /api/apps/*/logs mock
-    await expect(page.getByText("Container started")).toBeVisible();
-    await expect(page.getByText("Listening on :3000")).toBeVisible();
+    // After closing, the modal is dismissed — deployment logs disappear
+    await expect(page.getByRole("log", { name: "Deployment logs" })).not.toBeVisible();
   });
 
   // ── Tab interaction ────────────────────────────────────────────────────────
 
-  test("Deploy switches active tab to Logs automatically", async ({ page }) => {
-    // Switch away from the default Logs tab first
+  test("Deploy opens a modal without changing the active tab", async ({ page }) => {
+    // Switch away from the default Overview tab
     await page.getByRole("tab", { name: "Deployments" }).click();
     await expect(
       page.getByRole("tab", { name: "Deployments" }),
@@ -118,22 +116,23 @@ test.describe("Deployment Log Streaming", () => {
 
     await page.getByRole("button", { name: "Deploy" }).click();
 
-    // handleDeploy calls setActiveTab("logs"), so Logs tab must become active
-    await expect(page.getByRole("tab", { name: "Logs" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    // Deployment logs should appear in a modal
+    await expect(page.getByRole("log", { name: "Deployment logs" })).toBeVisible();
+    // The Deployments tab should remain active
+    await expect(
+      page.getByRole("tab", { name: "Deployments" }),
+    ).toHaveAttribute("aria-selected", "true");
   });
 
-  test("deployment log panel is inside the Logs tab panel", async ({
+  test("deployment log panel is inside a modal dialog", async ({
     page,
   }) => {
     await page.getByRole("button", { name: "Deploy" }).click();
 
-    // The Logs tabpanel must contain the deployment log stream
-    const logsTabPanel = page.getByRole("tabpanel", { name: "Logs" });
+    // The modal must contain the deployment log stream
+    const modal = page.getByRole("dialog");
     await expect(
-      logsTabPanel.getByRole("log", { name: "Deployment logs" }),
+      modal.getByRole("log", { name: "Deployment logs" }),
     ).toBeVisible();
   });
 

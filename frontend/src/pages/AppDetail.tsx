@@ -47,6 +47,7 @@ import { useContainerLogStream } from "@/hooks/useContainerLogStream";
 import { ToastContainer } from "@/components/Toast";
 import StatusBadge from "@/components/StatusBadge";
 import DeploymentLogStream from "@/components/DeploymentLogStream";
+import Modal from "@/components/Modal";
 import type { App, UpdateAppInput } from "@/api/client";
 
 type ActiveTab = "overview" | "logs" | "env" | "deployments" | "settings";
@@ -1372,7 +1373,6 @@ export default function AppDetail() {
       const result = await deployApp.mutateAsync(decodedName);
       toast.success(result.message || "Deployment triggered.");
       setActiveDeploymentId(result.deployment_id);
-      setActiveTab("logs");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Deployment failed.");
     } finally {
@@ -1633,18 +1633,7 @@ export default function AppDetail() {
             aria-label="Logs"
             hidden={activeTab !== "logs"}
           >
-            {activeTab === "logs" &&
-              (activeDeploymentId ? (
-                <DeploymentLogStream
-                  lines={stream.lines}
-                  isStreaming={stream.isStreaming}
-                  status={stream.status}
-                  error={stream.error}
-                  onClose={() => setActiveDeploymentId(null)}
-                />
-              ) : (
-                <LogsTab appName={decodedName} />
-              ))}
+            {activeTab === "logs" && <LogsTab appName={decodedName} />}
           </div>
           <div
             id="tabpanel-env"
@@ -1674,6 +1663,25 @@ export default function AppDetail() {
           </div>
         </div>
       </div>
+
+      {/* Deployment log modal */}
+      {activeDeploymentId && (
+        <Modal
+          title="Deployment Logs"
+          onClose={() => {
+            if (!stream.isStreaming) setActiveDeploymentId(null);
+          }}
+          maxWidth="max-w-3xl"
+        >
+          <DeploymentLogStream
+            lines={stream.lines}
+            isStreaming={stream.isStreaming}
+            status={stream.status}
+            error={stream.error}
+            onClose={() => setActiveDeploymentId(null)}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

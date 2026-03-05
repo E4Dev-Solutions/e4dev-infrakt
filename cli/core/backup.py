@@ -51,6 +51,20 @@ def _resolve_container_name(ssh: SSHClient, app: App) -> str:
     return expected
 
 
+def _is_pg_custom_format(ssh: SSHClient, path: str) -> bool:
+    """Check if a file is a PostgreSQL custom-format dump (starts with PGDMP).
+
+    Handles both raw and gzipped files.
+    """
+    q_path = shlex.quote(path)
+    if path.endswith(".gz"):
+        cmd = f"gunzip -c {q_path} 2>/dev/null | head -c 5"
+    else:
+        cmd = f"head -c 5 {q_path}"
+    stdout, _, rc = ssh.run(cmd)
+    return rc == 0 and stdout.startswith("PGDMP")
+
+
 def _timestamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
@@ -160,15 +174,32 @@ def restore_database(
         db_name = _get_container_env(ssh, container, "POSTGRES_DB")
         q_user = shlex.quote(db_user)
         q_db = shlex.quote(db_name)
-        if remote_backup_path.endswith(".sql.gz"):
-            # Legacy plain-SQL backup — fall back to gunzip | psql
-            cmd = f"gunzip -c {q_path} | docker exec -i {q_container} psql -U {q_user} -d {q_db}"
+        # Detect format by magic bytes, not extension (some tools
+        # save custom-format dumps with .sql.gz extension).
+        is_custom = _is_pg_custom_format(ssh, remote_backup_path)
+        if is_custom:
+            # Custom-format backup — use pg_restore with safe flags.
+            # Decompress first if gzipped, since pg_restore reads raw.
+            if remote_backup_path.endswith(".gz"):
+                cmd = (
+                    f"gunzip -c {q_path} | docker exec -i {q_container}"
+                    f" pg_restore -U {q_user} -d {q_db}"
+                    f" --clean --if-exists --no-owner"
+                )
+            else:
+                cmd = (
+                    f"cat {q_path} | docker exec -i {q_container}"
+                    f" pg_restore -U {q_user} -d {q_db}"
+                    f" --clean --if-exists --no-owner"
+                )
         else:
-            # Custom-format backup — use pg_restore with safe flags
-            cmd = (
-                f"cat {q_path} | docker exec -i {q_container}"
-                f" pg_restore -U {q_user} -d {q_db} --clean --if-exists --no-owner"
-            )
+            # Plain-SQL backup — gunzip if needed, pipe to psql
+            if remote_backup_path.endswith(".gz"):
+                cmd = (
+                    f"gunzip -c {q_path} | docker exec -i {q_container} psql -U {q_user} -d {q_db}"
+                )
+            else:
+                cmd = f"cat {q_path} | docker exec -i {q_container} psql -U {q_user} -d {q_db}"
     elif db_type == "mysql":
         password = _get_container_env(ssh, container, "MYSQL_PASSWORD")
         q_pass = shlex.quote(password)

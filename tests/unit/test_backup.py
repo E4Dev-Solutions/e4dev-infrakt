@@ -135,7 +135,8 @@ class TestBackupDatabase:
 
 class TestRestoreDatabase:
     def test_postgres_restore_uses_pg_restore_for_dump(self, mock_ssh):
-        mock_ssh.run.return_value = ("", "", 0)  # test -f succeeds
+        # docker inspect (resolve), test -f, head -c 5 (magic bytes)
+        mock_ssh.run.side_effect = [("", "", 0), ("", "", 0), ("PGDMP", "", 0)]
         app = _make_app("testdb", "db:postgres")
         restore_database(mock_ssh, app, "/opt/infrakt/backups/testdb.dump")
 
@@ -145,14 +146,26 @@ class TestRestoreDatabase:
         assert any("--if-exists" in c for c in calls)
 
     def test_postgres_restore_legacy_sql_gz_uses_psql(self, mock_ssh):
-        """Old .sql.gz backups should still restore via gunzip | psql."""
-        mock_ssh.run.return_value = ("", "", 0)
+        """Old .sql.gz backups with plain SQL should restore via gunzip | psql."""
+        # docker inspect (resolve), test -f, gunzip magic check (not PGDMP)
+        mock_ssh.run.side_effect = [("", "", 0), ("", "", 0), ("-- SQL", "", 0)]
         app = _make_app("testdb", "db:postgres")
         restore_database(mock_ssh, app, "/opt/infrakt/backups/testdb.sql.gz")
 
         calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
         assert any("gunzip" in c for c in calls)
         assert any("psql" in c for c in calls)
+
+    def test_postgres_restore_custom_format_in_sql_gz_uses_pg_restore(self, mock_ssh):
+        """Custom-format dump saved as .sql.gz should use pg_restore."""
+        # docker inspect (resolve), test -f, gunzip magic check (PGDMP)
+        mock_ssh.run.side_effect = [("", "", 0), ("", "", 0), ("PGDMP", "", 0)]
+        app = _make_app("testdb", "db:postgres")
+        restore_database(mock_ssh, app, "/opt/infrakt/backups/testdb.sql.gz")
+
+        calls = [str(c) for c in mock_ssh.run_checked.call_args_list]
+        assert any("pg_restore" in c for c in calls)
+        assert any("gunzip" in c for c in calls)
 
     def test_mysql_restore_runs_mysql(self, mock_ssh):
         mock_ssh.run.return_value = ("", "", 0)

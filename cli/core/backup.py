@@ -22,12 +22,33 @@ def _extract_db_type(app: App) -> str:
 
 
 def _container_name(app: App) -> str:
-    """Return the Docker container name for a database app."""
-    # Template child DBs use "infrakt-{name}" (e.g. infrakt-n8n-db),
-    # while standalone DBs use "infrakt-db-{name}" (from db-compose.yml.j2).
+    """Return the expected Docker container name for a database app.
+
+    Template/standalone DBs set an explicit ``container_name`` in their
+    compose file, so the name is deterministic.  Repo-based embedded DBs
+    rely on Docker Compose auto-naming (``{project}-{service}-1``), which
+    ``_resolve_container_name`` handles at runtime.
+    """
     if app.parent_app_id is not None:
         return f"infrakt-{app.name}"
     return f"infrakt-db-{app.name}"
+
+
+def _resolve_container_name(ssh: SSHClient, app: App) -> str:
+    """Find the actual running container name for a database app.
+
+    Tries the expected name first, then the docker compose auto-named
+    variant (with ``-1`` suffix) for repo-based embedded databases.
+    """
+    expected = _container_name(app)
+    _, _, rc = ssh.run(f"docker inspect {shlex.quote(expected)} > /dev/null 2>&1")
+    if rc == 0:
+        return expected
+    with_suffix = f"{expected}-1"
+    _, _, rc = ssh.run(f"docker inspect {shlex.quote(with_suffix)} > /dev/null 2>&1")
+    if rc == 0:
+        return with_suffix
+    return expected
 
 
 def _timestamp() -> str:
@@ -60,7 +81,7 @@ def backup_database(
     Supports postgres, mysql, redis, and mongo.
     """
     db_type = _extract_db_type(db_app)
-    container = _container_name(db_app)
+    container = _resolve_container_name(ssh, db_app)
     q_container = shlex.quote(container)
     ts = _timestamp()
     backup_id = db_app.backup_id or "unknown"
@@ -125,7 +146,7 @@ def restore_database(
     The backup file must already exist at ``remote_backup_path``.
     """
     db_type = _extract_db_type(db_app)
-    container = _container_name(db_app)
+    container = _resolve_container_name(ssh, db_app)
     q_container = shlex.quote(container)
     q_path = shlex.quote(remote_backup_path)
 
@@ -207,31 +228,45 @@ def generate_backup_script(
 ) -> str:
     """Generate a shell script that performs a backup and cleans old files."""
     db_type = _extract_db_type(db_app)
-    container = _container_name(db_app)
+    expected = _container_name(db_app)
     name = db_app.name
     backup_id = db_app.backup_id or "unknown"
     ts_var = "$(date +%Y%m%d_%H%M%S)"
     base = f"{name}_{db_type}_{backup_id}"
     fname_prefix = f"{server_name}_{base}" if server_name else base
 
+    # Resolve container at runtime: try expected name, fall back to -1 suffix
+    q_expected = shlex.quote(expected)
+    q_with_suffix = shlex.quote(f"{expected}-1")
     lines = [
         "#!/usr/bin/env bash",
         "set -euo pipefail",
         f"BACKUP_DIR={shlex.quote(backup_dir)}",
         'mkdir -p "$BACKUP_DIR"',
         "",
+        "# Resolve container name (handles docker compose auto-naming)",
+        f"if docker inspect {q_expected} > /dev/null 2>&1; then",
+        f"  CONTAINER={q_expected}",
+        f"elif docker inspect {q_with_suffix} > /dev/null 2>&1; then",
+        f"  CONTAINER={q_with_suffix}",
+        "else",
+        f'  echo "Error: container {expected} not found" >&2; exit 1',
+        "fi",
+        "",
     ]
+    # container is now a shell variable — use $CONTAINER directly (not shlex.quote)
 
     if db_type == "postgres":
         filename = f"{fname_prefix}_{ts_var}.dump"
-        q_c = shlex.quote(container)
         q_n = shlex.quote(name)
-        lines.append(f'docker exec {q_c} pg_dump -Fc -U {q_n} {q_n} > "$BACKUP_DIR/{filename}"')
+        lines.append(
+            f'docker exec "$CONTAINER" pg_dump -Fc -U {q_n} {q_n} > "$BACKUP_DIR/{filename}"'
+        )
     elif db_type == "mysql":
-        lines.append(f"MYSQL_PASS=$(docker exec {shlex.quote(container)} printenv MYSQL_PASSWORD)")
+        lines.append('MYSQL_PASS=$(docker exec "$CONTAINER" printenv MYSQL_PASSWORD)')
         filename = f"{fname_prefix}_{ts_var}.sql.gz"
         lines.append(
-            f"docker exec {shlex.quote(container)} mysqldump -u {shlex.quote(name)}"
+            f'docker exec "$CONTAINER" mysqldump -u {shlex.quote(name)}'
             f' -p"$MYSQL_PASS" {shlex.quote(name)}'
             f' | gzip > "$BACKUP_DIR/{filename}"'
         )
@@ -239,17 +274,16 @@ def generate_backup_script(
         filename = f"{fname_prefix}_{ts_var}.rdb"
         lines.extend(
             [
-                f"docker exec {shlex.quote(container)} redis-cli BGSAVE",
+                'docker exec "$CONTAINER" redis-cli BGSAVE',
                 "sleep 2",
-                f'docker cp {shlex.quote(container)}:/data/dump.rdb "$BACKUP_DIR/{filename}"',
+                f'docker cp "$CONTAINER":/data/dump.rdb "$BACKUP_DIR/{filename}"',
             ]
         )
     elif db_type == "mongo":
-        q_c = shlex.quote(container)
-        lines.append(f"MONGO_PASS=$(docker exec {q_c} printenv MONGO_INITDB_ROOT_PASSWORD)")
+        lines.append('MONGO_PASS=$(docker exec "$CONTAINER" printenv MONGO_INITDB_ROOT_PASSWORD)')
         filename = f"{fname_prefix}_{ts_var}.archive.gz"
         lines.append(
-            f"docker exec {shlex.quote(container)} mongodump"
+            'docker exec "$CONTAINER" mongodump'
             f" --archive --gzip"
             f' -u {shlex.quote(name)} -p "$MONGO_PASS"'
             f" --authenticationDatabase admin"

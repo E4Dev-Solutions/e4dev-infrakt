@@ -7,6 +7,7 @@ import pytest
 from cli.core.backup import (
     _container_name,
     _extract_db_type,
+    _resolve_container_name,
     backup_database,
     restore_database,
 )
@@ -58,6 +59,24 @@ class TestContainerName:
     def test_returns_infrakt_prefix_for_template_child(self):
         app = _make_app(name="n8n-db", parent_app_id=1)
         assert _container_name(app) == "infrakt-n8n-db"
+
+
+class TestResolveContainerName:
+    def test_returns_expected_name_when_found(self, mock_ssh):
+        app = _make_app(name="n8n-db", parent_app_id=1)
+        mock_ssh.run.return_value = ("", "", 0)
+        assert _resolve_container_name(mock_ssh, app) == "infrakt-n8n-db"
+
+    def test_falls_back_to_suffix_for_repo_embedded_db(self, mock_ssh):
+        app = _make_app(name="myapp-postgres", parent_app_id=1)
+        # First inspect (expected name) fails, second (with -1) succeeds
+        mock_ssh.run.side_effect = [("", "", 1), ("", "", 0)]
+        assert _resolve_container_name(mock_ssh, app) == "infrakt-myapp-postgres-1"
+
+    def test_returns_expected_when_neither_found(self, mock_ssh):
+        app = _make_app(name="myapp-postgres", parent_app_id=1)
+        mock_ssh.run.side_effect = [("", "", 1), ("", "", 1)]
+        assert _resolve_container_name(mock_ssh, app) == "infrakt-myapp-postgres"
 
 
 class TestBackupDatabase:

@@ -873,7 +873,8 @@ function DeploymentsTab({ appName }: { appName: string }) {
     );
   }
 
-  function getRef(dep: { commit_hash?: string; image_used?: string }): string {
+  function getRef(dep: { commit_hash?: string; image_used?: string; image_tag?: string }): string {
+    if (dep.image_tag) return dep.image_tag;
     if (dep.commit_hash) return dep.commit_hash.slice(0, 8);
     if (dep.image_used) return dep.image_used;
     return "---";
@@ -990,6 +991,7 @@ function SettingsTab({ app }: { app: App }) {
     health_check_interval: app.health_check_interval,
     replicas: app.replicas,
     deploy_strategy: app.deploy_strategy ?? "",
+    build_type: app.build_type ?? "auto",
   });
 
   // Multi-domain rows (initialized from app.domains + app.domain_ports)
@@ -1024,6 +1026,7 @@ function SettingsTab({ app }: { app: App }) {
     form.health_check_interval !== app.health_check_interval ||
     form.replicas !== app.replicas ||
     form.deploy_strategy !== (app.deploy_strategy ?? "") ||
+    form.build_type !== (app.build_type ?? "auto") ||
     currRows !== origRows;
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -1311,6 +1314,24 @@ function SettingsTab({ app }: { app: App }) {
                 <option value="rolling">Rolling</option>
               </select>
             </div>
+            {(app.git_repo || app.app_type === "git") && (
+              <div>
+                <label htmlFor="settings-build-type" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Build Type
+                </label>
+                <select
+                  id="settings-build-type"
+                  name="build_type"
+                  value={form.build_type ?? "auto"}
+                  onChange={handleChange}
+                  className={inputClass}
+                >
+                  <option value="auto">Auto-detect</option>
+                  <option value="dockerfile">Dockerfile</option>
+                  <option value="nixpacks">Nixpacks</option>
+                </select>
+              </div>
+            )}
           </div>
         </fieldset>
 

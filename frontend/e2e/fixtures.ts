@@ -194,12 +194,14 @@ export const MOCK_WEBHOOKS = [
     id: 1,
     url: "https://hooks.slack.com/services/T00/B00/xxxx",
     events: ["deploy.success", "deploy.failure"],
+    channel_type: "slack",
     created_at: new Date(Date.now() - 3600_000).toISOString(),
   },
   {
     id: 2,
     url: "https://discord.com/api/webhooks/123/abc",
     events: ["backup.complete"],
+    channel_type: "discord",
     created_at: new Date(Date.now() - 86400_000).toISOString(),
   },
 ];

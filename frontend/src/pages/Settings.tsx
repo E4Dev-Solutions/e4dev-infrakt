@@ -76,6 +76,7 @@ const defaultForm: CreateWebhookInput & { urlError: string } = {
   url: "",
   events: [],
   secret: "",
+  channel_type: "custom",
   urlError: "",
 };
 
@@ -333,6 +334,7 @@ export default function Settings() {
       url: form.url,
       events: form.events,
       ...(form.secret ? { secret: form.secret } : {}),
+      channel_type: form.channel_type ?? "custom",
     };
 
     try {
@@ -903,7 +905,7 @@ export default function Settings() {
             <table className="w-full text-sm" role="table">
               <thead>
                 <tr className="border-b border-zinc-700 bg-zinc-800/60">
-                  {["URL", "Events", "Created", "Actions"].map((h) => (
+                  {["URL", "Type", "Events", "Created", "Actions"].map((h) => (
                     <th
                       key={h}
                       scope="col"
@@ -929,6 +931,13 @@ export default function Settings() {
                         {webhook.url.length > 50
                           ? `${webhook.url.slice(0, 50)}…`
                           : webhook.url}
+                      </span>
+                    </td>
+
+                    {/* Type */}
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <span className="inline-flex items-center rounded-md bg-zinc-700 px-2 py-0.5 text-xs font-medium text-zinc-300">
+                        {webhook.channel_type === "slack" ? "Slack" : webhook.channel_type === "discord" ? "Discord" : "Custom"}
                       </span>
                     </td>
 
@@ -1234,6 +1243,29 @@ export default function Settings() {
               <p className="mt-1 text-xs text-zinc-500">
                 Used to sign the X-Infrakt-Signature header sent with each
                 delivery.
+              </p>
+            </div>
+
+            {/* Channel Type */}
+            <div>
+              <label
+                htmlFor="webhook-channel-type"
+                className="mb-1.5 block text-xs font-medium text-zinc-300"
+              >
+                Channel Type
+              </label>
+              <select
+                id="webhook-channel-type"
+                value={form.channel_type ?? "custom"}
+                onChange={(e) => setForm((prev) => ({ ...prev, channel_type: e.target.value }))}
+                className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+              >
+                <option value="custom">Custom (HMAC signed)</option>
+                <option value="slack">Slack</option>
+                <option value="discord">Discord</option>
+              </select>
+              <p className="mt-1 text-xs text-zinc-500">
+                Slack and Discord use their native message format automatically.
               </p>
             </div>
 

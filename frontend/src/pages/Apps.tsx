@@ -47,6 +47,7 @@ const defaultForm: CreateAppInput = {
   template: undefined,
   cpu_limit: "",
   memory_limit: "",
+  build_type: undefined,
 };
 
 export default function Apps() {
@@ -159,6 +160,7 @@ export default function Apps() {
         template: form.template || undefined,
         cpu_limit: form.cpu_limit || undefined,
         memory_limit: form.memory_limit || undefined,
+        build_type: form.build_type || undefined,
       };
       await createApp.mutateAsync(payload);
       toast.success(`App "${form.name}" created.`);
@@ -765,6 +767,24 @@ export default function Apps() {
                   </label>
                   <input id="app-memory-limit" name="memory_limit" type="text" value={form.memory_limit ?? ""} onChange={handleChange} placeholder="512M" className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none" />
                 </div>
+                {sourceType === "github" && (
+                  <div className="col-span-2">
+                    <label htmlFor="app-build-type" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                      Build Type
+                    </label>
+                    <select
+                      id="app-build-type"
+                      name="build_type"
+                      value={form.build_type ?? "auto"}
+                      onChange={handleChange}
+                      className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2 text-sm text-zinc-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                    >
+                      <option value="auto">Auto-detect</option>
+                      <option value="dockerfile">Dockerfile</option>
+                      <option value="nixpacks">Nixpacks</option>
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 

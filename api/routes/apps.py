@@ -85,6 +85,13 @@ def _app_out(a: App, session: object | None = None) -> AppOut:
         except _json.JSONDecodeError:
             pass
 
+    domain_ports_dict: dict[str, int] | None = None
+    if a.domain_ports:
+        try:
+            domain_ports_dict = _json.loads(a.domain_ports)
+        except _json.JSONDecodeError:
+            pass
+
     return AppOut(
         id=a.id,
         name=a.name,
@@ -92,6 +99,7 @@ def _app_out(a: App, session: object | None = None) -> AppOut:
         server_name=a.server.name,
         domain=domain_val,
         domains=domains_dict,
+        domain_ports=domain_ports_dict,
         port=a.port,
         git_repo=a.git_repo,
         branch=a.branch,
@@ -154,10 +162,17 @@ def create_app(body: AppCreate) -> AppOut:
         else:
             effective_domain = body.domain
 
+        effective_domain_ports = None
+        if body.domain_ports:
+            import json as _json2
+
+            effective_domain_ports = _json2.dumps(body.domain_ports)
+
         new_app = App(
             name=body.name,
             server_id=srv.id,
             domain=effective_domain,
+            domain_ports=effective_domain_ports,
             port=effective_port,
             git_repo=body.git_repo,
             branch=body.branch,
@@ -206,8 +221,22 @@ def update_app(name: str, body: AppUpdate, server: str | None = None) -> AppOut:
         if not app_obj:
             raise HTTPException(404, f"App '{name}' not found")
 
-        if body.domain is not None:
+        if body.domains is not None:
+            import json as _json
+
+            if body.domains:
+                app_obj.domain = _json.dumps(body.domains)
+            else:
+                app_obj.domain = None
+        elif body.domain is not None:
             app_obj.domain = body.domain
+        if body.domain_ports is not None:
+            import json as _json
+
+            if body.domain_ports:
+                app_obj.domain_ports = _json.dumps(body.domain_ports)
+            else:
+                app_obj.domain_ports = None
         if body.port is not None:
             app_obj.port = body.port
         if body.git_repo is not None:
@@ -279,6 +308,7 @@ async def deploy(
             "deploy_strategy": app_obj.deploy_strategy,
             "health_check_url": app_obj.health_check_url,
             "health_check_interval": app_obj.health_check_interval,
+            "domain_ports": app_obj.domain_ports,
         }
         ssh_data: dict[str, str | int | None] = {
             "host": srv.host,
@@ -354,6 +384,15 @@ async def deploy(
                     else:
                         primary_domain = domain_raw
 
+                # Parse per-service ports for non-template multi-domain apps
+                domain_ports_raw = app_data.get("domain_ports")
+                domain_ports: dict[str, int] = {}
+                if isinstance(domain_ports_raw, str) and domain_ports_raw.startswith("{"):
+                    try:
+                        domain_ports = _json.loads(domain_ports_raw)
+                    except _json.JSONDecodeError:
+                        pass
+
                 # Generate compose override for template-based apps
                 compose_override = None
                 if isinstance(app_type_val, str) and app_type_val.startswith("template:"):
@@ -389,7 +428,7 @@ async def deploy(
                     )
                     domain_map = tmpl.get("domain_map", {}) if tmpl else {}
                     for svc_name, svc_domain in multi_domains.items():
-                        svc_port = domain_map.get(svc_name, port)
+                        svc_port = domain_map.get(svc_name) or domain_ports.get(svc_name, port)
                         add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{svc_name}")
                 elif primary_domain:
                     add_domain(ssh, primary_domain, port, app_name=name)
@@ -965,7 +1004,16 @@ def destroy(name: str, server: str | None = None) -> dict[str, str]:
     with ssh:
         destroy_app(ssh, name)
         if app_domain:
-            remove_domain(ssh, app_domain)
+            if app_domain.startswith("{"):
+                import json as _json
+
+                try:
+                    for svc_domain in _json.loads(app_domain).values():
+                        remove_domain(ssh, svc_domain)
+                except (ValueError, AttributeError):
+                    remove_domain(ssh, app_domain)
+            else:
+                remove_domain(ssh, app_domain)
 
     with get_session() as session:
         # Delete child DB records (embedded databases from templates)

@@ -68,4 +68,28 @@ test.describe("Apps", () => {
     await page.getByLabel(`Destroy ${MOCK_APPS[0].name}`).click();
     await expect(page.getByText(/destroyed/i)).toBeVisible();
   });
+
+  test("Add service domain button appears for Image source type", async ({ page }) => {
+    await page.getByRole("button", { name: "Create App" }).click();
+    await page.getByRole("button", { name: "Image" }).click();
+    await expect(page.getByText("Add service domain")).toBeVisible();
+  });
+
+  test("Add service domain button appears for GitHub source type", async ({ page }) => {
+    await page.getByRole("button", { name: "Create App" }).click();
+    await page.getByRole("button", { name: "GitHub" }).click();
+    await expect(page.getByText("Add service domain")).toBeVisible();
+  });
+
+  test("clicking Add service domain shows domain rows", async ({ page }) => {
+    await page.getByRole("button", { name: "Create App" }).click();
+    await page.getByRole("button", { name: "Image" }).click();
+    await page.getByText("Add service domain").click();
+
+    // Should show Service Domains header and column labels
+    await expect(page.getByText("Service Domains")).toBeVisible();
+    await expect(page.locator("form").getByText("Service", { exact: true })).toBeVisible();
+    await expect(page.locator("form").getByText("Domain", { exact: true })).toBeVisible();
+    await expect(page.locator("form").getByText("Port", { exact: true })).toBeVisible();
+  });
 });

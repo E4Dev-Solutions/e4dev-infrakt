@@ -143,6 +143,7 @@ class AppCreate(BaseModel):
     server_name: str
     domain: str | None = None
     domains: dict[str, str] | None = None  # multi-domain: {"gitea": "git.example.com", ...}
+    domain_ports: dict[str, int] | None = None  # per-service ports: {"frontend": 3000, ...}
     port: int = Field(default=3000, ge=1, le=65535)
     git_repo: str | None = None
     branch: str = "main"
@@ -176,6 +177,15 @@ class AppCreate(BaseModel):
                     raise ValueError(f"Invalid domain format for '{svc}': {d}")
         return v
 
+    @field_validator("domain_ports")
+    @classmethod
+    def validate_domain_ports(cls, v: dict[str, int] | None) -> dict[str, int] | None:
+        if v is not None:
+            for svc, port in v.items():
+                if not (1 <= port <= 65535):
+                    raise ValueError(f"Invalid port for '{svc}': {port}")
+        return v
+
     @field_validator("git_repo")
     @classmethod
     def validate_git_repo(cls, v: str | None) -> str | None:
@@ -184,6 +194,8 @@ class AppCreate(BaseModel):
 
 class AppUpdate(BaseModel):
     domain: str | None = None
+    domains: dict[str, str] | None = None
+    domain_ports: dict[str, int] | None = None
     port: int | None = Field(default=None, ge=1, le=65535)
     git_repo: str | None = None
     branch: str | None = None
@@ -202,6 +214,24 @@ class AppUpdate(BaseModel):
             raise ValueError("Invalid domain name format")
         return v
 
+    @field_validator("domains")
+    @classmethod
+    def validate_domains(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is not None:
+            for svc, d in v.items():
+                if not _DOMAIN_PATTERN.match(d):
+                    raise ValueError(f"Invalid domain format for '{svc}': {d}")
+        return v
+
+    @field_validator("domain_ports")
+    @classmethod
+    def validate_domain_ports(cls, v: dict[str, int] | None) -> dict[str, int] | None:
+        if v is not None:
+            for svc, port in v.items():
+                if not (1 <= port <= 65535):
+                    raise ValueError(f"Invalid port for '{svc}': {port}")
+        return v
+
     @field_validator("git_repo")
     @classmethod
     def validate_git_repo(cls, v: str | None) -> str | None:
@@ -215,6 +245,7 @@ class AppOut(BaseModel):
     server_name: str = ""
     domain: str | None
     domains: dict[str, str] | None = None
+    domain_ports: dict[str, int] | None = None
     port: int
     git_repo: str | None
     branch: str

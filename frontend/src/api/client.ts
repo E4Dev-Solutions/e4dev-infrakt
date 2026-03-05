@@ -76,6 +76,7 @@ export interface App {
   server_name: string;
   domain?: string;
   domains?: Record<string, string>;
+  domain_ports?: Record<string, number>;
   port?: number;
   git_repo?: string;
   branch?: string;
@@ -210,6 +211,7 @@ export interface CreateAppInput {
   server_name: string;
   domain?: string;
   domains?: Record<string, string>;  // multi-domain: {"gitea": "git.example.com", ...}
+  domain_ports?: Record<string, number>;  // per-service ports: {"frontend": 3000, ...}
   port?: number;
   git_repo?: string;
   branch?: string;
@@ -232,6 +234,8 @@ export interface AppTemplate {
 
 export interface UpdateAppInput {
   domain?: string;
+  domains?: Record<string, string>;
+  domain_ports?: Record<string, number>;
   port?: number;
   git_repo?: string;
   branch?: string;

@@ -48,6 +48,7 @@ def _apply_migrations(engine: Engine) -> None:
         "ALTER TABLE apps ADD COLUMN parent_app_id INTEGER REFERENCES apps(id) ON DELETE CASCADE",
         "ALTER TABLE servers ADD COLUMN is_infrakt_host BOOLEAN DEFAULT 0",
         "ALTER TABLE apps ADD COLUMN backup_id VARCHAR(8)",
+        "ALTER TABLE apps ADD COLUMN domain_ports VARCHAR(500)",
     ]
     with engine.connect() as conn:
         for sql in migrations:

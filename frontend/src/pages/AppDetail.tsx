@@ -920,12 +920,26 @@ function SettingsTab({ app }: { app: App }) {
     deploy_strategy: app.deploy_strategy ?? "",
   });
 
+  // Multi-domain rows (initialized from app.domains + app.domain_ports)
+  const [domainRows, setDomainRows] = useState<{ service: string; domain: string; port: string }[]>(() => {
+    if (!app.domains) return [];
+    return Object.entries(app.domains).map(([svc, dom]) => ({
+      service: svc,
+      domain: dom,
+      port: app.domain_ports?.[svc]?.toString() ?? "",
+    }));
+  });
+
   const [showDanger, setShowDanger] = useState(false);
   const [destroyConfirm, setDestroyConfirm] = useState("");
 
   const isTemplate = app.app_type?.startsWith("template:");
 
   // Dirty detection
+  const origRows = app.domains
+    ? Object.entries(app.domains).map(([svc, dom]) => `${svc}:${dom}:${app.domain_ports?.[svc] ?? ""}`).join(",")
+    : "";
+  const currRows = domainRows.map((r) => `${r.service}:${r.domain}:${r.port}`).join(",");
   const isDirty =
     form.domain !== (app.domain ?? "") ||
     form.port !== (app.port ?? 3000) ||
@@ -937,7 +951,8 @@ function SettingsTab({ app }: { app: App }) {
     form.health_check_url !== (app.health_check_url ?? "") ||
     form.health_check_interval !== app.health_check_interval ||
     form.replicas !== app.replicas ||
-    form.deploy_strategy !== (app.deploy_strategy ?? "");
+    form.deploy_strategy !== (app.deploy_strategy ?? "") ||
+    currRows !== origRows;
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -955,7 +970,19 @@ function SettingsTab({ app }: { app: App }) {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await updateApp.mutateAsync({ name: app.name, input: form });
+      const filledRows = domainRows.filter((r) => r.service && r.domain);
+      const hasRowDomains = filledRows.length > 0;
+      const payload: UpdateAppInput = {
+        ...form,
+        domain: hasRowDomains ? undefined : form.domain,
+        domains: hasRowDomains
+          ? Object.fromEntries(filledRows.map((r) => [r.service, r.domain]))
+          : undefined,
+        domain_ports: hasRowDomains
+          ? Object.fromEntries(filledRows.filter((r) => r.port).map((r) => [r.service, Number(r.port)]))
+          : undefined,
+      };
+      await updateApp.mutateAsync({ name: app.name, input: payload });
       toast.success("App configuration updated.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update app.");
@@ -1003,37 +1030,99 @@ function SettingsTab({ app }: { app: App }) {
         {/* General */}
         <fieldset className="rounded-lg border border-zinc-700 bg-zinc-800/50 p-4">
           <legend className="px-2 text-sm font-semibold text-zinc-200">General</legend>
-          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="settings-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Domain
-              </label>
-              <input
-                id="settings-domain"
-                name="domain"
-                type="text"
-                value={form.domain ?? ""}
-                onChange={handleChange}
-                placeholder="app.example.com"
-                className={inputClass}
-              />
+          {domainRows.length > 0 ? (
+            <div className="mt-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-zinc-300">Service Domains</label>
+                <button
+                  type="button"
+                  onClick={() => setDomainRows((prev) => [...prev, { service: "", domain: "", port: "" }])}
+                  className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300"
+                >
+                  <Plus size={12} /> Add
+                </button>
+              </div>
+              <div className="grid grid-cols-12 gap-2 text-[10px] uppercase tracking-wider text-zinc-500 px-0.5">
+                <span className="col-span-3">Service</span>
+                <span className="col-span-5">Domain</span>
+                <span className="col-span-3">Port</span>
+                <span className="col-span-1" />
+              </div>
+              {domainRows.map((row, i) => (
+                <div key={i} className="grid grid-cols-12 gap-2">
+                  <input
+                    className="col-span-3 rounded-lg border border-zinc-600 bg-zinc-700 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                    placeholder="api"
+                    value={row.service}
+                    onChange={(e) => setDomainRows((prev) => prev.map((r, j) => (j === i ? { ...r, service: e.target.value } : r)))}
+                  />
+                  <input
+                    className="col-span-5 rounded-lg border border-zinc-600 bg-zinc-700 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                    placeholder="api.example.com"
+                    value={row.domain}
+                    onChange={(e) => setDomainRows((prev) => prev.map((r, j) => (j === i ? { ...r, domain: e.target.value } : r)))}
+                  />
+                  <input
+                    type="number"
+                    className="col-span-3 rounded-lg border border-zinc-600 bg-zinc-700 px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus-visible:outline-none"
+                    placeholder="4000"
+                    value={row.port}
+                    onChange={(e) => setDomainRows((prev) => prev.map((r, j) => (j === i ? { ...r, port: e.target.value } : r)))}
+                  />
+                  <button
+                    type="button"
+                    className="col-span-1 flex items-center justify-center text-zinc-500 hover:text-red-400"
+                    onClick={() => setDomainRows((prev) => prev.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
             </div>
-            <div>
-              <label htmlFor="settings-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
-                Port
-              </label>
-              <input
-                id="settings-port"
-                name="port"
-                type="number"
-                min={1}
-                max={65535}
-                value={form.port ?? ""}
-                onChange={handleChange}
-                className={inputClass}
-              />
+          ) : (
+            <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="settings-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Domain
+                </label>
+                <input
+                  id="settings-domain"
+                  name="domain"
+                  type="text"
+                  value={form.domain ?? ""}
+                  onChange={handleChange}
+                  placeholder="app.example.com"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="settings-port" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Port
+                </label>
+                <input
+                  id="settings-port"
+                  name="port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={form.port ?? ""}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+              {!isTemplate && (
+                <div className="sm:col-span-2">
+                  <button
+                    type="button"
+                    onClick={() => setDomainRows([{ service: "", domain: "", port: "" }])}
+                    className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300"
+                  >
+                    <Plus size={12} /> Add service domain
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </fieldset>
 
         {/* Source (hidden for templates) */}

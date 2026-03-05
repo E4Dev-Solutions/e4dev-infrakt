@@ -216,4 +216,19 @@ test.describe("App Detail", () => {
       page.locator("[id='tabpanel-settings']").getByRole("button", { name: "Destroy App" }),
     ).toBeVisible();
   });
+
+  test("Settings shows Add service domain button for non-template apps", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await expect(page.getByText("Add service domain")).toBeVisible();
+  });
+
+  test("Settings Add service domain shows domain rows", async ({ page }) => {
+    await page.getByRole("tab", { name: "Settings" }).click();
+    await page.getByText("Add service domain").click();
+
+    // Should show service domain row inputs
+    await expect(page.getByText("Service Domains")).toBeVisible();
+    // Save button should be enabled since rows were added
+    await expect(page.getByRole("button", { name: "Save Changes" })).toBeEnabled();
+  });
 });

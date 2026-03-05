@@ -73,10 +73,7 @@ export default function Login({ onLogin }: Props) {
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 backdrop-blur-sm p-6 shadow-2xl shadow-black/40">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label
-                htmlFor="api-key"
-                className="block text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2"
-              >
+              <label htmlFor="api-key" className="sr-only">
                 API Key
               </label>
               <input
@@ -84,7 +81,7 @@ export default function Login({ onLogin }: Props) {
                 type="password"
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                placeholder="Paste your API key"
+                placeholder=""
                 autoFocus
                 className="w-full rounded-xl border border-zinc-700 bg-zinc-800/80 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 transition-colors focus:border-orange-500/60 focus:outline-none focus:ring-1 focus:ring-orange-500/40"
               />

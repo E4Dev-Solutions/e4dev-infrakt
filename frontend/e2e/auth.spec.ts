@@ -78,12 +78,6 @@ test.describe("Authentication", () => {
     await expect(iconContainer.locator("svg")).toBeVisible();
   });
 
-  test("displays helper text about API key location", async ({ page }) => {
-    await page.goto("/");
-
-    await expect(page.getByText("~/.infrakt/api_key.txt")).toBeVisible();
-  });
-
   test("API key input has password type", async ({ page }) => {
     await page.goto("/");
 

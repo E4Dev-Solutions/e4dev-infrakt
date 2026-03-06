@@ -5,13 +5,14 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from api.helpers import get_s3_config as _get_s3_config
-from api.schemas import BackupPolicySave, S3ConfigSave
+from api.schemas import BackupPolicySave, DomainSettingsSave, S3ConfigSave
 from cli.core.backup import install_backup_cron, remove_backup_cron
 from cli.core.crypto import encrypt
 from cli.core.database import get_session, init_db
 from cli.core.ssh import SSHClient
 from cli.models.app import App
 from cli.models.backup_policy import BackupPolicy
+from cli.models.platform_settings import PlatformSettings
 from cli.models.s3_config import S3Config
 from cli.models.server import Server
 
@@ -231,3 +232,26 @@ def disable_all_backup_schedules() -> dict:
         "message": f"Disabled backup schedules for {removed} database(s)",
         "count": removed,
     }
+
+
+# ── Domain Settings ───────────────────────────────────────────────────────
+
+
+@router.get("/domain")
+def get_domain_settings() -> dict:
+    init_db()
+    with get_session() as session:
+        ps = session.query(PlatformSettings).first()
+        return {"base_domain": ps.base_domain if ps else None}
+
+
+@router.put("/domain")
+def save_domain_settings(body: DomainSettingsSave) -> dict[str, str]:
+    init_db()
+    with get_session() as session:
+        ps = session.query(PlatformSettings).first()
+        if ps:
+            ps.base_domain = body.base_domain
+        else:
+            session.add(PlatformSettings(base_domain=body.base_domain))
+    return {"message": "Domain settings saved"}

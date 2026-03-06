@@ -412,6 +412,7 @@ def deploy_app(
             _log(f"Tagged image as {image_name}:{tag}")
         except Exception:
             _log("Warning: could not tag image for rollback")
+        _prune_old_images(ssh, app_name, keep=5)
 
     _log("Deployment complete")
     result.log = "\n".join(log_lines)

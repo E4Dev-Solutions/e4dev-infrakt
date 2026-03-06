@@ -310,8 +310,8 @@ def test_deploy_git_tags_image_after_build(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d (repo?) = 1, git log (msg), test -f (compose?) = 1, test -f (Dockerfile?) = 1
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("msg\n", "", 0), ("", "", 1), ("", "", 1)])
+    # test -d (repo?) = 1, git log (msg), test -f (compose?) = 1, test -f (Dockerfile?) = 1, prune images
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("msg\n", "", 0), ("", "", 1), ("", "", 1), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n", ""])
 

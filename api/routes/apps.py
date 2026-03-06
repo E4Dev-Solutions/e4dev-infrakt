@@ -836,7 +836,19 @@ async def rollback(
                 if domain:
                     if not isinstance(domain, str):
                         domain = str(domain)
-                    add_domain(ssh, domain, port, app_name=name)
+                    uses_repo_compose = result.uses_repo_compose
+                    proxy_app_name = name
+                    if uses_repo_compose:
+                        primary_svc = detect_primary_service(ssh, name)
+                        if primary_svc:
+                            proxy_app_name = f"{name}-{primary_svc}"
+                    add_domain(
+                        ssh,
+                        domain,
+                        port,
+                        app_name=proxy_app_name,
+                        repo_compose=uses_repo_compose,
+                    )
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()

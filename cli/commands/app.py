@@ -127,6 +127,14 @@ def create(
             app_type = "image" if image else "git" if git_repo else "compose"
             effective_port = port or 3000
 
+        # Auto-assign domain if base_domain is configured and no domain provided
+        if not domain:
+            from cli.core.auto_domain import generate_auto_domain, get_base_domain
+
+            base = get_base_domain()
+            if base:
+                domain = generate_auto_domain(base)
+
         new_app = App(
             name=name,
             server_id=srv.id,

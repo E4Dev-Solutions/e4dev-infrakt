@@ -86,11 +86,22 @@ def _refresh_proxy_routes(
     if old_domains == new_domains:
         return
 
-    uses_repo_compose = app_obj.app_type == "git" and not (app_obj.app_type.startswith("template:"))
     port = app_obj.port or 3000
 
     try:
         with _ssh_for(app_obj.server) as ssh:
+            # Determine if the deployed compose uses repo's own file (no
+            # container_name → Docker adds -1 suffix).  Check the actual
+            # compose file on the server rather than guessing from app_type.
+            uses_repo_compose = False
+            if app_obj.app_type == "git" and not app_obj.app_type.startswith("template:"):
+                compose_path = f"/opt/infrakt/apps/{app_name}/repo/docker-compose.yml"
+                _, _, rc = ssh.run(f"test -f {compose_path}")
+                if rc == 0:
+                    # Repo has its own compose — check if it sets container_name
+                    content, _, _ = ssh.run(f"cat {compose_path}")
+                    uses_repo_compose = "container_name" not in content
+
             # Remove routes that no longer apply
             for domain in old_domains - new_domains:
                 try:
@@ -225,6 +236,7 @@ def create_app(body: AppCreate) -> AppOut:
             raise HTTPException(400, f"App '{body.name}' already exists on '{body.server_name}'")
 
         # Handle template-based apps
+        tmpl = None
         if body.template:
             tmpl = get_template(body.template)
             if not tmpl:
@@ -243,6 +255,21 @@ def create_app(body: AppCreate) -> AppOut:
             effective_domain = _json.dumps(body.domains)
         else:
             effective_domain = body.domain
+
+        # Auto-assign random subdomains if no domain was provided
+        # and a base_domain is configured in platform settings.
+        if not effective_domain and not body.domains:
+            from cli.core.auto_domain import generate_auto_domain, get_base_domain
+
+            base = get_base_domain()
+            if base:
+                if body.template and tmpl and "domain_map" in tmpl:
+                    import json as _json_ad
+
+                    auto_domains = {svc: generate_auto_domain(base) for svc in tmpl["domain_map"]}
+                    effective_domain = _json_ad.dumps(auto_domains)
+                else:
+                    effective_domain = generate_auto_domain(base)
 
         effective_domain_ports = None
         if body.domain_ports:
@@ -524,10 +551,11 @@ async def deploy(
                 )
 
                 # Set up proxy routes
-                # Repo-based apps without compose_override use the repo's own
-                # docker-compose.yml which doesn't set container_name, so Docker
-                # names containers with a -1 suffix (e.g. infrakt-app-web-1).
-                uses_repo_compose = bool(git_repo) and not compose_override
+                # Only repo-based apps that use the repo's own docker-compose.yml
+                # (no container_name set) get a -1 suffix from Docker Compose.
+                # Nixpacks/Dockerfile builds use a generated compose with explicit
+                # container_name, so they do NOT get the -1 suffix.
+                uses_repo_compose = result.uses_repo_compose
                 if multi_domains:
                     # Multi-domain: each service gets its own domain
                     tmpl = (

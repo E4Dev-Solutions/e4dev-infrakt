@@ -551,6 +551,17 @@ export async function mockApi(page: Page): Promise<void> {
     return route.continue();
   });
 
+  // Domain settings
+  await page.route("**/api/settings/domain", (route) => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({ json: { base_domain: null } });
+    }
+    if (route.request().method() === "PUT") {
+      return route.fulfill({ json: { message: "Domain settings saved" } });
+    }
+    return route.continue();
+  });
+
   // S3 settings
   await page.route("**/api/settings/s3", (route) => {
     if (route.request().method() === "GET") {

@@ -564,6 +564,10 @@ class SSHKeyOut(BaseModel):
 # ── GitHub ─────────────────────────────────────────────
 
 
+class DomainSettingsSave(BaseModel):
+    base_domain: str | None = None
+
+
 class S3ConfigSave(BaseModel):
     endpoint_url: str = Field(..., min_length=1, max_length=500)
     bucket: str = Field(..., min_length=1, max_length=200)

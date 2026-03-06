@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff, Github, Link as LinkIcon, Upload, Cloud } from "lucide-react";
+import { Settings as SettingsIcon, Plus, Trash2, Send, Bell, Loader2, Key, Server as ServerIcon, GitBranch, Copy, Check, Eye, EyeOff, Github, Link as LinkIcon, Upload, Cloud, Globe } from "lucide-react";
 import {
   useWebhooks,
   useCreateWebhook,
@@ -18,6 +18,8 @@ import {
   useS3Config,
   useSaveS3Config,
   useDeleteS3Config,
+  useDomainSettings,
+  useSaveDomainSettings,
 } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { ToastContainer } from "@/components/Toast";
@@ -141,6 +143,18 @@ export default function Settings() {
     }
   }, [s3Config]);
 
+  // Domain settings state
+  const { data: domainData, isLoading: domainLoading } = useDomainSettings();
+  const saveDomain = useSaveDomainSettings();
+  const [baseDomain, setBaseDomain] = useState("");
+
+  // Sync domain data
+  useEffect(() => {
+    if (domainData?.base_domain) {
+      setBaseDomain(domainData.base_domain);
+    }
+  }, [domainData]);
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [testingId, setTestingId] = useState<number | null>(null);
@@ -239,6 +253,15 @@ export default function Settings() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to disconnect GitHub account.");
     }
+  }
+
+  // ─── Domain handlers ─────────────────────────────────────────────────────────
+
+  async function handleSaveDomain(e: React.FormEvent) {
+    e.preventDefault();
+    const value = baseDomain.trim() || null;
+    await saveDomain.mutateAsync(value);
+    toast.success(value ? `Base domain set to "${value}"` : "Base domain cleared");
   }
 
   // ─── S3 handlers ────────────────────────────────────────────────────────────
@@ -396,6 +419,81 @@ export default function Settings() {
           </p>
         </div>
       </div>
+
+      {/* ── Domain Settings ── */}
+      <section aria-labelledby="domain-heading" className="mb-10">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-700">
+            <Globe size={18} className="text-orange-400" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 id="domain-heading" className="text-lg font-semibold text-zinc-100">
+              Base Domain
+            </h2>
+            <p className="text-xs text-zinc-500">
+              Apps created without a domain get a random subdomain automatically.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-zinc-700 bg-zinc-800 p-5">
+          {domainLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-zinc-500" aria-label="Loading domain settings" />
+            </div>
+          ) : (
+            <form onSubmit={(e) => void handleSaveDomain(e)} className="space-y-4" noValidate>
+              {domainData?.base_domain && (
+                <div className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
+                  <span className="text-sm text-emerald-300">
+                    Auto-domains active: <span className="font-mono">*.{domainData.base_domain}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBaseDomain("");
+                      void saveDomain.mutateAsync(null).then(() => toast.success("Base domain cleared"));
+                    }}
+                    disabled={saveDomain.isPending}
+                    className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                  >
+                    {saveDomain.isPending && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
+                    Remove
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="base-domain" className="mb-1.5 block text-xs font-medium text-zinc-300">
+                  Base Domain
+                </label>
+                <input
+                  id="base-domain"
+                  type="text"
+                  value={baseDomain}
+                  onChange={(e) => setBaseDomain(e.target.value)}
+                  placeholder="infrakt.cloud"
+                  className="w-full rounded-lg border border-zinc-600 bg-zinc-700 px-3 py-2.5 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                />
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Set a wildcard DNS A record (<span className="font-mono">*.yourdomain.com</span>) pointing to your server.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={saveDomain.isPending || !baseDomain.trim()}
+                  className="flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saveDomain.isPending && <Loader2 size={14} className="animate-spin" aria-hidden="true" />}
+                  {domainData?.base_domain ? "Update" : "Save"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </section>
 
       {/* ── S3 Backup Storage ── */}
       <section aria-labelledby="s3-heading" className="mb-10">

@@ -72,11 +72,14 @@ test.describe("Settings — Domain", () => {
   });
 
   test("Remove button clears the domain", async ({ page }) => {
+    let currentDomain: string | null = "infrakt.cloud";
     await page.route("**/api/settings/domain", (route) => {
       if (route.request().method() === "GET") {
-        return route.fulfill({ json: { base_domain: "infrakt.cloud" } });
+        return route.fulfill({ json: { base_domain: currentDomain } });
       }
       if (route.request().method() === "PUT") {
+        const body = route.request().postDataJSON() as { base_domain: string | null };
+        currentDomain = body.base_domain;
         return route.fulfill({ json: { message: "Domain settings saved" } });
       }
       return route.continue();

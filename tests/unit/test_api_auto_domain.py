@@ -68,3 +68,29 @@ class TestAutoDomainOnCreate:
         )
         assert resp.status_code == 201
         assert resp.json()["domain"] is None
+
+
+class TestAutoDomainTemplates:
+    def test_multi_domain_template_gets_random_domains(self, client, server_with_domain):
+        resp = client.post(
+            "/api/apps",
+            json={"name": "mydevtools", "server_name": server_with_domain, "template": "devtools"},
+        )
+        assert resp.status_code == 201
+        # _app_out parses JSON from domain column and stores the dict in domains
+        domains = resp.json()["domains"]
+        assert domains is not None
+        assert "gitea" in domains
+        assert "portainer" in domains
+        assert domains["gitea"].endswith(".infrakt.cloud")
+        assert domains["portainer"].endswith(".infrakt.cloud")
+        assert domains["gitea"] != domains["portainer"]
+
+    def test_single_domain_template_gets_random_domain(self, client, server_with_domain):
+        resp = client.post(
+            "/api/apps",
+            json={"name": "mykuma", "server_name": server_with_domain, "template": "uptime-kuma"},
+        )
+        assert resp.status_code == 201
+        domain = resp.json()["domain"]
+        assert domain.endswith(".infrakt.cloud")

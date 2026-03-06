@@ -236,6 +236,7 @@ def create_app(body: AppCreate) -> AppOut:
             raise HTTPException(400, f"App '{body.name}' already exists on '{body.server_name}'")
 
         # Handle template-based apps
+        tmpl = None
         if body.template:
             tmpl = get_template(body.template)
             if not tmpl:
@@ -255,14 +256,23 @@ def create_app(body: AppCreate) -> AppOut:
         else:
             effective_domain = body.domain
 
-        # Auto-assign a random subdomain if no domain was provided
+        # Auto-assign random subdomains if no domain was provided
         # and a base_domain is configured in platform settings.
         if not effective_domain and not body.domains:
             from cli.core.auto_domain import generate_auto_domain, get_base_domain
 
             base = get_base_domain()
             if base:
-                effective_domain = generate_auto_domain(base)
+                if body.template and tmpl and "domain_map" in tmpl:
+                    import json as _json_ad
+
+                    auto_domains = {
+                        svc: generate_auto_domain(base)
+                        for svc in tmpl["domain_map"]
+                    }
+                    effective_domain = _json_ad.dumps(auto_domains)
+                else:
+                    effective_domain = generate_auto_domain(base)
 
         effective_domain_ports = None
         if body.domain_ports:

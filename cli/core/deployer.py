@@ -11,6 +11,7 @@ from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePosixPath
+from typing import Any
 
 import yaml
 
@@ -546,7 +547,7 @@ def _classify_db_image(image: str) -> str | None:
     return None
 
 
-def _detect_port(svc_def: dict) -> int | None:
+def _detect_port(svc_def: dict[str, Any]) -> int | None:
     """Extract the first exposed/published port from a service definition."""
     # Check 'expose' first (preferred for compose services)
     expose = svc_def.get("expose", [])
@@ -585,7 +586,7 @@ _API_HINTS = {"api", "server", "backend", "gateway", "graphql", "rest"}
 _WORKER_HINTS = {"worker", "queue", "consumer", "cron", "scheduler", "job"}
 
 
-def _guess_app_role(svc_name: str, svc_def: dict) -> str:
+def _guess_app_role(svc_name: str, svc_def: dict[str, Any]) -> str:
     """Heuristically classify a non-DB service as web, api, or worker."""
     name_lower = svc_name.lower()
     # Check service name first

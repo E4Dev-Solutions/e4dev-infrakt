@@ -734,14 +734,12 @@ mypy cli/ --ignore-missing-imports
 
 ### CI
 
-GitHub Actions runs five jobs on every push and PR to `main`:
-- **lint**: `ruff check` + `ruff format --check`
-- **test**: `pytest --cov=cli`
-- **typecheck**: `mypy cli/ --ignore-missing-imports`
-- **frontend-build**: `npm ci && npm run build` (validates TypeScript types and the Vite production build)
-- **docker-build**: multi-stage Docker image build (`docker/build-push-action`, no push)
+GitHub Actions runs three jobs on every push and PR to `main`:
+- **lint**: `ruff check` + `ruff format --check` (uses `uv tool install ruff`)
+- **test**: `pytest --cov=cli` + `mypy cli/` (uses `uv pip install` for fast installs)
+- **e2e**: `npm run build` + Playwright E2E tests
 
-All five must pass before merging. The `docker-build` job depends on `frontend-build` so the Node build is validated before the Docker layer cache is used.
+All three must pass before merging. CD (`workflow_run`) only triggers after CI succeeds.
 
 ### Frontend Development
 

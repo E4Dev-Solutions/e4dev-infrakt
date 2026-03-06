@@ -9,10 +9,9 @@ test.describe("Deployments Tab", () => {
     await page.getByRole("tab", { name: "Deployments" }).click();
   });
 
-  test("displays deployments table with Ref column", async ({ page }) => {
-    await expect(page.getByText("Ref")).toBeVisible();
-    // First deployment shows truncated commit hash
-    await expect(page.getByText("abc12345")).toBeVisible();
+  test("displays deployment cards with commit hash", async ({ page }) => {
+    // First deployment shows truncated commit hash (7 chars)
+    await expect(page.getByText("abc1234")).toBeVisible();
   });
 
   test("shows deployment ID as number", async ({ page }) => {

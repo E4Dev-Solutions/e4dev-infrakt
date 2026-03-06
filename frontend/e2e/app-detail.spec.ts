@@ -151,8 +151,8 @@ test.describe("App Detail", () => {
 
   test("Deployments tab shows commit refs", async ({ page }) => {
     await page.getByRole("tab", { name: "Deployments" }).click();
-    // First deployment's commit hash truncated to 8 chars
-    const shortHash = MOCK_DEPLOYMENTS[0].commit_hash.slice(0, 8);
+    // First deployment's commit hash truncated to 7 chars
+    const shortHash = MOCK_DEPLOYMENTS[0].commit_hash.slice(0, 7);
     await expect(page.getByText(shortHash)).toBeVisible();
   });
 

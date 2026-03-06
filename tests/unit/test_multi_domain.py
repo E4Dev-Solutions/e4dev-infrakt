@@ -124,7 +124,8 @@ class TestAppOutDomainPorts:
 
 
 class TestUpdateMultiDomain:
-    def test_update_app_with_domains(self, client, isolated_config):
+    @patch("api.routes.apps._refresh_proxy_routes")
+    def test_update_app_with_domains(self, _mock_refresh, client, isolated_config):
         _seed_app()
         response = client.put(
             "/api/apps/my-app",
@@ -138,7 +139,8 @@ class TestUpdateMultiDomain:
         assert data["domains"] == {"web": "web.example.com", "api": "api.example.com"}
         assert data["domain_ports"] == {"web": 3000, "api": 4000}
 
-    def test_update_app_domains_stored_as_json(self, client, isolated_config):
+    @patch("api.routes.apps._refresh_proxy_routes")
+    def test_update_app_domains_stored_as_json(self, _mock_refresh, client, isolated_config):
         _seed_app()
         client.put(
             "/api/apps/my-app",

@@ -9,6 +9,7 @@ from cli.core.deployer import (
     deploy_app,
     detect_all_services,
     detect_db_services,
+    detect_primary_service,
     get_container_health,
     get_logs,
     list_services,
@@ -699,3 +700,120 @@ def test_detect_all_services_classifies_web_api_db():
     assert by_name["redis"].role == "cache"
     assert by_name["redis"].db_type == "redis"
     assert by_name["redis"].routable is False
+
+
+# ── detect_primary_service tests ─────────────────────────────────────────────
+
+
+def test_detect_primary_service_single_service():
+    """With one service, returns that service name."""
+    ssh = MagicMock()
+    # _compose_work_dir: test -f repo/docker-compose.yml → exists
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 0),  # _compose_work_dir
+            ("app\n", "", 0),  # config --services
+        ]
+    )
+    result = detect_primary_service(ssh, "myapp")
+    assert result == "app"
+
+
+def test_detect_primary_service_picks_build_service():
+    """With multiple services, prefers one with a build directive."""
+    import yaml
+
+    config = yaml.dump(
+        {
+            "services": {
+                "db": {"image": "postgres:16"},
+                "app": {"build": {"context": "."}, "ports": ["3000:3000"]},
+            }
+        }
+    )
+    ssh = MagicMock()
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 0),  # _compose_work_dir
+            ("db\napp\n", "", 0),  # config --services
+            (config, "", 0),  # config (full)
+        ]
+    )
+    result = detect_primary_service(ssh, "myapp")
+    assert result == "app"
+
+
+def test_detect_primary_service_picks_port_service_as_fallback():
+    """Falls back to service with ports when no build directive."""
+    import yaml
+
+    config = yaml.dump(
+        {
+            "services": {
+                "worker": {"image": "myworker:latest"},
+                "web": {"image": "myweb:latest", "ports": ["8080:8080"]},
+            }
+        }
+    )
+    ssh = MagicMock()
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 0),  # _compose_work_dir
+            ("worker\nweb\n", "", 0),  # config --services
+            (config, "", 0),  # config (full)
+        ]
+    )
+    result = detect_primary_service(ssh, "myapp")
+    assert result == "web"
+
+
+def test_detect_primary_service_returns_none_on_failure():
+    """Returns None when compose commands fail."""
+    ssh = MagicMock()
+    ssh.run = MagicMock(
+        side_effect=[
+            ("", "", 0),  # _compose_work_dir
+            ("", "", 1),  # config --services fails
+        ]
+    )
+    result = detect_primary_service(ssh, "myapp")
+    assert result is None
+
+
+# ── Network connection tests ─────────────────────────────────────────────────
+
+
+@patch("cli.core.deployer.get_github_token", return_value=None)
+def test_deploy_repo_compose_connects_to_infrakt_network(_mock_token):
+    """Repo-compose deploy connects containers to the infrakt network."""
+    ssh = MagicMock()
+    ssh.run = MagicMock(return_value=("", "", 0))
+    ssh.run_checked = MagicMock(return_value="abc1234" + "0" * 33)
+    ssh.run_streaming = MagicMock()
+    ssh.upload_string = MagicMock()
+
+    # After compose up, ps -q returns container IDs
+    container_ids = "abc123\ndef456\n"
+
+    def smart_run(cmd, **kwargs):
+        if "ps -q" in cmd:
+            return (container_ids, "", 0)
+        return ("", "", 0)
+
+    ssh.run = MagicMock(side_effect=smart_run)
+    ssh.run_checked = MagicMock(return_value="abc1234" + "0" * 33)
+
+    result = deploy_app(
+        ssh,
+        "myapp",
+        git_repo="https://github.com/test/repo.git",
+        branch="main",
+        port=3000,
+    )
+    assert result.uses_repo_compose is True
+
+    # Verify docker network connect was called for each container
+    network_connect_calls = [
+        call for call in ssh.run.call_args_list if "docker network connect infrakt" in str(call)
+    ]
+    assert len(network_connect_calls) >= 2

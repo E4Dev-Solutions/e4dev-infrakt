@@ -74,6 +74,76 @@ def _compose_work_dir(ssh: SSHClient, app_name: str) -> str:
     return app_path
 
 
+def detect_primary_service(ssh: SSHClient, app_name: str) -> str | None:
+    """Return the name of the primary routable service in a repo compose file.
+
+    Inspects ``docker compose config`` for the first service that has a
+    ``build`` directive or exposes ports (i.e. not a database).  Returns
+    ``None`` if the compose file cannot be parsed.
+    """
+    work_dir = _compose_work_dir(ssh, app_name)
+    cmd = f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} config --services"
+    stdout, _, rc = ssh.run(cmd, timeout=15)
+    if rc != 0 or not stdout.strip():
+        return None
+    services = [s.strip() for s in stdout.strip().splitlines() if s.strip()]
+    if len(services) == 1:
+        return services[0]
+
+    # Multiple services — read full config to pick the primary one
+    cmd2 = f"cd {shlex.quote(work_dir)} && {_compose_cmd(app_name)} config"
+    stdout2, _, rc2 = ssh.run(cmd2, timeout=15)
+    if rc2 != 0 or not stdout2.strip():
+        return services[0]
+    try:
+        config = yaml.safe_load(stdout2)
+    except Exception:
+        return services[0]
+
+    svc_defs = (config or {}).get("services", {})
+    # Prefer a service with a build context (the app itself, not a DB image)
+    for svc_name in services:
+        svc_def = svc_defs.get(svc_name, {})
+        if svc_def and svc_def.get("build") and not _classify_db_image(svc_def.get("image", "")):
+            return svc_name
+    # Fallback: first service with ports/expose
+    for svc_name in services:
+        svc_def = svc_defs.get(svc_name, {})
+        if svc_def and (svc_def.get("ports") or svc_def.get("expose")):
+            return svc_name
+    return services[0]
+
+
+def _connect_to_infrakt_network(
+    ssh: SSHClient,
+    app_name: str,
+    q_repo: str,
+    q_app_path: str,
+    _log: Callable[[str], None],
+) -> None:
+    """Connect all containers of a repo-compose app to the ``infrakt`` network.
+
+    Repo-based apps use the repository's own docker-compose.yml which typically
+    doesn't declare the ``infrakt`` external network.  Without this step the
+    containers end up on a project-default network and cannot reach Traefik,
+    databases, or other infrakt-managed services.
+    """
+    compose = _compose_cmd(app_name)
+    stdout, _, rc = ssh.run(
+        f"cd {q_repo} && {compose} --env-file {q_app_path}/.env ps -q",
+        timeout=15,
+    )
+    if rc != 0 or not stdout.strip():
+        return
+    for cid in stdout.strip().splitlines():
+        cid = cid.strip()
+        if not cid:
+            continue
+        # Silently skip if already connected (exit code 1 with "already exists")
+        ssh.run(f"docker network connect infrakt {cid} 2>/dev/null || true")
+    _log("Connected containers to infrakt network")
+
+
 def deploy_app(
     ssh: SSHClient,
     app_name: str,
@@ -217,6 +287,9 @@ def deploy_app(
         elif has_compose == 0 and not compose_override:
             result.uses_repo_compose = True
             _log("Using docker-compose.yml from repository")
+            # Also place .env in repo/ so compose auto-loads it for
+            # services that reference ${VAR} without explicit env_file.
+            ssh.run(f"cp {q_app_path}/.env {q_repo}/.env 2>/dev/null || true")
             _log("Building images...")
             ssh.run_streaming(
                 f"cd {q_repo} && {_compose_cmd(app_name)} --env-file {q_app_path}/.env build",
@@ -231,6 +304,10 @@ def deploy_app(
                 on_output=_stream,
                 timeout=120,
             )
+            # Repo-compose containers land on a default network — connect
+            # them to the shared 'infrakt' network so Traefik and other
+            # infrakt services (databases, etc.) can reach them.
+            _connect_to_infrakt_network(ssh, app_name, q_repo, q_app_path, _log)
         else:
             compose_content = compose_override or _generate_compose(
                 app_name,

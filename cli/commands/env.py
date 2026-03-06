@@ -8,7 +8,7 @@ from cli.core.config import ENVS_DIR, ensure_config_dir
 from cli.core.console import error, info, print_table, success
 from cli.core.crypto import decrypt, encrypt
 from cli.core.database import get_session, init_db
-from cli.core.deployer import _validate_name
+from cli.core.deployer import _compose_cmd, _compose_work_dir, _validate_name
 from cli.core.exceptions import AppNotFoundError
 from cli.models.app import App
 from cli.models.server import Server
@@ -155,9 +155,30 @@ def push_env(app_name: str, server_name: str | None) -> None:
 
     _validate_name(app_name, "app name")
     app_path = f"/opt/infrakt/apps/{app_name}"
-    q_path = shlex.quote(app_path)
     with ssh:
         ssh.upload_string(env_content, f"{app_path}/.env")
-        ssh.run_checked(f"cd {q_path} && docker compose restart", timeout=60)
+        # Also copy .env into the repo dir so compose auto-loads it
+        ssh.run(
+            f"cp {shlex.quote(app_path)}/.env {shlex.quote(app_path)}/repo/.env 2>/dev/null || true"
+        )
+        work_dir = _compose_work_dir(ssh, app_name)
+        q_work = shlex.quote(work_dir)
+        compose = _compose_cmd(app_name)
+        env_file = shlex.quote(app_path) + "/.env"
+        ssh.run_checked(
+            f"cd {q_work} && {compose} --env-file {env_file} up -d --force-recreate",
+            timeout=60,
+        )
+        # Reconnect to infrakt network after recreate (repo-compose apps)
+        if work_dir.endswith("/repo"):
+            stdout, _, rc = ssh.run(
+                f"cd {q_work} && {compose} --env-file {shlex.quote(app_path)}/.env ps -q",
+                timeout=15,
+            )
+            if rc == 0 and stdout.strip():
+                for cid in stdout.strip().splitlines():
+                    cid = cid.strip()
+                    if cid:
+                        ssh.run(f"docker network connect infrakt {cid} 2>/dev/null || true")
 
     success(f"Pushed {len(data)} variable(s) to '{app_name}' and restarted")

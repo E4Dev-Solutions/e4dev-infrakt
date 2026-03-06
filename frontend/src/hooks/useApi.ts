@@ -17,6 +17,8 @@ import {
   githubApi,
   s3Api,
   backupPolicyApi,
+  domainSettingsApi,
+  type DomainSettings,
   type S3Config,
   type S3ConfigSave,
   type BackupPolicy,
@@ -75,6 +77,7 @@ export const queryKeys = {
   templates: ["templates"] as const,
   s3Config: ["s3-config"] as const,
   backupPolicy: ["backup-policy"] as const,
+  domainSettings: ["domain-settings"] as const,
 };
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
@@ -824,6 +827,29 @@ export function useDisableAllBackups() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.backupPolicy });
       void qc.invalidateQueries({ queryKey: queryKeys.databases() });
+    },
+  });
+}
+
+// ─── Domain Settings ─────────────────────────────────────────────────────────
+
+export function useDomainSettings(
+  options?: Partial<UseQueryOptions<DomainSettings>>,
+) {
+  return useQuery({
+    queryKey: queryKeys.domainSettings,
+    queryFn: domainSettingsApi.get,
+    ...options,
+  });
+}
+
+export function useSaveDomainSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (base_domain: string | null) =>
+      domainSettingsApi.save(base_domain),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.domainSettings });
     },
   });
 }

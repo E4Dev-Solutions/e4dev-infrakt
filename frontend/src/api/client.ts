@@ -726,6 +726,18 @@ export const backupPolicyApi = {
     post("/settings/backup-policy/disable-all"),
 };
 
+// ─── Domain Settings ─────────────────────────────────────────────────────────
+
+export interface DomainSettings {
+  base_domain: string | null;
+}
+
+export const domainSettingsApi = {
+  get: (): Promise<DomainSettings> => get("/settings/domain"),
+  save: (base_domain: string | null): Promise<{ message: string }> =>
+    put("/settings/domain", { base_domain }),
+};
+
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
 export interface GitHubStatus {

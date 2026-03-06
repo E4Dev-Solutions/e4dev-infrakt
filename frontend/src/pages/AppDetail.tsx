@@ -117,7 +117,7 @@ function TabButton({
 // ─── Overview Tab ────────────────────────────────────────────────────────────
 
 function OverviewTab({ app }: { app: App }) {
-  const { data: healthData, refetch: refetchHealth, isFetching: healthFetching } = useAppHealth(app.name, { enabled: false });
+  const { data: healthData, refetch: refetchHealth, isFetching: healthFetching } = useAppHealth(app.name, { enabled: app.status === "running" });
   const { data: deployments = [] } = useAppDeployments(app.name);
 
   const recentDeploys = deployments.slice(0, 5);
@@ -873,11 +873,15 @@ function DeploymentsTab({ appName }: { appName: string }) {
     );
   }
 
-  function getRef(dep: { commit_hash?: string; image_used?: string; image_tag?: string }): string {
-    if (dep.image_tag) return dep.image_tag;
-    if (dep.commit_hash) return dep.commit_hash.slice(0, 8);
-    if (dep.image_used) return dep.image_used;
-    return "---";
+  function formatDuration(start: string, end?: string): string {
+    if (!end) return "---";
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (ms < 1000) return "<1s";
+    const secs = Math.floor(ms / 1000);
+    if (secs < 60) return `${secs}s`;
+    const mins = Math.floor(secs / 60);
+    const remSecs = secs % 60;
+    return `${mins}m ${remSecs}s`;
   }
 
   function handleRollback(depId: number) {
@@ -892,81 +896,131 @@ function DeploymentsTab({ appName }: { appName: string }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-700">
-      <table className="w-full text-sm" role="table">
-        <thead>
-          <tr className="border-b border-zinc-700 bg-zinc-800/60">
-            {["", "ID", "Status", "Ref", "Started", "Finished", ""].map((h, i) => (
-              <th
-                key={`${h}-${i}`}
-                scope="col"
-                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-zinc-400"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-700/40">
-          {deployments.map((dep, idx) => (
-            <>
-              <tr
-                key={dep.id}
-                className="bg-zinc-800/30 transition-colors hover:bg-zinc-800/60"
-              >
-                <td className="w-8 px-4 py-3">
-                  {dep.log ? (
-                    <button
-                      onClick={() => setExpandedId(expandedId === dep.id ? null : dep.id)}
-                      className="text-zinc-500 hover:text-zinc-300"
-                      aria-label={expandedId === dep.id ? "Collapse log" : "View log"}
-                    >
-                      {expandedId === dep.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    </button>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-zinc-400">
-                  #{dep.id}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={dep.status} />
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-zinc-400">
-                  {getRef(dep)}
-                </td>
-                <td className="px-4 py-3 text-zinc-400">
-                  {formatDate(dep.started_at)}
-                </td>
-                <td className="px-4 py-3 text-zinc-400">
-                  {dep.finished_at ? formatDate(dep.finished_at) : "---"}
-                </td>
-                <td className="px-4 py-3">
-                  {dep.status === "success" && idx > 0 ? (
-                    <button
-                      onClick={() => handleRollback(dep.id)}
-                      disabled={rollbackMut.isPending}
-                      className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/10 disabled:opacity-50"
-                      aria-label="Rollback"
-                    >
-                      <RotateCcw size={12} /> Rollback
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-              {expandedId === dep.id && dep.log ? (
-                <tr key={`${dep.id}-log`}>
-                  <td colSpan={7} className="bg-zinc-900/60 px-4 py-3">
-                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-zinc-400">
-                      {dep.log}
-                    </pre>
-                  </td>
-                </tr>
-              ) : null}
-            </>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
       <ToastContainer toasts={toast.toasts} onDismiss={toast.dismiss} />
+      {deployments.map((dep, idx) => (
+        <div
+          key={dep.id}
+          className="rounded-lg border border-zinc-700 bg-zinc-800/30 transition-colors hover:bg-zinc-800/50"
+        >
+          {/* Main row */}
+          <div className="flex items-center gap-3 px-4 py-3">
+            {/* Status dot */}
+            <span
+              className={[
+                "inline-block h-2.5 w-2.5 shrink-0 rounded-full",
+                dep.status === "success"
+                  ? "bg-emerald-400"
+                  : dep.status === "failed"
+                    ? "bg-red-400"
+                    : dep.status === "in_progress"
+                      ? "bg-amber-400 animate-pulse"
+                      : "bg-zinc-500",
+              ].join(" ")}
+              aria-hidden="true"
+            />
+
+            {/* ID + Status */}
+            <span className="font-mono text-xs text-zinc-500">#{dep.id}</span>
+            <StatusBadge status={dep.status} />
+
+            {/* Commit hash */}
+            {dep.commit_hash && (
+              <span className="rounded bg-zinc-700 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
+                {dep.commit_hash.slice(0, 7)}
+              </span>
+            )}
+
+            {/* Image tag */}
+            {dep.image_tag && (
+              <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-xs text-zinc-400">
+                {dep.image_tag}
+              </span>
+            )}
+
+            {/* Spacer */}
+            <span className="flex-1" />
+
+            {/* Duration */}
+            <span className="text-xs text-zinc-500" title="Duration">
+              {dep.status === "in_progress" ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                formatDuration(dep.started_at, dep.finished_at)
+              )}
+            </span>
+
+            {/* Time */}
+            <span className="text-xs text-zinc-500">{formatRelativeTime(dep.started_at)}</span>
+
+            {/* Rollback */}
+            {dep.status === "success" && idx > 0 && (
+              <button
+                onClick={() => handleRollback(dep.id)}
+                disabled={rollbackMut.isPending}
+                className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-amber-400 ring-1 ring-amber-500/30 hover:bg-amber-500/10 disabled:opacity-50"
+                aria-label="Rollback"
+              >
+                <RotateCcw size={12} /> Rollback
+              </button>
+            )}
+
+            {/* Expand log */}
+            {dep.log && (
+              <button
+                onClick={() => setExpandedId(expandedId === dep.id ? null : dep.id)}
+                className="text-zinc-500 hover:text-zinc-300"
+                aria-label={expandedId === dep.id ? "Collapse log" : "View log"}
+              >
+                {expandedId === dep.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+            )}
+          </div>
+
+          {/* Expanded details */}
+          {expandedId === dep.id && (
+            <div className="border-t border-zinc-700/50">
+              {/* Detail grid */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 px-4 py-3 text-xs sm:grid-cols-4">
+                <div>
+                  <span className="text-zinc-500">Started</span>
+                  <p className="text-zinc-300">{formatDate(dep.started_at)}</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500">Finished</span>
+                  <p className="text-zinc-300">{dep.finished_at ? formatDate(dep.finished_at) : "---"}</p>
+                </div>
+                <div>
+                  <span className="text-zinc-500">Duration</span>
+                  <p className="text-zinc-300">{formatDuration(dep.started_at, dep.finished_at)}</p>
+                </div>
+                {dep.commit_hash && (
+                  <div>
+                    <span className="text-zinc-500">Commit</span>
+                    <p className="font-mono text-zinc-300">{dep.commit_hash}</p>
+                  </div>
+                )}
+                {dep.image_used && (
+                  <div className="col-span-2">
+                    <span className="text-zinc-500">Image</span>
+                    <p className="truncate font-mono text-zinc-300">{dep.image_used}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Log */}
+              {dep.log && (
+                <div className="border-t border-zinc-700/50 px-4 py-3">
+                  <p className="mb-2 text-xs font-medium text-zinc-400">Build Log</p>
+                  <pre className="max-h-64 overflow-auto rounded-md bg-zinc-950 p-3 whitespace-pre-wrap font-mono text-xs text-zinc-400">
+                    {dep.log}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

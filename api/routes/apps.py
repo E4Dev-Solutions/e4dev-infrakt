@@ -36,6 +36,7 @@ from cli.core.deployer import (
     destroy_app,
     detect_all_services,
     detect_db_services,
+    detect_primary_service,
     get_container_health,
     get_logs,
     list_services,
@@ -110,13 +111,18 @@ def _refresh_proxy_routes(
                     logger.warning("Failed to remove proxy route for %s", domain)
 
             # Add new routes
+            proxy_app_name = app_name
+            if uses_repo_compose:
+                primary_svc = detect_primary_service(ssh, app_name)
+                if primary_svc:
+                    proxy_app_name = f"{app_name}-{primary_svc}"
             for domain in new_domains - old_domains:
                 try:
                     add_domain(
                         ssh,
                         domain,
                         port,
-                        app_name=app_name,
+                        app_name=proxy_app_name,
                         repo_compose=uses_repo_compose,
                     )
                 except Exception:
@@ -574,11 +580,19 @@ async def deploy(
                             repo_compose=uses_repo_compose,
                         )
                 elif primary_domain:
+                    # For repo-compose apps, resolve the actual service
+                    # name so the proxy routes to the correct container
+                    # (e.g. infrakt-myapp-app-1 instead of infrakt-myapp-1).
+                    proxy_app_name = name
+                    if uses_repo_compose:
+                        primary_svc = detect_primary_service(ssh, name)
+                        if primary_svc:
+                            proxy_app_name = f"{name}-{primary_svc}"
                     add_domain(
                         ssh,
                         primary_domain,
                         port,
-                        app_name=name,
+                        app_name=proxy_app_name,
                         repo_compose=uses_repo_compose,
                     )
 

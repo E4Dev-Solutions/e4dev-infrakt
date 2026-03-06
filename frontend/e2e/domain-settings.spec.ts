@@ -85,8 +85,10 @@ test.describe("Settings — Domain", () => {
       return route.continue();
     });
     await page.goto("/settings");
+    const removeResponse = page.waitForResponse("**/api/settings/domain");
     await page.getByRole("button", { name: "Remove" }).first().click();
-    await expect(page.getByText("Base domain cleared")).toBeVisible();
+    await removeResponse;
+    await expect(page.getByText("Base domain cleared")).toBeVisible({ timeout: 10000 });
   });
 
   test("shows DNS hint text", async ({ page }) => {

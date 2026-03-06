@@ -13,6 +13,7 @@ from cli.core.database import get_session, init_db
 from cli.core.deployer import (
     deploy_app,
     destroy_app,
+    detect_primary_service,
     get_container_health,
     get_logs,
     reconcile_app_status,
@@ -249,6 +250,7 @@ def deploy(name: str, server_name: str | None) -> None:
                 else:
                     primary_domain = app_domain
 
+                uses_repo_compose = result.uses_repo_compose
                 if multi_domains:
                     tmpl = (
                         get_template(app_type.split(":", 1)[1])
@@ -258,9 +260,26 @@ def deploy(name: str, server_name: str | None) -> None:
                     domain_map = tmpl.get("domain_map", {}) if tmpl else {}
                     for svc_name, svc_domain in multi_domains.items():
                         svc_port = domain_map.get(svc_name, app_port)
-                        add_domain(ssh, svc_domain, svc_port, app_name=f"{name}-{svc_name}")
+                        add_domain(
+                            ssh,
+                            svc_domain,
+                            svc_port,
+                            app_name=f"{name}-{svc_name}",
+                            repo_compose=uses_repo_compose,
+                        )
                 elif primary_domain:
-                    add_domain(ssh, primary_domain, app_port, app_name=name)
+                    proxy_app_name = name
+                    if uses_repo_compose:
+                        primary_svc = detect_primary_service(ssh, name)
+                        if primary_svc:
+                            proxy_app_name = f"{name}-{primary_svc}"
+                    add_domain(
+                        ssh,
+                        primary_domain,
+                        app_port,
+                        app_name=proxy_app_name,
+                        repo_compose=uses_repo_compose,
+                    )
 
         ssh.close()
 

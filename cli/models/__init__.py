@@ -3,6 +3,7 @@ from cli.models.app_dependency import AppDependency
 from cli.models.backup_policy import BackupPolicy
 from cli.models.deployment import Deployment
 from cli.models.github_integration import GitHubIntegration
+from cli.models.platform_settings import PlatformSettings
 from cli.models.s3_config import S3Config
 from cli.models.server import Server
 from cli.models.server_metric import ServerMetric
@@ -17,6 +18,7 @@ __all__ = [
     "BackupPolicy",
     "Deployment",
     "GitHubIntegration",
+    "PlatformSettings",
     "S3Config",
     "ServerTag",
     "Webhook",

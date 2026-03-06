@@ -255,6 +255,15 @@ def create_app(body: AppCreate) -> AppOut:
         else:
             effective_domain = body.domain
 
+        # Auto-assign a random subdomain if no domain was provided
+        # and a base_domain is configured in platform settings.
+        if not effective_domain and not body.domains:
+            from cli.core.auto_domain import generate_auto_domain, get_base_domain
+
+            base = get_base_domain()
+            if base:
+                effective_domain = generate_auto_domain(base)
+
         effective_domain_ports = None
         if body.domain_ports:
             import json as _json2

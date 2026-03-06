@@ -18,7 +18,7 @@ from api.log_broadcaster import broadcaster
 from cli.core.crypto import env_content_for_app
 from cli.core.database import get_session, init_db
 from cli.core.deploy_keys import validate_deploy_key
-from cli.core.deployer import deploy_app
+from cli.core.deployer import deploy_app, detect_primary_service
 from cli.core.exceptions import SSHConnectionError
 from cli.core.proxy_manager import add_domain
 from cli.core.ssh import SSHClient
@@ -131,7 +131,19 @@ async def trigger_deploy(
                     memory_limit=app_mem,
                 )
                 if app_domain:
-                    add_domain(ssh, app_domain, app_port, app_name=app_name)
+                    uses_repo_compose = result.uses_repo_compose
+                    proxy_app_name = app_name
+                    if uses_repo_compose:
+                        primary_svc = detect_primary_service(ssh, app_name)
+                        if primary_svc:
+                            proxy_app_name = f"{app_name}-{primary_svc}"
+                    add_domain(
+                        ssh,
+                        app_domain,
+                        app_port,
+                        app_name=proxy_app_name,
+                        repo_compose=uses_repo_compose,
+                    )
 
             with get_session() as session:
                 dep = session.query(Deployment).filter(Deployment.id == dep_id).first()

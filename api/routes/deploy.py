@@ -151,6 +151,7 @@ async def trigger_deploy(
                     dep.status = "success"
                     dep.log = result.log
                     dep.commit_hash = result.commit_hash
+                    dep.commit_message = result.commit_message
                     dep.image_used = result.image_used
                     dep.finished_at = datetime.utcnow()
                 a = session.query(App).filter(App.id == app_id).first()

@@ -34,6 +34,7 @@ class DeployResult:
 
     log: str = ""
     commit_hash: str | None = None
+    commit_message: str | None = None
     image_used: str | None = None
     image_tag: str | None = None
     uses_repo_compose: bool = False
@@ -243,9 +244,12 @@ def deploy_app(
                 timeout=120,
             )
 
-        # Capture the commit hash
+        # Capture the commit hash and message
         stdout = ssh.run_checked(f"cd {q_repo} && git rev-parse HEAD")
         result.commit_hash = stdout.strip()[:40]
+        msg_out, _, _ = ssh.run(f"cd {q_repo} && git log -1 --format=%s")
+        if msg_out:
+            result.commit_message = msg_out.strip()[:200]
 
         # Determine build strategy
         _, _, has_compose = ssh.run(f"test -f {q_repo}/docker-compose.yml")

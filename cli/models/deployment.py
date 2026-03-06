@@ -18,6 +18,7 @@ class Deployment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     app_id: Mapped[int] = mapped_column(ForeignKey("apps.id"), nullable=False)
     commit_hash: Mapped[str | None] = mapped_column(String(40))
+    commit_message: Mapped[str | None] = mapped_column(String(200))
     image_used: Mapped[str | None] = mapped_column(String(500))
     image_tag: Mapped[str | None] = mapped_column(String(200))
     status: Mapped[str] = mapped_column(String(20), default="in_progress")

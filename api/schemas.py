@@ -273,6 +273,7 @@ class DeploymentOut(BaseModel):
     app_id: int
     app_name: str = ""
     commit_hash: str | None
+    commit_message: str | None = None
     image_used: str | None = None
     status: str
     log: str | None

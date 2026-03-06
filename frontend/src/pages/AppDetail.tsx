@@ -924,10 +924,15 @@ function DeploymentsTab({ appName }: { appName: string }) {
             <span className="font-mono text-xs text-zinc-500">#{dep.id}</span>
             <StatusBadge status={dep.status} />
 
-            {/* Commit hash */}
+            {/* Commit hash + message */}
             {dep.commit_hash && (
               <span className="rounded bg-zinc-700 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
                 {dep.commit_hash.slice(0, 7)}
+              </span>
+            )}
+            {dep.commit_message && (
+              <span className="truncate max-w-[200px] text-xs text-zinc-400" title={dep.commit_message}>
+                {dep.commit_message}
               </span>
             )}
 
@@ -998,6 +1003,9 @@ function DeploymentsTab({ appName }: { appName: string }) {
                   <div>
                     <span className="text-zinc-500">Commit</span>
                     <p className="font-mono text-zinc-300">{dep.commit_hash}</p>
+                    {dep.commit_message && (
+                      <p className="mt-0.5 text-sm text-zinc-400">{dep.commit_message}</p>
+                    )}
                   </div>
                 )}
                 {dep.image_used && (

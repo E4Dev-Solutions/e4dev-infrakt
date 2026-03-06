@@ -54,6 +54,7 @@ def _apply_migrations(engine: Engine) -> None:
         "ALTER TABLE apps ADD COLUMN db_password_encrypted VARCHAR(500)",
         "ALTER TABLE deployments ADD COLUMN image_tag VARCHAR(200)",
         "ALTER TABLE webhooks ADD COLUMN channel_type VARCHAR(20) DEFAULT 'custom'",
+        "ALTER TABLE deployments ADD COLUMN commit_message VARCHAR(200)",
     ]
     with engine.connect() as conn:
         for sql in migrations:

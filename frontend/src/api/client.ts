@@ -15,6 +15,7 @@ export interface RecentDeployment {
   app_name: string;
   status: DeploymentStatus;
   commit_hash?: string;
+  commit_message?: string;
   image_used?: string;
   started_at: string;
   finished_at?: string;
@@ -99,6 +100,7 @@ export interface Deployment {
   id: number;
   app_id: number;
   commit_hash?: string;
+  commit_message?: string;
   image_used?: string;
   image_tag?: string;
   status: DeploymentStatus;

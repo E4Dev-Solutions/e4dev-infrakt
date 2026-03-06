@@ -179,8 +179,8 @@ def test_deploy_app_captures_commit_hash_for_git(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d (repo?) = 1, test -f (compose?) = 1, test -f (Dockerfile?) = 1
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    # test -d (repo?) = 1, git log (msg) = "feat: test", test -f (compose?) = 1, test -f (Dockerfile?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("feat: test commit\n", "", 0), ("", "", 1), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(
         side_effect=[
@@ -192,6 +192,7 @@ def test_deploy_app_captures_commit_hash_for_git(_mock_token):
     result = deploy_app(ssh, "test-app", git_repo="https://github.com/test/repo.git", branch="main")
     assert isinstance(result, DeployResult)
     assert result.commit_hash == "abc123def456"
+    assert result.commit_message == "feat: test commit"
     assert result.image_used is None
 
 
@@ -202,8 +203,8 @@ def test_deploy_app_pinned_commit_uses_reset(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d (repo?) = 0, test -f (compose?) = 1, test -f (Dockerfile?) = 1
-    ssh.run = MagicMock(side_effect=[("", "", 0), ("", "", 1), ("", "", 1)])
+    # test -d (repo?) = 0, git log (msg), test -f (compose?) = 1, test -f (Dockerfile?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 0), ("fix: something\n", "", 0), ("", "", 1), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(
         side_effect=[
@@ -309,8 +310,8 @@ def test_deploy_git_tags_image_after_build(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d (repo?) = 1, test -f (compose?) = 1, test -f (Dockerfile?) = 1
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    # test -d (repo?) = 1, git log (msg), test -f (compose?) = 1, test -f (Dockerfile?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("msg\n", "", 0), ("", "", 1), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n", ""])
 
@@ -335,7 +336,7 @@ def test_deploy_git_no_tag_without_deployment_id(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("msg\n", "", 0), ("", "", 1), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
 
@@ -361,8 +362,8 @@ def test_deploy_git_nixpacks_builds_with_nixpacks(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d returns 1 (clone), test -f returns 1 (no compose)
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1)])
+    # test -d returns 1 (clone), git log (msg), test -f returns 1 (no compose)
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("msg\n", "", 0), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
 
@@ -386,8 +387,8 @@ def test_deploy_git_auto_detects_nixpacks_when_no_dockerfile(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d (repo exists?) = 1 (no), test -f (compose?) = 1 (no), test -f (Dockerfile?) = 1 (no)
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1), ("", "", 1)])
+    # test -d (repo exists?) = 1 (no), git log (msg), test -f (compose?) = 1 (no), test -f (Dockerfile?) = 1 (no)
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("msg\n", "", 0), ("", "", 1), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
 
@@ -413,8 +414,8 @@ def test_deploy_git_splits_build_and_up(_mock_token):
     ssh.__enter__ = MagicMock(return_value=ssh)
     ssh.__exit__ = MagicMock(return_value=False)
     ssh.upload_string = MagicMock()
-    # test -d (repo?) = 1, test -f (compose?) = 1
-    ssh.run = MagicMock(side_effect=[("", "", 1), ("", "", 1)])
+    # test -d (repo?) = 1, git log (msg), test -f (compose?) = 1
+    ssh.run = MagicMock(side_effect=[("", "", 1), ("msg\n", "", 0), ("", "", 1)])
     ssh.run_streaming = MagicMock(return_value="")
     ssh.run_checked = MagicMock(side_effect=["", "abc1234567890\n"])
 

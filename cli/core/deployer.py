@@ -35,6 +35,7 @@ class DeployResult:
     commit_hash: str | None = None
     image_used: str | None = None
     image_tag: str | None = None
+    uses_repo_compose: bool = False
 
 
 def _validate_name(value: str, label: str) -> None:
@@ -213,6 +214,7 @@ def deploy_app(
                 timeout=120,
             )
         elif has_compose == 0 and not compose_override:
+            result.uses_repo_compose = True
             _log("Using docker-compose.yml from repository")
             _log("Building images...")
             ssh.run_streaming(

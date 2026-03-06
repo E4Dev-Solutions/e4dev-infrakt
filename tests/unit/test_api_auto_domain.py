@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 from api.main import app
 from cli.core.database import get_session, init_db
 from cli.models.platform_settings import PlatformSettings
-from cli.models.server import Server
 from tests.conftest import TEST_API_KEY
 
 HEADERS = {"X-API-Key": TEST_API_KEY}

@@ -266,10 +266,7 @@ def create_app(body: AppCreate) -> AppOut:
                 if body.template and tmpl and "domain_map" in tmpl:
                     import json as _json_ad
 
-                    auto_domains = {
-                        svc: generate_auto_domain(base)
-                        for svc in tmpl["domain_map"]
-                    }
+                    auto_domains = {svc: generate_auto_domain(base) for svc in tmpl["domain_map"]}
                     effective_domain = _json_ad.dumps(auto_domains)
                 else:
                     effective_domain = generate_auto_domain(base)

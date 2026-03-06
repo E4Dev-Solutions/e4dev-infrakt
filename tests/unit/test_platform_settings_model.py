@@ -1,4 +1,5 @@
 """Tests for PlatformSettings model."""
+
 from cli.core.database import get_session, init_db
 from cli.models.platform_settings import PlatformSettings
 

@@ -1,4 +1,5 @@
 """Tests for auto-domain generation."""
+
 import re
 
 from cli.core.auto_domain import generate_auto_domain, get_base_domain

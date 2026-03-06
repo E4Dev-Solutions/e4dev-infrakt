@@ -1,4 +1,5 @@
 """Auto-domain generation for apps without explicit domains."""
+
 from __future__ import annotations
 
 import secrets

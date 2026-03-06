@@ -12,45 +12,81 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
-    runs-on: self-hosted
+  # ---------------------------------------------------------------------------
+  # Python linting — ruff check + ruff format
+  # ---------------------------------------------------------------------------
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pipx run ruff check .
+      - run: pipx run ruff format --check .
+
+  # ---------------------------------------------------------------------------
+  # Python tests + type checking
+  # ---------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # ── Lint ──
-      - name: Lint
-        run: uvx ruff check . && uvx ruff format --check .
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
 
-      # ── Python tests + type check ──
-      - name: Install Python deps
-        run: |
-          uv venv --python python3.11 .venv
-          . .venv/bin/activate
-          uv pip install -e ".[dev]"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      - name: Test
-        run: |
-          . .venv/bin/activate
-          pytest --cov=cli -q
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run tests
+        run: pytest --cov=cli -q
 
       - name: Type check
-        run: |
-          . .venv/bin/activate
-          mypy cli/ --ignore-missing-imports
+        run: mypy cli/ --ignore-missing-imports
 
-      # ── Frontend build + E2E ──
-      - name: Install frontend deps
+  # ---------------------------------------------------------------------------
+  # Frontend build + E2E tests
+  # ---------------------------------------------------------------------------
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
         working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
         run: npm ci
 
       - name: Build dashboard
-        working-directory: frontend
         run: npm run build
 
-      - name: Ensure Playwright browsers
-        working-directory: frontend
-        run: npx playwright install chromium
+      - name: Get Playwright version
+        id: pw
+        run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
 
-      - name: E2E tests
-        working-directory: frontend
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright deps (cached)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run E2E tests
         run: npx playwright test

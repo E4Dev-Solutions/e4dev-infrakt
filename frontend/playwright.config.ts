@@ -14,12 +14,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        launchOptions: {
-          args: process.env.CI ? ["--no-sandbox", "--disable-setuid-sandbox"] : [],
-        },
-      },
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
   webServer: {

@@ -85,9 +85,12 @@ test.describe("Settings — Domain", () => {
       return route.continue();
     });
     await page.goto("/settings");
-    const removeResponse = page.waitForResponse("**/api/settings/domain");
+    await expect(page.getByText("Auto-domains active")).toBeVisible();
+    const putDone = page.waitForResponse(
+      (resp) => resp.url().includes("/api/settings/domain") && resp.request().method() === "PUT",
+    );
     await page.getByRole("button", { name: "Remove" }).first().click();
-    await removeResponse;
+    await putDone;
     await expect(page.getByText("Base domain cleared")).toBeVisible({ timeout: 10000 });
   });
 
